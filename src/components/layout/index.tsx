@@ -8,8 +8,12 @@ import { api_base } from '@/external/bot-skeleton';
 import { useOfflineDetection } from '@/hooks/useOfflineDetection';
 import { useStore } from '@/hooks/useStore';
 import useTMB from '@/hooks/useTMB';
-import { handleOidcAuthFailure } from '@/utils/auth-utils';
-import { requestOidcAuthentication } from '@deriv-com/auth-client';
+import {
+    clearOAuthRedirectInProgress,
+    hasStoredAuthSession,
+    isOAuthRedirectInProgress,
+    redirectToDerivOAuthLogin,
+} from '@/utils/auth-utils';
 import { useDevice } from '@deriv-com/ui';
 import { crypto_currencies_display_order, fiat_currencies_display_order } from '../shared';
 import Footer from './footer';
@@ -32,16 +36,23 @@ const Layout = observer(() => {
 
     const isLoggedInCookie = Cookies.get('logged_state') === 'true';
     const isEndpointPage = window.location.pathname.includes('endpoint');
-    const checkClientAccount = JSON.parse(localStorage.getItem('clientAccounts') ?? '{}');
     const getQueryParams = new URLSearchParams(window.location.search);
     const currency = getQueryParams.get('account') ?? '';
-    const accountsList = JSON.parse(localStorage.getItem('accountsList') ?? '{}');
+
+    const readClientAccounts = () => JSON.parse(localStorage.getItem('clientAccounts') ?? '{}');
+    const readAccountsList = () => JSON.parse(localStorage.getItem('accountsList') ?? '{}');
+
+    const checkClientAccount = readClientAccounts();
+    const accountsList = readAccountsList();
     const isClientAccountsPopulated = Object.keys(accountsList).length > 0;
+    const hasAuthSession = hasStoredAuthSession();
+
     const ifClientAccountHasCurrency =
         Object.values(checkClientAccount).some((account: any) => account.currency === currency) ||
         currency === 'demo' ||
-        currency === '';
-    const [clientHasCurrency, setClientHasCurrency] = useState(ifClientAccountHasCurrency);
+        currency === '' ||
+        hasAuthSession;
+    const [, setClientHasCurrency] = useState(ifClientAccountHasCurrency);
     const [isAuthenticating, setIsAuthenticating] = useState(true); // Start with true to prevent flashing
 
     // Expose setClientHasCurrency to window for global access
@@ -64,38 +75,33 @@ const Layout = observer(() => {
             const account_list = data?.authorize?.account_list || [];
             const account_list_filter = account_list.filter((acc: any) => acc.is_disabled === 0);
             api_accounts.push(account_list_filter || []);
-            const allCurrencies = new Set(Object.values(checkClientAccount).map((acc: any) => acc.currency));
 
-            // Skip disabled accounts when checking for missing currency
+            const stored_client_accounts = readClientAccounts();
+            const stored_accounts_list = readAccountsList();
+            const allCurrencies = new Set(Object.values(stored_client_accounts).map((acc: any) => acc.currency));
+
             const accounts = api_accounts.flat();
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            let detected_currency = '';
-            const hasMissingCurrency = accounts.some(data => {
-                if (!allCurrencies.has(data.currency)) {
-                    console.log('Missing currency:', data.currency);
-                    sessionStorage.setItem('query_param_currency', data.currency);
+            const hasMissingCurrency = accounts.some(acc => {
+                if (!allCurrencies.has(acc.currency)) {
+                    sessionStorage.setItem('query_param_currency', acc.currency);
                     return true;
                 }
-                detected_currency = data.currency;
                 return false;
             });
 
             let hasMissingToken = false;
-            let missingTokenCurrency = '';
-
             for (const acc of account_list_filter) {
-                if (acc.loginid && !accountsList[acc.loginid]) {
+                if (acc.loginid && !stored_accounts_list[acc.loginid]) {
                     hasMissingToken = true;
-                    missingTokenCurrency = acc.currency || '';
-                    // Store the missing token's currency in session storage
-                    if (missingTokenCurrency) {
-                        sessionStorage.setItem('query_param_currency', missingTokenCurrency);
+                    if (acc.currency) {
+                        sessionStorage.setItem('query_param_currency', acc.currency);
                     }
                     break;
                 }
             }
 
-            if (hasMissingCurrency || hasMissingToken) {
+            // Do not force re-login when we already have a stored session (prevents redirect loops).
+            if ((hasMissingCurrency || hasMissingToken) && !hasStoredAuthSession()) {
                 setClientHasCurrency(false);
             } else {
                 const account_list_ =
@@ -137,10 +143,22 @@ const Layout = observer(() => {
             sessionStorage.setItem('query_param_currency', currency);
         }
 
-        const checkOIDCEnabledWithMissingAccount = !isEndpointPage && !isCallbackPage && !clientHasCurrency;
+        if (hasAuthSession) {
+            clearOAuthRedirectInProgress();
+        }
+
+        // Only auto-redirect when SSO cookie says logged-in but we have no stored tokens.
+        // Never auto-redirect on orphan ?state= only (would loop with home.deriv.com).
+        const url_params = new URLSearchParams(window.location.search);
+        const has_oauth_tokens_in_url = url_params.has('acct1') && url_params.has('token1');
         const shouldAuthenticate =
-            (isLoggedInCookie && !isClientAccountsPopulated && !isEndpointPage && !isCallbackPage) ||
-            checkOIDCEnabledWithMissingAccount;
+            !isEndpointPage &&
+            !isCallbackPage &&
+            !hasAuthSession &&
+            !isOAuthRedirectInProgress() &&
+            !has_oauth_tokens_in_url &&
+            isLoggedInCookie &&
+            !isClientAccountsPopulated;
 
         // Skip authentication when offline
         if (!isOnline) {
@@ -163,25 +181,10 @@ const Layout = observer(() => {
                 } else if (shouldAuthenticate) {
                     const query_param_currency = currency || sessionStorage.getItem('query_param_currency') || 'USD';
 
-                    // Make sure we have the currency in session storage before redirecting
                     if (query_param_currency) {
                         sessionStorage.setItem('query_param_currency', query_param_currency);
                     }
-                    try {
-                        await requestOidcAuthentication({
-                            redirectCallbackUri: `${window.location.origin}/callback`,
-                            ...(query_param_currency
-                                ? {
-                                      state: {
-                                          account: query_param_currency,
-                                      },
-                                  }
-                                : {}),
-                        });
-                    } catch (err) {
-                        setIsAuthenticating(false);
-                        handleOidcAuthFailure(err);
-                    }
+                    redirectToDerivOAuthLogin();
                 }
             } catch (err) {
                 // eslint-disable-next-line no-console
@@ -196,7 +199,6 @@ const Layout = observer(() => {
         isClientAccountsPopulated,
         isEndpointPage,
         isCallbackPage,
-        clientHasCurrency,
         tmb_enabled_from_hook,
         onRenderTMBCheck,
         currency,

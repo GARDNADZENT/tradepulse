@@ -6,5 +6,41 @@
         height: 32px;
         display: flex;
         align-items: center;
+        text-decoration: none;
+    }
+}
+
+.tradepulse-logo {
+    gap: 0.8rem;
+
+    &__mark {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 3.2rem;
+        height: 3.2rem;
+        border-radius: 0.8rem;
+        background: linear-gradient(135deg, #ff444f 0%, #ff6b35 100%);
+        color: #fff;
+        font-size: 1.2rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+    }
+
+    &__wordmark {
+        display: flex;
+        align-items: baseline;
+        font-size: 1.8rem;
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: -0.03em;
+    }
+
+    &__trade {
+        color: var(--text-prominent, #0e0e0e);
+    }
+
+    &__pulse {
+        color: #ff444f;
     }
 }

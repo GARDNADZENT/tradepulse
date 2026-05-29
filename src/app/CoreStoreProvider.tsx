@@ -3,6 +3,7 @@ import Cookies from 'js-cookie';
 import { observer } from 'mobx-react-lite';
 import { getDecimalPlaces, toMoment } from '@/components/shared';
 import { FORM_ERROR_MESSAGES } from '@/components/shared/constants/form-error-messages';
+import { shouldUseProjectOAuth } from '@/components/shared/utils/config/config';
 import { initFormErrorMessages } from '@/components/shared/utils/validation/declarative-validation-rules';
 import { api_base } from '@/external/bot-skeleton';
 import { CONNECTION_STATUS } from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
@@ -11,6 +12,7 @@ import { useApiBase } from '@/hooks/useApiBase';
 import { useStore } from '@/hooks/useStore';
 import useTMB from '@/hooks/useTMB';
 import { TLandingCompany, TSocketResponseData } from '@/types/api-types';
+import { redirectToDerivOAuthLogin } from '@/utils/auth-utils';
 import { useTranslations } from '@deriv-com/translations';
 
 type TClientInformation = {
@@ -146,7 +148,11 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
                 error?.code === 'DisabledClient' ||
                 error?.code === 'InvalidToken'
             ) {
-                await oAuthLogout();
+                if (shouldUseProjectOAuth()) {
+                    redirectToDerivOAuthLogin();
+                } else {
+                    await oAuthLogout();
+                }
             }
 
             if (msg_type === 'balance' && data && !error) {

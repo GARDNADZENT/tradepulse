@@ -1,10 +1,18 @@
 import React from 'react';
 import Cookies from 'js-cookie';
 import ChunkLoader from '@/components/loader/chunk-loader';
+import { ensureCustomAppIdConfigured, shouldUseProjectOAuth } from '@/components/shared/utils/config/config';
 import { generateDerivApiInstance } from '@/external/bot-skeleton/services/api/appId';
 import { observer as globalObserver } from '@/external/bot-skeleton/utils/observer';
 import { useOfflineDetection } from '@/hooks/useOfflineDetection';
-import { clearAuthData } from '@/utils/auth-utils';
+import { redirectToDerivOAuthLogin } from '@/utils/auth-utils';
+import {
+    clearAuthData,
+    clearOAuthRedirectInProgress,
+    clearOrphanOAuthStateFromUrl,
+    setLoggedStateCookie,
+} from '@/utils/auth-utils';
+import { isTradePulseHost, TRADEPULSE_BRAND } from '@/utils/tradepulse-brand';
 import { localize } from '@deriv-com/translations';
 import { URLUtils } from '@deriv-com/utils';
 import App from './App';
@@ -37,6 +45,8 @@ const setLocalStorageToken = async (
 
             localStorage.setItem('accountsList', JSON.stringify(accountsList));
             localStorage.setItem('clientAccounts', JSON.stringify(clientAccounts));
+            setLoggedStateCookie(true);
+            clearOAuthRedirectInProgress();
 
             URLUtils.filterSearchParams(paramsToDelete);
 
@@ -45,6 +55,8 @@ const setLocalStorageToken = async (
                 console.log('[Auth] Offline mode - skipping API connection');
                 localStorage.setItem('authToken', loginInfo[0].token);
                 localStorage.setItem('active_loginid', loginInfo[0].loginid);
+                setLoggedStateCookie(true);
+                clearOAuthRedirectInProgress();
                 return;
             }
 
@@ -62,9 +74,14 @@ const setLocalStorageToken = async (
 
                             const is_tmb_enabled = window.is_tmb_enabled === true;
                             // Only emit the InvalidToken event if logged_state is true
-                            if (Cookies.get('logged_state') === 'true' && !is_tmb_enabled) {
+                            if (Cookies.get('logged_state') === 'true' && !is_tmb_enabled && !shouldUseProjectOAuth()) {
                                 // Emit an event that can be caught by the application to retrigger OIDC authentication
                                 globalObserver.emit('InvalidToken', { error });
+                            }
+
+                            if (Cookies.get('logged_state') === 'true' && shouldUseProjectOAuth()) {
+                                redirectToDerivOAuthLogin();
+                                return;
                             }
 
                             if (Cookies.get('logged_state') === 'false') {
@@ -98,10 +115,36 @@ const setLocalStorageToken = async (
     }
 };
 
+const restorePostLoginUrl = (loginInfo: URLUtils.LoginInfo[]) => {
+    const return_url = sessionStorage.getItem('redirect_url');
+    if (!return_url || !loginInfo.length) return;
+
+    sessionStorage.removeItem('redirect_url');
+    clearOAuthRedirectInProgress();
+
+    try {
+        const target = new URL(return_url, window.location.origin);
+        const currency = loginInfo[0]?.currency;
+        if (currency && !target.searchParams.has('account')) {
+            target.searchParams.set('account', currency);
+        }
+        if (target.origin !== window.location.origin || target.href !== window.location.href) {
+            window.location.replace(target.toString());
+        }
+    } catch {
+        // ignore invalid redirect_url
+    }
+};
+
 export const AuthWrapper = () => {
     const [isAuthComplete, setIsAuthComplete] = React.useState(false);
     const { loginInfo, paramsToDelete } = URLUtils.getLoginInfoFromURL();
     const { isOnline } = useOfflineDetection();
+
+    React.useEffect(() => {
+        ensureCustomAppIdConfigured();
+        clearOrphanOAuthStateFromUrl();
+    }, []);
 
     React.useEffect(() => {
         const initializeAuth = async () => {
@@ -109,6 +152,7 @@ export const AuthWrapper = () => {
                 // Pass isOnline to setLocalStorageToken to handle offline mode properly
                 await setLocalStorageToken(loginInfo, paramsToDelete, setIsAuthComplete, isOnline);
                 URLUtils.filterSearchParams(['lang']);
+                restorePostLoginUrl(loginInfo);
                 setIsAuthComplete(true);
             } catch (error) {
                 console.error('[Auth] Authentication initialization failed:', error);
@@ -142,6 +186,7 @@ export const AuthWrapper = () => {
 
     const getLoadingMessage = () => {
         if (!isOnline) return localize('Loading offline mode...');
+        if (isTradePulseHost()) return `${TRADEPULSE_BRAND.name} — ${localize('Loading...')}`;
         return localize('Initializing...');
     };
 

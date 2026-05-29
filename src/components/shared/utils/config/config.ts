@@ -1,8 +1,8 @@
-import { LocalStorageConstants, LocalStorageUtils, URLUtils } from '@deriv-com/utils';
+import { LocalStorageConstants, LocalStorageUtils } from '@deriv-com/utils';
 import { isStaging } from '../url/helpers';
 
 export const APP_IDS = {
-    LOCALHOST: 36300,
+    LOCALHOST: 127021,
     TMP_STAGING: 64584,
     STAGING: 29934,
     STAGING_BE: 29934,
@@ -11,6 +11,9 @@ export const APP_IDS = {
     PRODUCTION_BE: 65556,
     PRODUCTION_ME: 65557,
 };
+
+/** TradePulse fixed Deriv app id for all non-Deriv hosts in this project. */
+export const PROJECT_APP_ID = APP_IDS.LOCALHOST;
 
 export const livechat_license_id = 12049137;
 export const livechat_client_id = '66aa088aad5a414484c1fd1fa8a5ace7';
@@ -23,6 +26,7 @@ export const domain_app_ids = {
     'dbot.deriv.com': APP_IDS.PRODUCTION,
     'dbot.deriv.be': APP_IDS.PRODUCTION_BE,
     'dbot.deriv.me': APP_IDS.PRODUCTION_ME,
+    'tradepulse.sytes.net': APP_IDS.LOCALHOST,
 };
 
 export const getCurrentProductionDomain = () =>
@@ -34,15 +38,49 @@ export const isProduction = () => {
     return new RegExp(`^(${all_domains.join('|')})$`, 'i').test(window.location.hostname);
 };
 
+export const isNgrokHost = () =>
+    /\.ngrok-free\.app$/i.test(window.location.hostname) ||
+    /\.ngrok\.io$/i.test(window.location.hostname) ||
+    /\.ngrok\.app$/i.test(window.location.hostname);
+
 export const isTestLink = () => {
     return (
         window.location.origin?.includes('.binary.sx') ||
         window.location.origin?.includes('bot-65f.pages.dev') ||
-        isLocal()
+        isLocal() ||
+        isNgrokHost()
     );
 };
 
-export const isLocal = () => /localhost(:\d+)?$/i.test(window.location.hostname);
+export const isLocal = () =>
+    /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(window.location.hostname) || window.location.hostname === '0.0.0.0';
+
+/** True when running on dbot.deriv.com (or .me / .be) production/staging hosts. */
+export const isDbotProductionHost = () => Boolean(getCurrentProductionDomain());
+
+export const isSytesHost = () => /\.sytes\.net$/i.test(window.location.hostname);
+
+/** Dev / tunnel / TradePulse hosts that use app_id 127021 and oauth.deriv.com (not home.deriv.com). */
+export const isCustomOAuthHost = () => isTestLink() || isNgrokHost() || isSytesHost();
+
+/**
+ * TradePulse OAuth mode: every host except official dbot.deriv.com staging/production domains.
+ * Covers localhost, ngrok, sytes, Vercel, GitHub Pages, LAN IPs, etc.
+ */
+export const shouldUseProjectOAuth = () => !getCurrentProductionDomain();
+
+/** Ensure TradePulse app id and disable TMB/OIDC overrides on white-label hosts. */
+export const ensureCustomAppIdConfigured = () => {
+    if (!shouldUseProjectOAuth()) return;
+
+    localStorage.setItem('config.app_id', String(PROJECT_APP_ID));
+    localStorage.setItem('is_tmb_enabled', 'false');
+    window.is_tmb_enabled = false;
+
+    // Stale OIDC redirect targets send users to app.deriv.com / home.deriv.com
+    localStorage.removeItem('config.post_login_redirect_uri');
+    localStorage.removeItem('config.post_logout_redirect_uri');
+};
 
 const getDefaultServerURL = () => {
     if (isTestLink()) {
@@ -68,8 +106,8 @@ const getDefaultServerURL = () => {
 export const getDefaultAppIdAndUrl = () => {
     const server_url = getDefaultServerURL();
 
-    if (isTestLink()) {
-        return { app_id: APP_IDS.LOCALHOST, server_url };
+    if (shouldUseProjectOAuth()) {
+        return { app_id: PROJECT_APP_ID, server_url };
     }
 
     const current_domain = getCurrentProductionDomain() ?? '';
@@ -79,21 +117,18 @@ export const getDefaultAppIdAndUrl = () => {
 };
 
 export const getAppId = () => {
-    let app_id = null;
-    const config_app_id = window.localStorage.getItem('config.app_id');
     const current_domain = getCurrentProductionDomain() ?? '';
 
-    if (config_app_id) {
-        app_id = config_app_id;
-    } else if (isStaging()) {
-        app_id = APP_IDS.STAGING;
-    } else if (isTestLink()) {
-        app_id = APP_IDS.LOCALHOST;
-    } else {
-        app_id = domain_app_ids[current_domain as keyof typeof domain_app_ids] ?? APP_IDS.PRODUCTION;
+    // Keep white-label app_id permanent on all non-dbot.deriv.com hosts.
+    if (shouldUseProjectOAuth()) {
+        return String(PROJECT_APP_ID);
     }
 
-    return app_id;
+    if (isStaging()) {
+        return String(APP_IDS.STAGING);
+    }
+
+    return String(domain_app_ids[current_domain as keyof typeof domain_app_ids] ?? APP_IDS.PRODUCTION);
 };
 
 export const getSocketURL = () => {
@@ -142,11 +177,21 @@ export const getDebugServiceWorker = () => {
     return false;
 };
 
-export const generateOAuthURL = () => {
-    const { getOauthURL } = URLUtils;
-    const oauth_url = getOauthURL();
-    const original_url = new URL(oauth_url);
+/** Random OAuth state (base64url), e.g. qX4ckfTGCC-dn84FRNIOgj9Lcth3O-PZ */
+export const generateOAuthState = (): string => {
+    const bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    const binary = Array.from(bytes, byte => String.fromCharCode(byte)).join('');
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
+
+/**
+ * Legacy Deriv OAuth authorize URL (oauth.deriv.com), e.g.:
+ * https://oauth.deriv.com/oauth2/authorize?app_id=127021&brand=deriv&redirect=home&state=…
+ */
+export const generateOAuthURL = (language?: string) => {
     const hostname = window.location.hostname;
+    const original_url = new URL('https://oauth.deriv.com/oauth2/authorize');
 
     // First priority: Check for configured server URLs (for QA/testing environments)
     const configured_server_url = (LocalStorageUtils.getValue(LocalStorageConstants.configServerURL) ||
@@ -161,20 +206,30 @@ export const generateOAuthURL = () => {
             : !valid_server_urls.includes(JSON.stringify(configured_server_url)))
     ) {
         original_url.hostname = configured_server_url;
-    } else if (original_url.hostname.includes('oauth.deriv.')) {
-        // Second priority: Domain-based OAuth URL setting for .me and .be domains
-        if (hostname.includes('.deriv.me')) {
-            original_url.hostname = 'oauth.deriv.me';
-        } else if (hostname.includes('.deriv.be')) {
-            original_url.hostname = 'oauth.deriv.be';
-        } else {
-            // Fallback to original logic for other domains
-            const current_domain = getCurrentProductionDomain();
-            if (current_domain) {
-                const domain_suffix = current_domain.replace(/^[^.]+\./, '');
-                original_url.hostname = `oauth.${domain_suffix}`;
-            }
+    } else if (hostname.includes('.deriv.me')) {
+        original_url.hostname = 'oauth.deriv.me';
+    } else if (hostname.includes('.deriv.be')) {
+        original_url.hostname = 'oauth.deriv.be';
+    } else {
+        const current_domain = getCurrentProductionDomain();
+        if (current_domain) {
+            const domain_suffix = current_domain.replace(/^[^.]+\./, '');
+            original_url.hostname = `oauth.${domain_suffix}`;
         }
     }
-    return original_url.toString() || oauth_url;
+
+    ensureCustomAppIdConfigured();
+
+    const state = generateOAuthState();
+    sessionStorage.setItem('oauth.state', state);
+    original_url.searchParams.set('app_id', String(getAppId()));
+    original_url.searchParams.set('brand', 'deriv');
+    // Must match working Deriv OAuth URLs — `l=EN` alone routes to home.deriv.com/dashboard/login.
+    original_url.searchParams.set('redirect', 'home');
+    original_url.searchParams.set('state', state);
+    if (language) {
+        original_url.searchParams.set('l', language);
+    }
+
+    return original_url.toString();
 };

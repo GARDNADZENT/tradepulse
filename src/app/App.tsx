@@ -10,6 +10,7 @@ import { StoreProvider } from '@/hooks/useStore';
 import CallbackPage from '@/pages/callback';
 import Endpoint from '@/pages/endpoint';
 import { TAuthData } from '@/types/api-types';
+import { getDocumentTitle } from '@/utils/site-config';
 import { initializeI18n, localize, TranslationProvider } from '@deriv-com/translations';
 import CoreStoreProvider from './CoreStoreProvider';
 import './app-root.scss';
@@ -65,8 +66,7 @@ const router = createBrowserRouter(
 
 function App() {
     React.useEffect(() => {
-        // Use the invalid token handler hook to automatically retrigger OIDC authentication
-        // when an invalid token is detected and the cookie logged state is true
+        document.title = getDocumentTitle();
 
         initSurvicate();
         window?.dataLayer?.push({ event: 'page_load' });

@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import ChunkLoader from '@/components/loader/chunk-loader';
 import RootStore from '@/stores/root-store';
 import { TWebSocket } from '@/Types';
+import { localize } from '@deriv-com/translations';
 import Bot from '../external/bot-skeleton/scratch/dbot';
 
 const StoreContext = createContext<null | RootStore>(null);
@@ -31,7 +33,9 @@ const StoreProvider: React.FC<TStoreProvider> = ({ children, mockStore }) => {
         }
     }, [store, mockStore]);
 
-    if (!store && mockStore) return null;
+    if (!store) {
+        return <ChunkLoader message={localize('Loading...')} />;
+    }
 
     return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;
 };

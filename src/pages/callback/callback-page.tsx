@@ -3,7 +3,7 @@ import { crypto_currencies_display_order, fiat_currencies_display_order } from '
 import { generateDerivApiInstance } from '@/external/bot-skeleton/services/api/appId';
 import { observer as globalObserver } from '@/external/bot-skeleton/utils/observer';
 import useTMB from '@/hooks/useTMB';
-import { clearAuthData } from '@/utils/auth-utils';
+import { clearAuthData, clearOAuthRedirectInProgress, setLoggedStateCookie } from '@/utils/auth-utils';
 import { Callback } from '@deriv-com/auth-client';
 import { Button } from '@deriv-com/ui';
 
@@ -59,6 +59,8 @@ const CallbackPage = () => {
 
                 localStorage.setItem('accountsList', JSON.stringify(accountsList));
                 localStorage.setItem('clientAccounts', JSON.stringify(clientAccounts));
+                setLoggedStateCookie(true);
+                clearOAuthRedirectInProgress();
 
                 let is_token_set = false;
 
@@ -102,7 +104,15 @@ const CallbackPage = () => {
                 // Determine the appropriate currency to use
                 const selected_currency = getSelectedCurrency(tokens, clientAccounts, state);
 
-                window.location.replace(window.location.origin + `bot/?account=${selected_currency}`);
+                const stored_post_login = localStorage.getItem('config.post_login_redirect_uri');
+                const post_login =
+                    stored_post_login && stored_post_login.startsWith(window.location.origin)
+                        ? stored_post_login
+                        : sessionStorage.getItem('redirect_url') || `${window.location.origin}/`;
+                const redirect_url = new URL(post_login, window.location.origin);
+                sessionStorage.removeItem('redirect_url');
+                redirect_url.searchParams.set('account', selected_currency);
+                window.location.replace(redirect_url.toString());
             }}
             renderReturnButton={() => {
                 return (

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Cookies from 'js-cookie';
 import { generateOAuthURL } from '@/components/shared';
+import { shouldUseProjectOAuth } from '@/components/shared/utils/config/config';
 import { removeCookies } from '@/components/shared/utils/storage/storage';
 import { api_base } from '@/external/bot-skeleton';
 import { setAuthData } from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
@@ -168,6 +169,15 @@ const useTMB = (): UseTMBReturn => {
     const tmbStatusPromiseRef = useRef<Promise<boolean> | null>(null);
 
     const isTmbEnabled = useCallback(async () => {
+        // TradePulse: never use TMB/OIDC (sends users to home.deriv.com with wrong app_id).
+        if (shouldUseProjectOAuth()) {
+            window.is_tmb_enabled = false;
+            setIsTmbEnabled(false);
+            localStorage.setItem('is_tmb_enabled', 'false');
+            tmbStatusDeterminedRef.current = true;
+            return false;
+        }
+
         // If we've already determined the status, return the cached value
         if (tmbStatusDeterminedRef.current) {
             return window.is_tmb_enabled === true;
