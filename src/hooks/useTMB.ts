@@ -168,12 +168,18 @@ const useTMB = (): UseTMBReturn => {
     const tmbStatusDeterminedRef = useRef(false);
     const tmbStatusPromiseRef = useRef<Promise<boolean> | null>(null);
 
+    useEffect(() => {
+        if (shouldUseProjectOAuth()) {
+            window.is_tmb_enabled = false;
+            setIsTmbEnabled(false);
+            tmbStatusDeterminedRef.current = true;
+        }
+    }, []);
+
     const isTmbEnabled = useCallback(async () => {
         // TradePulse: never use TMB/OIDC (sends users to home.deriv.com with wrong app_id).
         if (shouldUseProjectOAuth()) {
             window.is_tmb_enabled = false;
-            setIsTmbEnabled(false);
-            localStorage.setItem('is_tmb_enabled', 'false');
             tmbStatusDeterminedRef.current = true;
             return false;
         }

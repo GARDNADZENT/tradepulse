@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import clsx from 'clsx';
 import { observer } from 'mobx-react-lite';
 import PWAInstallButton from '@/components/pwa-install-button';
@@ -43,8 +43,11 @@ const AppHeader = observer(({ isAuthenticating }: TAppHeaderProps) => {
     const { isSingleLoggingIn } = useOauth2();
 
     const { hubEnabledCountryList } = useFirebaseCountriesConfig();
-    const { onRenderTMBCheck, isTmbEnabled } = useTMB();
-    const is_tmb_enabled = isTmbEnabled() || window.is_tmb_enabled === true;
+    const { onRenderTMBCheck, isTmbEnabled, is_tmb_enabled: tmb_enabled_from_hook } = useTMB();
+    const is_tmb_enabled = useMemo(
+        () => window.is_tmb_enabled === true || tmb_enabled_from_hook,
+        [tmb_enabled_from_hook]
+    );
     // No need for additional state management here since we're handling it in the layout component
 
     const renderAccountSection = useCallback(() => {
