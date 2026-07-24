@@ -10,9 +10,10 @@ const PAD = 8;
 
 function isLoggedIn(): boolean {
     try {
-        const loggedState = document.cookie.includes('logged_state=true');
-        const accountsList = JSON.parse(localStorage.getItem('accountsList') ?? '{}');
-        return loggedState || Object.keys(accountsList).length > 0;
+        const activeLoginId = localStorage.getItem('active_loginid');
+        if (activeLoginId) return true;
+        const clientAccounts = JSON.parse(localStorage.getItem('client.accounts') ?? '{}');
+        return Object.keys(clientAccounts).length > 0;
     } catch { return false; }
 }
 
