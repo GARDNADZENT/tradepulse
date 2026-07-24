@@ -7,6 +7,8 @@ export function onNewSystemMessage(callback) {
 
 export function isNewLoggedIn() {
     try {
+        const activeLoginId = localStorage.getItem('active_loginid');
+        if (activeLoginId) return true;
         const acc = JSON.parse(localStorage.getItem('client.accounts') || '{}');
         const ids = JSON.parse(localStorage.getItem('accountsList') || '{}');
         return Object.keys(acc).length > 0 || Object.keys(ids).length > 0;
