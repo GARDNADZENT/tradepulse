@@ -45,6 +45,7 @@ import RunStrategy from '../dashboard/run-strategy';
 import './main.scss';
 
 import TradingBots from '../free-bots/trading-bots';
+import { MakotiWidget } from '@/components/makoti-widget/makoti-widget';
 
 const ChartWrapper = lazy(() => import('../chart/chart-wrapper'));
 const Tutorial = lazy(() => import('../tutorials'));
@@ -501,6 +502,8 @@ const AppWrapper = observer(() => {
             >
                 {message}
             </Dialog>
+
+            {active_tab === BOT_BUILDER && <MakotiWidget />}
 
             {/* Trade Type Confirmation Modal */}
             {(() => {

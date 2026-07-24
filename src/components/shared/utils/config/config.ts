@@ -85,6 +85,10 @@ export const getSocketURL = async (): Promise<string> => {
     }
 };
 
+export const getAppId = () => {
+    return process.env.NEXT_PUBLIC_DERIV_APP_ID || '33UD5Xga7WHSzXFtBYdmr';
+};
+
 export const getDebugServiceWorker = () => {
     const debug_service_worker_flag = window.localStorage.getItem('debug_service_worker');
     if (debug_service_worker_flag) return !!parseInt(debug_service_worker_flag);

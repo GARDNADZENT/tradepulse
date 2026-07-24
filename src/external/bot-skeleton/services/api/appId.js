@@ -75,6 +75,7 @@ export const generateDerivApiInstance = async (forceNew = false) => {
 
             console.log('[DerivAPI] Creating new WebSocket connection to:', wsURL);
             const deriv_socket = new WebSocket(wsURL);
+            window._newSystemWS = deriv_socket;
             const deriv_api = new DerivAPIBasic({
                 connection: deriv_socket,
                 middleware: new APIMiddleware({}),
@@ -95,6 +96,10 @@ export const generateDerivApiInstance = async (forceNew = false) => {
             // Log when connection opens
             deriv_socket.addEventListener('open', () => {
                 console.log('[DerivAPI] WebSocket connection established');
+            });
+
+            deriv_socket.addEventListener('message', (event) => {
+                window.dispatchEvent(new CustomEvent('newSystemMessage', { detail: event }));
             });
 
             deriv_socket.addEventListener('error', error => {
