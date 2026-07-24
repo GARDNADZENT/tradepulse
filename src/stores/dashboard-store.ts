@@ -43,11 +43,13 @@ export interface IDashboardStore {
     onCloseDialog: () => void;
     onCloseTour: (param: Partial<string>) => void;
     onTourEnd: (step: number, is_tour_active: boolean) => void;
+    pendingFreeBot: { name: string; xml: string } | null;
     setActiveTab: (active_tab: number) => void;
     setActiveTabTutorial: (active_tab_tutorials: number) => void;
     setFAQSearchValue: (faq_search_value: string) => void;
     setInfoPanelVisibility: (visibility: boolean) => void;
     setIsFileSupported: (is_file_supported: boolean) => void;
+    setPendingFreeBot: (bot: { name: string; xml: string }) => void;
     setWebSocketState: (is_web_socket_intialised: boolean) => void;
     setOpenSettings: (toast_message: NOTIFICATION_TYPE) => void;
     setPreviewOnDialog: (has_mobile_preview_loaded: boolean) => void;
@@ -207,6 +209,7 @@ export default class DashboardStore implements IDashboardStore {
     is_chart_modal_visible = false;
     is_trading_view_modal_visible = false;
     faq_title = '';
+    pendingFreeBot: { name: string; xml: string } | null = null;
 
     setFaqTitle = (faq_title: string) => {
         this.faq_title = faq_title;
@@ -323,6 +326,10 @@ export default class DashboardStore implements IDashboardStore {
 
     setPreviewOnPopup = (is_preview_on_popup: boolean): void => {
         this.is_preview_on_popup = is_preview_on_popup;
+    };
+
+    setPendingFreeBot = (bot: { name: string; xml: string }): void => {
+        this.pendingFreeBot = bot;
     };
 
     setTourDialogVisibility = (is_tour_dialog_visible: boolean): void => {
