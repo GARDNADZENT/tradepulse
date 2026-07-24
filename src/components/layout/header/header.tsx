@@ -240,6 +240,17 @@ const AppHeader = observer(() => {
                 <Wrapper variant='left'>
                     <MobileMenu onLogout={handleLogout} />
                     <AppLogo />
+                    <div className='powered-by-deriv-header'>
+                        <img
+                            src='/makoti-logo.jpg'
+                            alt='MAKOTI TRADERS logo'
+                            className='powered-by-deriv-header__logo'
+                        />
+                        <div className='powered-by-deriv-header__text'>
+                            <span className='deriv-word'>MAKOTI TRADERS</span>
+                            <span className='powered-by-deriv-header__label'>POWERED BY DERIV</span>
+                        </div>
+                    </div>
                     {isDesktop ? <MenuItems /> : renderAccountSection('left')}
                 </Wrapper>
                 <Wrapper variant='right'>
