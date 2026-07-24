@@ -22,8 +22,8 @@ interface BotData {
 const DEFAULT_FEATURES = ['Automated Trading', 'Risk Management', 'Profit Optimization'];
 
 const FreeBots = observer(() => {
-    const { dashboard, app } = useStore();
-    const { active_tab, setActiveTab, setPendingFreeBot } = dashboard;
+    const { dashboard, load_modal, app } = useStore();
+    const { active_tab, setActiveTab } = dashboard;
     const [availableBots, setAvailableBots] = useState<BotData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -116,11 +116,13 @@ const FreeBots = observer(() => {
     };
 
     // Load bot into builder
-    const loadBotIntoBuilder = (bot: BotData) => {
+    const loadBotIntoBuilder = async (bot: BotData) => {
         if (bot.xml) {
-            // Flag the selected bot for the Bot Builder to load after navigation
-            setPendingFreeBot({ name: bot.name, xml: bot.xml });
-            // Instant navigation
+            const tempId = `freebot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            await load_modal.loadStrategyToBuilder(
+                { id: tempId, xml: bot.xml, name: bot.name, save_type: 'pending' },
+                true
+            );
             setActiveTab(DBOT_TABS.BOT_BUILDER);
         }
     };
