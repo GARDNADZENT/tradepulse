@@ -54,16 +54,21 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
 
     const formattedAccounts = useMemo(() => {
         if (!accountList) return [];
+        const allBal = client?.all_accounts_balance?.accounts ?? {};
         return accountList
-            .map(account => ({
-                loginid: account.loginid,
-                currency: account.currency,
-                balance: addComma(Number(account.balance ?? 0).toFixed(getDecimalPlaces(account.currency))),
-                isVirtual: isDemoAccount(account.loginid),
-                isActive: account.loginid === activeLoginid,
-            }))
+            .map(account => {
+                const liveBal = allBal[account.loginid]?.balance;
+                const rawBal = liveBal ?? account.balance ?? 0;
+                return {
+                    loginid: account.loginid,
+                    currency: account.currency,
+                    balance: addComma(Number(rawBal).toFixed(getDecimalPlaces(account.currency))),
+                    isVirtual: isDemoAccount(account.loginid),
+                    isActive: account.loginid === activeLoginid,
+                };
+            })
             .sort((a, b) => (a.isActive ? -1 : b.isActive ? 1 : 0));
-    }, [accountList, activeLoginid]);
+    }, [accountList, activeLoginid, client?.all_accounts_balance]);
 
     if (!activeAccount) return null;
 
