@@ -79,6 +79,7 @@ export function openMakotiWS(
     if (window._newSystemWS?.readyState === WebSocket.OPEN) {
         subscribe();
         readyFired = true;
+        setTimeout(onReady, 0);
         return { send: sendFn, close: closeFn, isOpen: isOpenFn };
     }
 
