@@ -43,6 +43,13 @@ export type ContractMode = 'DIGITMATCH' | 'DIGITDIFF' | 'DIGITOVER' | 'DIGITUNDE
 
 const VOLATILITY_SYMBOLS = ['R_10', 'R_25', 'R_50', 'R_75', 'R_100', '1HZ10V', '1HZ25V', '1HZ50V', '1HZ75V', '1HZ100V'];
 
+// Fallback symbols used when active_symbols API returns no results
+const FALLBACK_SYMBOLS = VOLATILITY_SYMBOLS.map(s => ({
+    display_name: s,
+    symbol: s,
+    pip_size: s.startsWith('1HZ') ? 2 : s === 'R_100' ? 2 : s === 'R_75' ? 4 : s === 'R_50' ? 4 : s === 'R_25' ? 3 : 3,
+}));
+
 function getDigit(price: number, pip: number): number {
     return Number(Number(price).toFixed(pip).slice(-1));
 }
@@ -165,13 +172,14 @@ export function useManualTrade() {
                 }
                 if (data.msg_type === 'active_symbols' && data.active_symbols) {
                     const volidx = data.active_symbols
-                        .filter((s: any) => s.symbol_type === 'volidx' && VOLATILITY_SYMBOLS.includes(s.symbol))
+                        .filter((s: any) => s.symbol_type === 'volidx')
                         .map((s: any) => ({
                             display_name: s.display_name ?? s.symbol,
                             symbol: s.symbol,
                             pip_size: s.pip_size ?? 2,
                         }));
                     if (volidx.length > 0) setSymbols(volidx);
+                    else setSymbols(FALLBACK_SYMBOLS);
                     setIsLoading(false);
                     return;
                 }
@@ -194,9 +202,14 @@ export function useManualTrade() {
 
     // Fetch symbols + positions on mount
     useEffect(() => {
-        sendViaNewSystem({ active_symbols: 'brief', product_type: 'basic' });
+        sendViaNewSystem({ active_symbols: 'brief' });
         sendViaNewSystem({ proposal_open_contract: 1, limit: 20 });
-        const t = setTimeout(() => setIsLoading(false), 10000);
+        const t = setTimeout(() => {
+            if (mountedRef.current) {
+                setSymbols(prev => prev.length > 0 ? prev : FALLBACK_SYMBOLS);
+                setIsLoading(false);
+            }
+        }, 10000);
         return () => clearTimeout(t);
     }, []);
 
