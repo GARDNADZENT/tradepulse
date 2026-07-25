@@ -75,11 +75,10 @@ export function openMakotiWS(
 
     const isOpenFn = () => window._newSystemWS?.readyState === WebSocket.OPEN;
 
-    // If already open, connect immediately
+    // If already open, just subscribe — caller sends requests directly
     if (window._newSystemWS?.readyState === WebSocket.OPEN) {
         subscribe();
         readyFired = true;
-        onReady();
         return { send: sendFn, close: closeFn, isOpen: isOpenFn };
     }
 

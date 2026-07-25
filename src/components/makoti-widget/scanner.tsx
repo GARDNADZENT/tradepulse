@@ -209,20 +209,18 @@ export const Scanner: React.FC = () => {
     const ensureWs = useCallback(() => {
         if (wsRef.current && wsRef.current.isOpen()) return wsRef.current;
         cleanup();
+        const sendTicksRequest = () => {
+            if (!window._newSystemWS || window._newSystemWS.readyState !== WebSocket.OPEN) return;
+            const bot = botRef.current;
+            const count = bot === 'pvty_kill' ? 1000 : 60;
+            setProgress(`Fetching ${count} ticks from all 10 volatilities…`);
+            ALL_SYMBOLS.forEach(sym => {
+                window._newSystemWS.send(JSON.stringify({ ticks_history: sym, count, end: 'latest', style: 'ticks' }));
+            });
+        };
         const mws = openMakotiWS(
             (data) => msgHandlerRef.current(data),
-            () => {
-                if (scanningRef.current) {
-                    const bot = botRef.current;
-                    if (bot === 'pvty_kill') {
-                        setProgress('Fetching 1000 ticks from all 10 volatilities…');
-                        ALL_SYMBOLS.forEach(sym => mws.send({ ticks_history: sym, count: 1000, end: 'latest', style: 'ticks' }));
-                    } else {
-                        setProgress('Fetching 60 ticks from all 10 volatilities…');
-                        ALL_SYMBOLS.forEach(sym => mws.send({ ticks_history: sym, count: 60, end: 'latest', style: 'ticks' }));
-                    }
-                }
-            },
+            () => { if (scanningRef.current) sendTicksRequest(); },
             () => { cancelScanRef.current?.(); },
             { skipAuth: true }
         );
