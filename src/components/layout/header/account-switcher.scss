@@ -722,6 +722,11 @@
 }
 
 /** @define acc-dropdown */
+.acc-info__wrapper {
+    position: relative;
+    z-index: 101;
+}
+
 .acc-dropdown {
     position: absolute;
     top: calc(100% + 4px);
