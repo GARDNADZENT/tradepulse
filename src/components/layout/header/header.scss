@@ -16,6 +16,13 @@
         }
     }
 
+    &__brand-text {
+        font-size: 11px;
+        color: var(--text-general);
+        margin-left: 0.8rem;
+        white-space: nowrap;
+        opacity: 0.7;
+    }
 }
 
 .account-switcher {

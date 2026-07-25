@@ -282,12 +282,16 @@ const Interpreter = () => {
     }
 
     function pause() {
-        if (interpreter) interpreter.paused_ = true;
+        if (interpreter) {
+            interpreter.paused_ = true;
+            $scope.paused_ = true;
+        }
     }
 
     function resume() {
         if (interpreter) {
             interpreter.paused_ = false;
+            $scope.paused_ = false;
             loop();
         }
     }
