@@ -56,11 +56,31 @@ function getDigit(price: number, pip: number): number {
 
 function computeDigitCounts(prices: number[], pipSize: number): number[] {
     const counts = Array(10).fill(0);
-    prices.slice(-1000).forEach(p => {
+    prices.forEach(p => {
         const d = getDigit(p, pipSize);
         if (d >= 0 && d <= 9) counts[d]++;
     });
     return counts;
+}
+
+function calcDigitPcts(ticks: number[]): number[] {
+    const counts = new Array(10).fill(0);
+    ticks.forEach(d => { if (d >= 0 && d <= 9) counts[d]++; });
+    const total = counts.reduce((a, v) => a + v, 0);
+    return total > 0 ? counts.map(c => (c / total) * 100) : counts;
+}
+
+/** Returns growth (pp change between recent-30 and full-200 windows) and full-window counts. */
+function computeDigitGrowth(prices: number[], pipSize: number): { counts: number[]; growth: number[]; total: number } {
+    const full = prices.slice(-200);
+    const recent = prices.slice(-30);
+    const fullDigits = full.map(p => getDigit(p, pipSize)).filter(d => d >= 0 && d <= 9);
+    const recentDigits = recent.map(p => getDigit(p, pipSize)).filter(d => d >= 0 && d <= 9);
+    const fullPcts = calcDigitPcts(fullDigits);
+    const recentPcts = calcDigitPcts(recentDigits);
+    const growth = fullPcts.map((p, i) => parseFloat((recentPcts[i] - p).toFixed(1)));
+    const counts = computeDigitCounts(full, pipSize);
+    return { counts, growth, total: fullDigits.length };
 }
 
 export function useManualTrade() {
@@ -69,6 +89,7 @@ export function useManualTrade() {
     const [currentTick, setCurrentTick] = useState<TickInfo | null>(null);
     const [lastDigit, setLastDigit] = useState<number | null>(null);
     const [digitCounts, setDigitCounts] = useState<number[]>(Array(10).fill(0));
+    const [digitGrowth, setDigitGrowth] = useState<number[]>(Array(10).fill(0));
     const [digitTotal, setDigitTotal] = useState(0);
     const [pipSize, setPipSize] = useState(2);
     const [tradeType, setTradeTypeState] = useState<TradeType>('matches-differs');
@@ -108,7 +129,10 @@ export function useManualTrade() {
                         setLastDigit(getDigit(quote, pipRef.current));
                         pricesRef.current = [...pricesRef.current.slice(-999), quote];
                         if (pricesRef.current.length > 0) {
-                            setDigitCounts(computeDigitCounts(pricesRef.current, pipRef.current));
+                            const stats = computeDigitGrowth(pricesRef.current, pipRef.current);
+                            setDigitCounts(stats.counts);
+                            setDigitGrowth(stats.growth);
+                            setDigitTotal(stats.total);
                         }
                     }
                     return;
@@ -117,8 +141,10 @@ export function useManualTrade() {
                     const p = data.history.prices.map(Number).filter((v: number) => !isNaN(v));
                     if (p.length > 0) {
                         pricesRef.current = p;
-                        setDigitCounts(computeDigitCounts(p, pipRef.current));
-                        setDigitTotal(p.length);
+                        const stats = computeDigitGrowth(p, pipRef.current);
+                        setDigitCounts(stats.counts);
+                        setDigitGrowth(stats.growth);
+                        setDigitTotal(stats.total);
                         const sid = data.subscription?.id;
                         if (sid) subIdRef.current = sid;
                     }
@@ -223,6 +249,7 @@ export function useManualTrade() {
         setCurrentTick(null);
         setLastDigit(null);
         setDigitCounts(Array(10).fill(0));
+        setDigitGrowth(Array(10).fill(0));
         setDigitTotal(0);
 
         const sym = symbols.find(s => s.symbol === activeSymbol);
@@ -302,7 +329,7 @@ export function useManualTrade() {
 
     return {
         symbols, activeSymbol, setActiveSymbol,
-        currentTick, lastDigit, digitCounts, digitTotal, pipSize,
+        currentTick, lastDigit, digitCounts, digitGrowth, digitTotal, pipSize,
         tradeType, setTradeType,
         contractMode, setContractMode,
         selectedDigit, setSelectedDigit,

@@ -156,7 +156,7 @@ $radius:   10px;
     justify-content: flex-end;
     cursor: pointer;
     position: relative;
-    padding-top: 16px;
+    padding-top: 26px;
 
     &:hover .mt-bar-fill {
         opacity: 0.8;
@@ -177,10 +177,21 @@ $radius:   10px;
 }
 
 .mt-bar-pct {
-    font-size: 9px;
-    color: $muted;
+    font-size: 11px;
+    color: $text;
+    font-weight: 700;
     position: absolute;
     top: 0;
+}
+
+.mt-growth {
+    font-size: 9px;
+    line-height: 1;
+    position: absolute;
+    top: 14px;
+    &--up  { color: $win; }
+    &--dn  { color: $loss; }
+    &--flat { color: $muted; }
 }
 
 .mt-bar-lbl {

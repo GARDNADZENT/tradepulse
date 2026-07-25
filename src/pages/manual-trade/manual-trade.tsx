@@ -22,7 +22,7 @@ const CONTRACT_MODE_OPTIONS: Record<TradeType, { value: ContractMode; label: str
 const ManualTrade = observer(() => {
     const {
         symbols, activeSymbol, setActiveSymbol,
-        currentTick, lastDigit, digitCounts, digitTotal, pipSize,
+        currentTick, lastDigit, digitCounts, digitGrowth, digitTotal, pipSize,
         tradeType, setTradeType,
         contractMode, setContractMode,
         selectedDigit, setSelectedDigit,
@@ -94,22 +94,26 @@ const ManualTrade = observer(() => {
 
                     <div className='mt-stats'>
                         <div className='mt-stats-header'>
-                            Digit Frequency {digitTotal > 0 && `(last ${Math.min(digitTotal, 1000)})`}
+                            Digit Distribution (200 ticks)
                         </div>
                         <div className='mt-bars'>
                             {digitLabels.map((label, i) => {
-                                const pct = digitTotal > 0 ? (digitCounts[i] / Math.min(digitTotal, 1000)) * 100 : 0;
+                                const pct = digitTotal > 0 ? (digitCounts[i] / digitTotal) * 100 : 0;
+                                const growth = digitGrowth[i] ?? 0;
                                 const isSelected = i === selectedDigit && contractMode !== 'DIGITEVEN' && contractMode !== 'DIGITODD';
                                 const isHi = i >= 7;
+                                const growthIcon = growth > 2 ? '▲' : growth > 0.5 ? '△' : growth < -2 ? '▼' : growth < -0.5 ? '▽' : '–';
+                                const growthClass = growth > 0.5 ? 'mt-growth--up' : growth < -0.5 ? 'mt-growth--dn' : 'mt-growth--flat';
                                 return (
                                     <div
                                         key={i}
                                         className={`mt-bar-col ${isSelected ? 'mt-bar-col--sel' : ''}`}
                                         onClick={() => setSelectedDigit(i)}
-                                        title={`Digit ${i}: ${pct.toFixed(1)}%`}
+                                        title={`Digit ${i}: ${pct.toFixed(1)}% (${growth >= 0 ? '+' : ''}${growth.toFixed(1)}pp)`}
                                     >
                                         <div className='mt-bar-fill' style={{ height: `${Math.min(100, pct * 4)}%` }} />
                                         <span className='mt-bar-pct'>{pct.toFixed(0)}%</span>
+                                        <span className={`mt-growth ${growthClass}`}>{growthIcon}</span>
                                         <span className={`mt-bar-lbl ${isHi && isSelected ? 'mt-bar-lbl--hi' : ''}`}>{label}</span>
                                     </div>
                                 );
