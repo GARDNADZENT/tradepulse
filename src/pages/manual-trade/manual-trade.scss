@@ -23,7 +23,8 @@ $radius:   10px;
     gap: 12px;
 
     @include mobile-or-tablet-screen {
-        padding: 8px 10px 80px;
+        padding: 8px 10px 16px;
+        gap: 8px;
     }
 }
 
@@ -88,6 +89,10 @@ $radius:   10px;
     border-radius: $radius;
     padding: 20px;
     text-align: center;
+
+    @include mobile-or-tablet-screen {
+        padding: 12px;
+    }
 }
 
 .mt-price {
@@ -96,6 +101,10 @@ $radius:   10px;
     color: $accent;
     font-family: 'Courier New', monospace;
     letter-spacing: 1px;
+
+    @include mobile-or-tablet-screen {
+        font-size: 22px;
+    }
 }
 
 .mt-digit-row {
@@ -118,6 +127,12 @@ $radius:   10px;
     font-size: 24px;
     font-weight: 900;
     box-shadow: 0 0 16px rgba($accent, 0.4);
+
+    @include mobile-or-tablet-screen {
+        width: 36px;
+        height: 36px;
+        font-size: 18px;
+    }
 }
 
 .mt-digit-label {
@@ -146,6 +161,10 @@ $radius:   10px;
     align-items: flex-end;
     gap: 4px;
     height: 120px;
+
+    @include mobile-or-tablet-screen {
+        height: 100px;
+    }
 }
 
 .mt-bar-col {
@@ -156,7 +175,7 @@ $radius:   10px;
     justify-content: flex-end;
     cursor: pointer;
     position: relative;
-    padding-top: 26px;
+    padding-top: 38px;
 
     &:hover .mt-bar-fill {
         opacity: 0.8;
@@ -176,19 +195,32 @@ $radius:   10px;
     transition: height 0.3s, opacity 0.2s;
 }
 
+.mt-badge {
+    position: absolute;
+    top: 0;
+    font-size: 7px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    padding: 1px 3px;
+    border-radius: 3px;
+    line-height: 1.2;
+    &--hot { background: rgba($win, 0.2); color: $win; }
+    &--low { background: rgba($loss, 0.2); color: $loss; }
+}
+
 .mt-bar-pct {
     font-size: 11px;
     color: $text;
     font-weight: 700;
     position: absolute;
-    top: 0;
+    top: 11px;
 }
 
 .mt-growth {
     font-size: 9px;
     line-height: 1;
     position: absolute;
-    top: 14px;
+    top: 24px;
     &--up  { color: $win; }
     &--dn  { color: $loss; }
     &--flat { color: $muted; }
@@ -211,6 +243,11 @@ $radius:   10px;
     display: flex;
     flex-direction: column;
     gap: 12px;
+
+    @include mobile-or-tablet-screen {
+        padding: 12px;
+        gap: 8px;
+    }
 }
 
 .mt-chips {

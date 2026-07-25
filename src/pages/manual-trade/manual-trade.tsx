@@ -37,6 +37,25 @@ const ManualTrade = observer(() => {
     const maxCount = Math.max(1, ...digitCounts);
     const modeOptions = CONTRACT_MODE_OPTIONS[tradeType];
 
+    const digitPcts = useMemo(() => {
+        if (digitTotal === 0) return Array(10).fill(0);
+        return digitCounts.map(c => (c / digitTotal) * 100);
+    }, [digitCounts, digitTotal]);
+
+    const hotIdx = useMemo(() => {
+        if (digitTotal === 0) return -1;
+        let maxPct = -1, idx = -1;
+        digitPcts.forEach((p, i) => { if (p > maxPct) { maxPct = p; idx = i; } });
+        return idx;
+    }, [digitPcts, digitTotal]);
+
+    const lowIdx = useMemo(() => {
+        if (digitTotal === 0) return -1;
+        let minPct = Infinity, idx = -1;
+        digitPcts.forEach((p, i) => { if (p < minPct) { minPct = p; idx = i; } });
+        return idx;
+    }, [digitPcts, digitTotal]);
+
     const predictionText = useMemo(() => {
         switch (contractMode) {
             case 'DIGITMATCH': return `match ${selectedDigit}`;
@@ -94,14 +113,16 @@ const ManualTrade = observer(() => {
 
                     <div className='mt-stats'>
                         <div className='mt-stats-header'>
-                            Digit Distribution (200 ticks)
+                            Digit Distribution ({digitTotal} ticks)
                         </div>
                         <div className='mt-bars'>
                             {digitLabels.map((label, i) => {
-                                const pct = digitTotal > 0 ? (digitCounts[i] / digitTotal) * 100 : 0;
+                                const pct = digitPcts[i];
                                 const growth = digitGrowth[i] ?? 0;
                                 const isSelected = i === selectedDigit && contractMode !== 'DIGITEVEN' && contractMode !== 'DIGITODD';
                                 const isHi = i >= 7;
+                                const isHot = i === hotIdx && digitTotal > 0;
+                                const isLow = i === lowIdx && digitTotal > 0;
                                 const growthIcon = growth > 2 ? '▲' : growth > 0.5 ? '△' : growth < -2 ? '▼' : growth < -0.5 ? '▽' : '–';
                                 const growthClass = growth > 0.5 ? 'mt-growth--up' : growth < -0.5 ? 'mt-growth--dn' : 'mt-growth--flat';
                                 return (
@@ -112,7 +133,9 @@ const ManualTrade = observer(() => {
                                         title={`Digit ${i}: ${pct.toFixed(1)}% (${growth >= 0 ? '+' : ''}${growth.toFixed(1)}pp)`}
                                     >
                                         <div className='mt-bar-fill' style={{ height: `${Math.min(100, pct * 4)}%` }} />
-                                        <span className='mt-bar-pct'>{pct.toFixed(0)}%</span>
+                                        {isHot && <span className='mt-badge mt-badge--hot'>HOT</span>}
+                                        {isLow && <span className='mt-badge mt-badge--low'>LOW</span>}
+                                        <span className='mt-bar-pct'>{pct.toFixed(1)}%</span>
                                         <span className={`mt-growth ${growthClass}`}>{growthIcon}</span>
                                         <span className={`mt-bar-lbl ${isHi && isSelected ? 'mt-bar-lbl--hi' : ''}`}>{label}</span>
                                     </div>

@@ -70,17 +70,15 @@ function calcDigitPcts(ticks: number[]): number[] {
     return total > 0 ? counts.map(c => (c / total) * 100) : counts;
 }
 
-/** Returns growth (pp change between recent-30 and full-200 windows) and full-window counts. */
+/** Returns counts (from all prices), growth (recent-30 vs all), and total digits. */
 function computeDigitGrowth(prices: number[], pipSize: number): { counts: number[]; growth: number[]; total: number } {
-    const full = prices.slice(-200);
-    const recent = prices.slice(-30);
-    const fullDigits = full.map(p => getDigit(p, pipSize)).filter(d => d >= 0 && d <= 9);
-    const recentDigits = recent.map(p => getDigit(p, pipSize)).filter(d => d >= 0 && d <= 9);
-    const fullPcts = calcDigitPcts(fullDigits);
+    const allDigits = prices.map(p => getDigit(p, pipSize)).filter(d => d >= 0 && d <= 9);
+    const recentDigits = prices.slice(-30).map(p => getDigit(p, pipSize)).filter(d => d >= 0 && d <= 9);
+    const allPcts = calcDigitPcts(allDigits);
     const recentPcts = calcDigitPcts(recentDigits);
-    const growth = fullPcts.map((p, i) => parseFloat((recentPcts[i] - p).toFixed(1)));
-    const counts = computeDigitCounts(full, pipSize);
-    return { counts, growth, total: fullDigits.length };
+    const growth = allPcts.map((p, i) => parseFloat((recentPcts[i] - p).toFixed(1)));
+    const counts = computeDigitCounts(prices, pipSize);
+    return { counts, growth, total: allDigits.length };
 }
 
 export function useManualTrade() {
