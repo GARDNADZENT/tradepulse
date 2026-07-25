@@ -373,7 +373,7 @@ const AppWrapper = observer(() => {
     // [/AI]
     return (
         <React.Fragment>
-            <div className='main'>
+            <div className={classNames('main', { 'main--manual-trade-active': active_tab === MANUAL_TRADE })}>
                 <div
                     className={classNames('main__container', {
                         'main__container--active': active_tour && active_tab === DASHBOARD && !isDesktop,
@@ -492,15 +492,17 @@ const AppWrapper = observer(() => {
                     </div>
                 </div>
             </div>
-            <DesktopWrapper>
-                <div className='main__run-strategy-wrapper'>
-                    <RunStrategy />
-                    <RunPanel />
-                </div>
-                <ChartModal />
-                <TradingViewModal />
-            </DesktopWrapper>
-            <MobileWrapper>{!is_open && <RunPanel />}</MobileWrapper>
+            {active_tab !== MANUAL_TRADE && (
+                <DesktopWrapper>
+                    <div className='main__run-strategy-wrapper'>
+                        <RunStrategy />
+                        <RunPanel />
+                    </div>
+                    <ChartModal />
+                    <TradingViewModal />
+                </DesktopWrapper>
+            )}
+            {active_tab !== MANUAL_TRADE && <MobileWrapper>{!is_open && <RunPanel />}</MobileWrapper>}
             <Dialog
                 cancel_button_text={cancel_button_text || localize('Cancel')}
                 className='dc-dialog__wrapper--fixed'
