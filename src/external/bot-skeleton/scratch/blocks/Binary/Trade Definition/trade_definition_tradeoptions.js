@@ -20,8 +20,25 @@ window.Blockly.Blocks.trade_definition_tradeoptions = {
         this.jsonInit(this.definition());
         this.setInputsInline(true);
 
-        // Ensure one of this type per statement-stack
         this.setNextStatement(false);
+    },
+    updateVirtualHookThresholdInput(is_enabled) {
+        runIrreversibleEvents(() => {
+            if (is_enabled) {
+                if (!this.getInput('VIRTUAL_HOOK_THRESHOLD')) {
+                    this.appendValueInput('VIRTUAL_HOOK_THRESHOLD')
+                        .appendField(localize('Loss Threshold:'));
+                    const shadow_block = this.workspace.newBlock('math_number');
+                    shadow_block.setShadow(true);
+                    shadow_block.setFieldValue('1', 'NUM');
+                    shadow_block.initSvg();
+                    shadow_block.render();
+                    shadow_block.outputConnection.connect(this.getInput('VIRTUAL_HOOK_THRESHOLD').connection);
+                }
+            } else {
+                this.removeInput('VIRTUAL_HOOK_THRESHOLD', true);
+            }
+        });
     },
     definition() {
         const is_stake = this.type === 'trade_definition_tradeoptions';
@@ -31,6 +48,8 @@ window.Blockly.Blocks.trade_definition_tradeoptions = {
                 duration_value: '%2',
             }),
             message1: `${is_stake ? localize('Stake') : localize('Payout')}: %1 %2 %3`,
+            message2: localize('Virtual Hook: %1'),
+            message3: localize('Loss Threshold: %1'),
             args0: [
                 {
                     type: 'field_dropdown',
@@ -60,6 +79,20 @@ window.Blockly.Blocks.trade_definition_tradeoptions = {
                     text: '',
                 },
             ],
+            args2: [
+                {
+                    type: 'field_checkbox',
+                    name: 'VIRTUAL_HOOK_ENABLED',
+                    checked: false,
+                },
+            ],
+            args3: [
+                {
+                    type: 'input_value',
+                    name: 'VIRTUAL_HOOK_THRESHOLD',
+                    check: 'Number',
+                },
+            ],
             colour: window.Blockly.Colours.Special1.colour,
             colourSecondary: window.Blockly.Colours.Special1.colourSecondary,
             colourTertiary: window.Blockly.Colours.Special1.colourTertiary,
@@ -84,6 +117,11 @@ window.Blockly.Blocks.trade_definition_tradeoptions = {
     },
     onchange(event) {
         if (event.type === 'change') {
+            if (event.name === 'VIRTUAL_HOOK_ENABLED') {
+                const is_enabled = this.getFieldValue('VIRTUAL_HOOK_ENABLED') === 'TRUE';
+                this.updateVirtualHookThresholdInput(is_enabled);
+            }
+
             const selected_block = this.workspace.getBlockById(event.blockId);
             selected_block?.parentBlock_?.inputList
                 .filter(item => ['DURATION', 'AMOUNT'].includes(item.name))
@@ -553,6 +591,11 @@ window.Blockly.Blocks.trade_definition_tradeoptions = {
         } else if (has_prediction) {
             this.createPredictionInput([1]);
         }
+
+        const vh_enabled = xmlElement.getAttribute('vh_enabled') === 'true';
+        if (vh_enabled) {
+            this.updateVirtualHookThresholdInput(true);
+        }
     },
     mutationToDom() {
         const container = document.createElement('mutation');
@@ -560,6 +603,9 @@ window.Blockly.Blocks.trade_definition_tradeoptions = {
         container.setAttribute('has_first_barrier', !!this.getInput('BARRIEROFFSET'));
         container.setAttribute('has_second_barrier', !!this.getInput('SECONDBARRIEROFFSET'));
         container.setAttribute('has_prediction', !!this.getInput('PREDICTION'));
+
+        const vh_enabled = this.getFieldValue('VIRTUAL_HOOK_ENABLED') === 'TRUE';
+        container.setAttribute('vh_enabled', vh_enabled);
 
         return container;
     },

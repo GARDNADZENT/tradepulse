@@ -1,7 +1,8 @@
-import { ComponentProps, ReactNode, useMemo } from 'react';
+import { ComponentProps, ReactNode, useCallback, useMemo } from 'react';
 import useThemeSwitcher from '@/hooks/useThemeSwitcher';
 import RootStore from '@/stores/root-store';
-import { LegacyLogout1pxIcon, LegacyTheme1pxIcon } from '@deriv/quill-icons/Legacy';
+import { navigateToTransfer } from '@/utils/transfer-utils';
+import { LegacyLogout1pxIcon, LegacyTheme1pxIcon, LegacyTransferIcon } from '@deriv/quill-icons/Legacy';
 import { useTranslations } from '@deriv-com/translations';
 import { ToggleSwitch } from '@deriv-com/ui';
 
@@ -28,6 +29,13 @@ const useMobileMenuConfig = (
 ) => {
     const { localize } = useTranslations();
     const { is_dark_mode_on, toggleTheme } = useThemeSwitcher();
+
+    const handleTransfer = useCallback(() => {
+        const currency = client?.all_accounts_balance?.accounts?.[client.activeLoginid ?? '']?.currency;
+        if (currency) {
+            navigateToTransfer(currency);
+        }
+    }, [client]);
 
     const menuConfig = useMemo((): TMenuConfig[] => {
 
@@ -59,6 +67,12 @@ const useMobileMenuConfig = (
                 },
             ].filter(Boolean) as TMenuConfig,
             [
+                client?.is_logged_in && {
+                    as: 'button',
+                    label: localize('Transfer'),
+                    LeftComponent: LegacyTransferIcon,
+                    onClick: handleTransfer,
+                },
                 client?.is_logged_in &&
                     onLogout && {
                         as: 'button',
@@ -72,6 +86,7 @@ const useMobileMenuConfig = (
     }, [
         client,
         onLogout,
+        handleTransfer,
         is_dark_mode_on,
         toggleTheme,
         localize,

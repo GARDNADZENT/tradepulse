@@ -14,6 +14,7 @@ import LanguageSettings from './LanguageSettings';
 import LogoutFooter from './LogoutFooter';
 import NetworkStatus from './NetworkStatus';
 import ServerTime from './ServerTime';
+import TransferFooter from './TransferFooter';
 import './footer.scss';
 
 const Footer = () => {
@@ -30,6 +31,7 @@ const Footer = () => {
         <footer className='app-footer'>
             <FullScreen />
             {isAuthorized && <LogoutFooter />}
+            {isAuthorized && <TransferFooter />}
             {/* [AI] Conditionally render language settings based on brand config */}
             {enableLanguageSettings && (
                 <>
