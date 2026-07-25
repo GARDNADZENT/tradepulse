@@ -201,6 +201,7 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
                     </div>
                 </div>
             ) : (
+                <>
                 <Button
                     is_disabled={(is_disabled && !is_unavailable_for_payment_agent) || contract_stage === 3}
                     className={button_props.class}
@@ -247,6 +248,7 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
                         <Localize i18n_default_text='Pause' />
                     </Button>
                 )}
+                </>
             )}
             <div
                 className={classNames('animation__container', className, {
