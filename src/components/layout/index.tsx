@@ -10,7 +10,6 @@ import { crypto_currencies_display_order, fiat_currencies_display_order } from '
 import Footer from './footer';
 import AppHeader from './header';
 import Body from './main-body';
-import StandaloneLoginScreen from '../login-screen/StandaloneLoginScreen';
 import './layout.scss';
 
 const Layout = observer(() => {
@@ -144,21 +143,18 @@ const Layout = observer(() => {
     }, [isAuthenticating, isInitialAuthCheckComplete]);
 
     return (
-        <>
-            <StandaloneLoginScreen />
-            <div
-                className={clsx('layout', {
-                    responsive: isDesktop,
-                    'quick-strategy-active': is_quick_strategy_active && !isDesktop,
-                })}
-            >
-                {!isCallbackPage && <AppHeader isAuthenticating={isAuthenticating || !isInitialAuthCheckComplete} />}
-                <Body>
-                    <Outlet />
-                </Body>
-                {!isCallbackPage && isDesktop && <Footer />}
-            </div>
-        </>
+        <div
+            className={clsx('layout', {
+                responsive: isDesktop,
+                'quick-strategy-active': is_quick_strategy_active && !isDesktop,
+            })}
+        >
+            {!isCallbackPage && <AppHeader isAuthenticating={isAuthenticating || !isInitialAuthCheckComplete} />}
+            <Body>
+                <Outlet />
+            </Body>
+            {!isCallbackPage && isDesktop && <Footer />}
+        </div>
     );
 });
 
