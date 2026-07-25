@@ -1,0 +1,447 @@
+@use 'components/shared/styles/mixins' as *;
+
+$accent:   #f97316;
+$accent2:  #ef4444;
+$bg:       #0f1117;
+$bg2:      #181c27;
+$bg3:      #1e2336;
+$border:   rgba(249,115,22,0.2);
+$text:     #e2e8f0;
+$muted:    #64748b;
+$win:      #22c55e;
+$loss:     #ef4444;
+$radius:   10px;
+
+.mt-page {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: $bg;
+    color: $text;
+    padding: 12px 16px 80px;
+    overflow-y: auto;
+    gap: 12px;
+
+    @include mobile-or-tablet-screen {
+        padding: 8px 10px 80px;
+    }
+}
+
+.mt-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: $muted;
+    font-size: 14px;
+}
+
+.mt-main {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 16px;
+    flex: 1;
+
+    @include mobile-or-tablet-screen {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+}
+
+/* ── Tick section (left) ───────────────────────────── */
+.mt-tick-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.mt-symbol-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.mt-select {
+    flex: 1;
+    background: $bg2;
+    border: 1px solid $border;
+    border-radius: $radius;
+    color: $text;
+    padding: 8px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    &:focus { outline: none; border-color: $accent; }
+}
+
+.mt-status {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+    &--on { background: rgba($win, 0.15); color: $win; }
+    &--off { background: rgba($loss, 0.15); color: $loss; }
+}
+
+.mt-tick-display {
+    background: $bg2;
+    border: 1px solid $border;
+    border-radius: $radius;
+    padding: 20px;
+    text-align: center;
+}
+
+.mt-price {
+    font-size: 28px;
+    font-weight: 700;
+    color: $accent;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 1px;
+}
+
+.mt-digit-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.mt-last-digit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, $accent, $accent2);
+    color: #fff;
+    font-size: 24px;
+    font-weight: 900;
+    box-shadow: 0 0 16px rgba($accent, 0.4);
+}
+
+.mt-digit-label {
+    font-size: 12px;
+    color: $muted;
+}
+
+/* ── Digit frequency bars ──────────────────────────── */
+.mt-stats {
+    background: $bg2;
+    border: 1px solid $border;
+    border-radius: $radius;
+    padding: 12px;
+}
+
+.mt-stats-header {
+    font-size: 12px;
+    color: $muted;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.mt-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 120px;
+}
+
+.mt-bar-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    cursor: pointer;
+    position: relative;
+    padding-top: 16px;
+
+    &:hover .mt-bar-fill {
+        opacity: 0.8;
+    }
+
+    &--sel .mt-bar-fill {
+        background: linear-gradient(180deg, $accent, $accent2) !important;
+        box-shadow: 0 0 8px rgba($accent, 0.5);
+    }
+}
+
+.mt-bar-fill {
+    width: 100%;
+    background: $bg3;
+    border-radius: 3px 3px 0 0;
+    min-height: 2px;
+    transition: height 0.3s, opacity 0.2s;
+}
+
+.mt-bar-pct {
+    font-size: 9px;
+    color: $muted;
+    position: absolute;
+    top: 0;
+}
+
+.mt-bar-lbl {
+    font-size: 10px;
+    color: $text;
+    margin-top: 2px;
+    font-weight: 600;
+    &--hi { color: $accent; }
+}
+
+/* ── Trade section (right) ─────────────────────────── */
+.mt-trade-section {
+    background: $bg2;
+    border: 1px solid $border;
+    border-radius: $radius;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.mt-chips {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+}
+
+.mt-chip {
+    white-space: nowrap;
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid $border;
+    background: transparent;
+    color: $muted;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &--on {
+        background: $accent;
+        color: #fff;
+        border-color: $accent;
+    }
+
+    &:hover:not(&--on) {
+        border-color: rgba($accent, 0.5);
+        color: $text;
+    }
+}
+
+.mt-mode-group {
+    display: flex;
+    gap: 6px;
+}
+
+.mt-mode-btn {
+    flex: 1;
+    padding: 8px;
+    border-radius: $radius;
+    border: 1px solid $border;
+    background: transparent;
+    color: $muted;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &--on {
+        background: linear-gradient(135deg, $accent, $accent2);
+        color: #fff;
+        border-color: transparent;
+        box-shadow: 0 0 12px rgba($accent, 0.3);
+    }
+
+    &:hover:not(&--on) {
+        border-color: rgba($accent, 0.5);
+        color: $text;
+    }
+}
+
+.mt-input-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.mt-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.mt-label {
+    font-size: 11px;
+    color: $muted;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.mt-input {
+    background: $bg3;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: $text;
+    padding: 8px 10px;
+    font-size: 14px;
+    font-weight: 600;
+    transition: border-color 0.2s;
+
+    &:focus {
+        outline: none;
+        border-color: $accent;
+    }
+
+    &::-webkit-inner-spin-button { opacity: 0.5; }
+}
+
+.mt-prediction {
+    font-size: 13px;
+    color: $muted;
+    text-align: center;
+    padding: 8px;
+    background: $bg3;
+    border-radius: 6px;
+    strong { color: $accent; }
+}
+
+.mt-buy-btn {
+    width: 100%;
+    padding: 12px;
+    border-radius: $radius;
+    border: none;
+    background: linear-gradient(135deg, $accent, $accent2);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    box-shadow: 0 0 20px rgba($accent, 0.3);
+
+    &:hover:not(:disabled) {
+        opacity: 0.9;
+        transform: translateY(-1px);
+    }
+
+    &:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        box-shadow: none;
+    }
+}
+
+.mt-hint {
+    font-size: 11px;
+    color: $muted;
+    text-align: center;
+}
+
+.mt-result {
+    font-size: 12px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+
+    &--ok { background: rgba($win, 0.1); color: $win; border: 1px solid rgba($win, 0.3); }
+    &--err { background: rgba($loss, 0.1); color: $loss; border: 1px solid rgba($loss, 0.3); }
+}
+
+.mt-dismiss {
+    background: none;
+    border: none;
+    color: inherit;
+    font-size: 16px;
+    cursor: pointer;
+    opacity: 0.6;
+    &:hover { opacity: 1; }
+}
+
+/* ── Positions ─────────────────────────────────────── */
+.mt-positions {
+    background: $bg2;
+    border: 1px solid $border;
+    border-radius: $radius;
+    padding: 12px;
+}
+
+.mt-positions-header {
+    font-size: 12px;
+    color: $muted;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+.mt-positions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.mt-pos-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: $bg3;
+    border-radius: 6px;
+    font-size: 12px;
+}
+
+.mt-pos-sym {
+    font-weight: 600;
+    min-width: 60px;
+}
+
+.mt-pos-type {
+    color: $muted;
+    font-size: 11px;
+    min-width: 60px;
+}
+
+.mt-pos-price {
+    min-width: 60px;
+    text-align: right;
+}
+
+.mt-pos-status {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    min-width: 44px;
+    text-align: center;
+
+    &--open { background: rgba($accent, 0.15); color: $accent; }
+    &--sold { background: rgba($muted, 0.15); color: $muted; }
+}
+
+.mt-pos-profit {
+    font-weight: 700;
+    min-width: 50px;
+    text-align: right;
+    &--win { color: $win; }
+    &--loss { color: $loss; }
+}
+
+.mt-sell-btn {
+    padding: 3px 10px;
+    border-radius: 12px;
+    border: 1px solid $loss;
+    background: transparent;
+    color: $loss;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &:hover {
+        background: $loss;
+        color: #fff;
+    }
+}

@@ -33,6 +33,7 @@ import {
 import {
     LabelPairedChartLineCaptionRegularIcon,
     LabelPairedObjectsColumnCaptionRegularIcon,
+    LabelPairedPlayLgFillIcon,
     LabelPairedPuzzlePieceTwoCaptionBoldIcon,
 } from '@deriv/quill-icons/LabelPaired';
 import { LegacyGuide1pxIcon } from '@deriv/quill-icons/Legacy';
@@ -45,6 +46,7 @@ import RunStrategy from '../dashboard/run-strategy';
 import './main.scss';
 
 import TradingBots from '../free-bots/trading-bots';
+import ManualTrade from '../manual-trade';
 import { MakotiWidget } from '@/components/makoti-widget/makoti-widget';
 
 const ChartWrapper = lazy(() => import('../chart/chart-wrapper'));
@@ -79,9 +81,9 @@ const AppWrapper = observer(() => {
         [key: string]: string;
     };
     const { clear } = summary_card;
-    const { DASHBOARD, BOT_BUILDER, TRADING_BOTS } = DBOT_TABS;
+    const { DASHBOARD, BOT_BUILDER, TRADING_BOTS, MANUAL_TRADE } = DBOT_TABS;
     const init_render = React.useRef(true);
-    const hash = ['dashboard', 'bot_builder', 'chart', 'trading_bots', 'tutorial'];
+    const hash = ['dashboard', 'bot_builder', 'chart', 'trading_bots', 'manual_trade', 'tutorial'];
     const { isDesktop } = useDevice();
     const location = useLocation();
     const navigate = useNavigate();
@@ -445,6 +447,21 @@ const AppWrapper = observer(() => {
                                 id='id-trading-bots'
                             >
                                 <TradingBots />
+                            </div>
+                            <div
+                                label={
+                                    <>
+                                        <LabelPairedPlayLgFillIcon
+                                            height='24px'
+                                            width='24px'
+                                            fill='var(--text-general)'
+                                        />
+                                        <Localize i18n_default_text='Manual Trade' />
+                                    </>
+                                }
+                                id='id-manual-trade'
+                            >
+                                <ManualTrade />
                             </div>
                             <div
                                 label={
