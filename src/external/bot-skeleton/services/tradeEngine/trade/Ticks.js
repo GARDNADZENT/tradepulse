@@ -29,6 +29,14 @@ export default Engine =>
                     const lastTick = ticks.slice(-1)[0];
                     const { epoch } = lastTick;
                     this.store.dispatch({ type: constants.NEW_TICK, payload: epoch });
+
+                    if (this.vh_state?.virtual_trade_active && this.processVirtualTick) {
+                        this.processVirtualTick({
+                            quote: lastTick.quote || lastTick.price,
+                            symbol: this.symbol,
+                            epoch: lastTick.epoch || epoch,
+                        });
+                    }
                 };
 
                 const key = await ticksService.monitor({ symbol, callback });

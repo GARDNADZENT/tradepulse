@@ -25,17 +25,20 @@ export default Engine =>
                 throw Error(getLocalizedErrorMessage('ProposalsNotReady'));
             }
 
+            if (this.vh_state.enabled && this.vh_state.is_virtual) {
+                const proposal = proposals.find(p => p.contract_type === contract_type);
+                const stake = this.vh_state.current_stake || this.tradeOptions.amount || 1;
+                return proposal
+                    ? { id: proposal.id, askPrice: Number(stake) }
+                    : { id: proposals[0].id, askPrice: Number(stake) };
+            }
+
             const to_buy = proposals.find(proposal => {
                 if (
                     proposal.contract_type === contract_type &&
                     proposal.purchase_reference === this.getPurchaseReference()
                 ) {
-                    // Below happens when a user has had one of the proposals return
-                    // with a ContractBuyValidationError. We allow the logic to continue
-                    // to here cause the opposite proposal may still be valid. Only once
-                    // they attempt to purchase the errored proposal we will intervene.
                     if (proposal.error) {
-                        // Ensure we throw the localized error message
                         throw proposal.error;
                     }
 

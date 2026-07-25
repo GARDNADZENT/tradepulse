@@ -63,9 +63,9 @@ export default class TransactionsStore {
 
     get statistics() {
         let total_runs = 0;
-        // Filter out only contract transactions and remove dividers
+        // Filter out only contract transactions, remove dividers, exclude virtual trades
         const trxs = this.transactions.filter(
-            trx => trx.type === transaction_elements.CONTRACT && typeof trx.data === 'object'
+            trx => trx.type === transaction_elements.CONTRACT && typeof trx.data === 'object' && !(trx.data as any).is_virtual
         );
         const statistics = trxs.reduce(
             (stats, { data }) => {

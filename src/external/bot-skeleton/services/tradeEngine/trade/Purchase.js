@@ -1,8 +1,10 @@
+import { localize } from '@deriv-com/translations';
 import { LogTypes } from '../../../constants/messages';
 import { api_base } from '../../api/api-base';
+import { observer as globalObserver } from '../../../utils/observer';
 import { contractStatus, info, log } from '../utils/broadcast';
 import { doUntilDone, getUUID, recoverFromError, tradeOptionToBuy } from '../utils/helpers';
-import { purchaseSuccessful } from './state/actions';
+import { openContractReceived, purchaseSuccessful, sell, start } from './state/actions';
 import { BEFORE_PURCHASE } from './state/constants';
 
 let delayIndex = 0;
@@ -10,14 +12,248 @@ let purchase_reference;
 
 export default Engine =>
     class Purchase extends Engine {
-        purchase(contract_type) {
-            // Prevent calling purchase twice
+        async purchase(contract_type) {
+            if (this.vh_state.enabled && this.vh_state.is_virtual) {
+                return this.virtualPurchase(contract_type);
+            }
+            return this.realPurchase(contract_type);
+        }
+
+        async virtualPurchase(contract_type) {
+            const { duration, duration_unit, symbol } = this.tradeOptions;
+
+            let target_ticks = 0;
+            if (duration_unit === 't') {
+                target_ticks = duration;
+            } else {
+                const duration_seconds = duration * (duration_unit === 'm' ? 60 : 1);
+                target_ticks = Math.ceil(duration_seconds);
+            }
+
+            let resolved_prediction = this.tradeOptions.prediction;
+            if (typeof window !== 'undefined' && window.BinaryBotCustomPrediction !== undefined) {
+                resolved_prediction = Number(window.BinaryBotCustomPrediction);
+                window.BinaryBotCustomPrediction = undefined;
+            }
+
+            const configured_stake = Number(this.tradeOptions.amount) || 1;
+            if (!this.vh_state.initial_stake || this.vh_state.initial_stake === 0) {
+                this.vh_state.initial_stake = configured_stake;
+            }
+            if (!this.vh_state.current_stake || this.vh_state.current_stake === 0) {
+                this.vh_state.current_stake = configured_stake;
+            }
+
+            this.vh_state.virtual_trade_active = true;
+            this.vh_state.virtual_tick_count = 0;
+            this.vh_state.virtual_target_duration = target_ticks;
+            this.vh_state.virtual_contract_type = contract_type;
+            this.vh_state.virtual_prediction = resolved_prediction;
+            this.vh_state.virtual_entry_spot = 0;
+            this.vh_state.entry_spot_captured = false;
+            this.vh_state.last_tick_epoch = null;
+
+            this.store.dispatch(purchaseSuccessful());
+            this.store.dispatch(openContractReceived());
+
+            this.vh_state.virtual_tick_subscription = api_base.api.onMessage().subscribe(({ data }) => {
+                if (data.msg_type === 'tick' && data.tick.symbol === symbol) {
+                    this.processVirtualTick({
+                        quote: data.tick.quote,
+                        symbol: data.tick.symbol,
+                        epoch: data.tick.epoch,
+                    });
+                }
+            });
+            api_base.pushSubscription(this.vh_state.virtual_tick_subscription);
+            if (!api_base.api.sent_requests?.some(req => req.ticks === symbol)) {
+                api_base.api.send({ ticks: symbol, subscribe: 1 });
+            }
+
+            return new Promise((resolve, reject) => {
+                this.vh_state.virtual_resolve = resolve;
+                this.vh_state.virtual_reject = reject;
+                this.vh_state.virtual_timeout = setTimeout(() => {
+                    if (this.vh_state.virtual_trade_active) {
+                        this.resetVirtualTrade();
+                        reject(new Error('Virtual trade timed out'));
+                    }
+                }, 8000);
+            });
+        }
+
+        processVirtualTick(tick_data) {
+            if (!this.vh_state.virtual_trade_active) return;
+
+            const { symbol } = this.tradeOptions;
+            if (tick_data.symbol !== symbol) return;
+
+            const tick_epoch = tick_data.epoch;
+            if (tick_epoch && tick_epoch === this.vh_state.last_tick_epoch) return;
+            this.vh_state.last_tick_epoch = tick_epoch;
+
+            const { virtual_target_duration, virtual_contract_type } = this.vh_state;
+            const isDigitTrade = !['CALL', 'PUT'].includes(virtual_contract_type);
+
+            if (!this.vh_state.entry_spot_captured) {
+                this.vh_state.virtual_entry_spot = tick_data.quote;
+                this.vh_state.entry_spot_captured = true;
+
+                if (isDigitTrade && virtual_target_duration === 1) {
+                    this.settleVirtualTrade(tick_data);
+                }
+                return;
+            }
+
+            this.vh_state.virtual_tick_count++;
+            const current_tick_count = this.vh_state.virtual_tick_count;
+
+            const settle_after = isDigitTrade ? virtual_target_duration - 1 : virtual_target_duration;
+
+            if (current_tick_count >= settle_after) {
+                this.settleVirtualTrade(tick_data);
+            }
+        }
+
+        settleVirtualTrade(tick_data) {
+            const raw_end_spot = tick_data.quote;
+            const raw_entry_spot = this.vh_state.virtual_entry_spot;
+
+            const pip_size = this.getPipSize() || 0;
+            const end_spot_str = Number(raw_end_spot).toFixed(pip_size);
+            const entry_spot_str = Number(raw_entry_spot).toFixed(pip_size);
+
+            const end_spot = Number(end_spot_str);
+            const entry_spot = Number(entry_spot_str);
+
+            const trade_contract_type = this.vh_state.virtual_contract_type;
+            const prediction_barrier = parseInt(this.vh_state.virtual_prediction, 10);
+
+            const last_digit = Number(end_spot_str.slice(-1));
+            let is_win;
+
+            switch (trade_contract_type) {
+                case 'CALL':
+                    is_win = end_spot > entry_spot;
+                    break;
+                case 'PUT':
+                    is_win = end_spot < entry_spot;
+                    break;
+                case 'DIGITMATCH':
+                    is_win = last_digit === prediction_barrier;
+                    break;
+                case 'DIGITDIFF':
+                    is_win = last_digit !== prediction_barrier;
+                    break;
+                case 'DIGITOVER':
+                    is_win = last_digit > prediction_barrier;
+                    break;
+                case 'DIGITUNDER':
+                    is_win = last_digit < prediction_barrier;
+                    break;
+                case 'DIGITODD':
+                    is_win = last_digit % 2 !== 0;
+                    break;
+                case 'DIGITEVEN':
+                    is_win = last_digit % 2 === 0;
+                    break;
+                default:
+                    is_win = false;
+                    break;
+            }
+
+            const stake = this.vh_state.current_stake || this.tradeOptions.amount || 1;
+            const simulated_contract = {
+                ask_price: stake,
+                payout: stake * 1.95,
+                profit: is_win ? stake * 0.95 : -stake,
+                status: 'sold',
+                is_sold: true,
+                entry_spot: entry_spot_str,
+                exit_spot: end_spot_str,
+                is_virtual: true,
+                contract_type: trade_contract_type,
+                symbol: this.tradeOptions.symbol,
+            };
+
+            this.updateVirtualTotals(simulated_contract);
+            this.store.dispatch(sell());
+
+            setTimeout(() => {
+                const resolve = this.vh_state.virtual_resolve;
+                this.resetVirtualTrade();
+                if (resolve) resolve();
+
+                if (this.afterPromise) {
+                    const currentAfterPromise = this.afterPromise;
+                    this.afterPromise = null;
+                    currentAfterPromise();
+                }
+
+                setTimeout(() => {
+                    this.store.dispatch(start());
+                }, 10);
+            }, 0);
+        }
+
+        resetVirtualTrade() {
+            if (this.vh_state.virtual_timeout) {
+                clearTimeout(this.vh_state.virtual_timeout);
+            }
+            if (this.vh_state.virtual_tick_subscription) {
+                this.vh_state.virtual_tick_subscription.unsubscribe();
+            }
+            this.vh_state.virtual_trade_active = false;
+            this.vh_state.virtual_tick_count = 0;
+            this.vh_state.virtual_resolve = null;
+            this.vh_state.virtual_reject = null;
+            this.vh_state.last_tick_epoch = null;
+            this.vh_state.entry_spot_captured = false;
+        }
+
+        updateVirtualTotals(contract) {
+            const win = contract.profit > 0;
+
+            if (win) {
+                this.vh_state.loss_count = 0;
+                this.vh_state.current_stake = this.vh_state.initial_stake;
+            } else {
+                this.vh_state.loss_count++;
+                if (this.vh_state.threshold > 0 && this.vh_state.loss_count >= this.vh_state.threshold) {
+                    this.vh_state.is_virtual = false;
+                }
+            }
+
+            const now = Math.floor(Date.now() / 1000);
+            const virtual_id = `virtual_${now}_${Math.random()}`;
+            const virtual_contract = {
+                ...contract,
+                buy_price: Number(contract.ask_price),
+                sell_price: contract.profit > 0 ? Number(contract.payout) : 0,
+                profit: Number(contract.profit),
+                transaction_ids: { buy: virtual_id },
+                entry_tick: contract.entry_spot,
+                exit_tick: contract.exit_spot,
+                date_start: now,
+                entry_tick_time: now,
+                exit_tick_time: now + (this.vh_state.virtual_target_duration || 1),
+                display_name: win ? localize('Virtual Win') : localize('Virtual Loss'),
+                is_virtual: true,
+                is_completed: true,
+                underlying: this.tradeOptions.symbol,
+                currency: this.tradeOptions.currency || 'USD',
+                shortcode: `${contract.contract_type}_S0P_${this.tradeOptions.symbol.toUpperCase()}`,
+            };
+
+            globalObserver.emit('bot.contract', { ...virtual_contract, is_sold: true, is_virtual: true });
+        }
+
+        async realPurchase(contract_type) {
             if (this.store.getState().scope !== BEFORE_PURCHASE) {
                 return Promise.resolve();
             }
 
             const onSuccess = response => {
-                // Don't unnecessarily send a forget request for a purchased contract.
                 const { buy } = response;
 
                 contractStatus({
@@ -28,6 +264,23 @@ export default Engine =>
 
                 this.contractId = buy.contract_id;
                 this.store.dispatch(purchaseSuccessful());
+
+                if (this.vh_state.enabled && !this.vh_state.is_virtual) {
+                    const originalAfterPromise = this.afterPromise;
+                    this.afterPromise = () => {
+                        const contract = this.data.contract;
+                        const win = contract.profit > 0;
+                        this.vh_state.real_trade_count = (this.vh_state.real_trade_count || 0) + 1;
+
+                        if (win) {
+                            this.vh_state.is_virtual = true;
+                            this.vh_state.loss_count = 0;
+                            this.vh_state.step_count = 0;
+                            this.vh_state.current_stake = this.vh_state.initial_stake;
+                        }
+                        if (originalAfterPromise) originalAfterPromise();
+                    };
+                }
 
                 if (this.is_proposal_subscription_required) {
                     this.renewProposalsOnPurchase();
@@ -63,7 +316,6 @@ export default Engine =>
                 return recoverFromError(
                     action,
                     (errorCode, makeDelay) => {
-                        // if disconnected no need to resubscription (handled by live-api)
                         if (errorCode !== 'DisconnectError') {
                             this.renewProposalsOnPurchase();
                         } else {
@@ -114,6 +366,7 @@ export default Engine =>
                 delayIndex++
             ).then(onSuccess);
         }
+
         getPurchaseReference = () => purchase_reference;
         regeneratePurchaseReference = () => {
             purchase_reference = getUUID();
