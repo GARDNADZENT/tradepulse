@@ -39,6 +39,7 @@ export default class RunPanelStore {
             dialog_options: observable,
             has_open_contract: observable,
             is_running: observable,
+            is_paused: observable,
             is_statistics_info_modal_open: observable,
             is_drawer_open: observable,
             is_dialog_open: observable,
@@ -58,6 +59,8 @@ export default class RunPanelStore {
             is_contract_buying_in_progress: observable,
             SetpurchaseInProgress: action,
             onStopButtonClick: action,
+            onPauseBotClick: action,
+            onResumeBotClick: action,
             onClearStatClick: action,
             clearStat: action,
             toggleStatisticsInfoModal: action,
@@ -109,6 +112,7 @@ export default class RunPanelStore {
     is_sell_requested = false;
     show_bot_stop_message = false;
     is_contract_buying_in_progress = false;
+    is_paused = false;
 
     run_id = '';
     onOkButtonClick: (() => void) | null = null;
@@ -230,6 +234,7 @@ export default class RunPanelStore {
 
     onStopBotClick = () => {
         this.is_contract_buying_in_progress = false;
+        this.is_paused = false;
 
         const { is_multiplier } = this.root_store.summary_card;
         const { summary_card } = this.root_store;
@@ -241,6 +246,16 @@ export default class RunPanelStore {
             summary_card.clear();
             this.setShowBotStopMessage(true);
         }
+    };
+
+    onPauseBotClick = () => {
+        this.dbot.pauseBot();
+        this.is_paused = true;
+    };
+
+    onResumeBotClick = () => {
+        this.dbot.resumeBot();
+        this.is_paused = false;
     };
 
     stopBot = () => {

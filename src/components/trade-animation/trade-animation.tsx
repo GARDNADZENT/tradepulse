@@ -28,7 +28,7 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
     const { isMobile } = useDevice();
 
     const { is_contract_completed, profit } = summary_card;
-    const { contract_stage, is_stop_button_visible, is_stop_button_disabled, onRunButtonClick, onStopBotClick } =
+    const { contract_stage, is_stop_button_visible, is_stop_button_disabled, is_paused, onRunButtonClick, onStopBotClick, onPauseBotClick, onResumeBotClick } =
         run_panel;
     const [shouldDisable, setShouldDisable] = React.useState(false);
     const is_unavailable_for_payment_agent = false;
@@ -114,6 +114,14 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
     const should_show_tooltip = !is_stop_button_visible && !is_bot_builder_tab && has_no_bots;
 
     const button_props = React.useMemo(() => {
+        if (is_paused) {
+            return {
+                id: 'db-animation__resume-button',
+                class: 'animation__run-button',
+                text: <Localize i18n_default_text='Resume' />,
+                icon: <LabelPairedPlayLgFillIcon fill='#fff' />,
+            };
+        }
         if (is_stop_button_visible && !is_stop_button_disabled) {
             return {
                 id: 'db-animation__stop-button',
@@ -128,7 +136,7 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
             text: <Localize i18n_default_text='Run' />,
             icon: <LabelPairedPlayLgFillIcon fill='#fff' />,
         };
-    }, [is_stop_button_visible, is_stop_button_disabled]);
+    }, [is_stop_button_visible, is_stop_button_disabled, is_paused]);
     const show_overlay = should_show_overlay && is_contract_completed;
 
     // Fix TypeScript error by ensuring active_tab is a number
@@ -200,6 +208,10 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
                     icon={button_props.icon}
                     onClick={() => {
                         setShouldDisable(true);
+                        if (is_paused) {
+                            onResumeBotClick();
+                            return;
+                        }
                         if (is_stop_button_visible) {
                             onStopBotClick();
                             return;
@@ -215,6 +227,26 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
                 >
                     {button_props.text}
                 </Button>
+                {is_stop_button_visible && !is_paused && !is_stop_button_disabled && (
+                    <Button
+                        className='animation__pause-button'
+                        id='db-animation__pause-button'
+                        icon={
+                            <svg width='16' height='16' viewBox='0 0 16 16' fill='none'>
+                                <rect x='3' y='2' width='3.5' height='12' rx='1' fill='#fff'/>
+                                <rect x='9.5' y='2' width='3.5' height='12' rx='1' fill='#fff'/>
+                            </svg>
+                        }
+                        onClick={() => {
+                            setShouldDisable(true);
+                            onPauseBotClick();
+                        }}
+                        has_effect
+                        primary
+                    >
+                        <Localize i18n_default_text='Pause' />
+                    </Button>
+                )}
             )}
             <div
                 className={classNames('animation__container', className, {

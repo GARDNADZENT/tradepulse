@@ -42,6 +42,7 @@ $radius:   10px;
     grid-template-columns: 1fr 320px;
     gap: 16px;
     flex: 1;
+    min-height: 0;
 
     @include mobile-or-tablet-screen {
         grid-template-columns: 1fr;
@@ -146,6 +147,11 @@ $radius:   10px;
     border: 1px solid $border;
     border-radius: $radius;
     padding: 12px;
+
+    @include mobile-or-tablet-screen {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
 }
 
 .mt-stats-header {
@@ -154,6 +160,7 @@ $radius:   10px;
     margin-bottom: 8px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    white-space: nowrap;
 }
 
 .mt-bars {
@@ -164,6 +171,7 @@ $radius:   10px;
 
     @include mobile-or-tablet-screen {
         height: 100px;
+        min-width: 320px;
     }
 }
 
@@ -243,6 +251,7 @@ $radius:   10px;
     display: flex;
     flex-direction: column;
     gap: 12px;
+    min-height: 0;
 
     @include mobile-or-tablet-screen {
         padding: 12px;

@@ -58,6 +58,10 @@ const Interpreter = () => {
     }
 
     function loop() {
+        if (interpreter.paused_) {
+            setTimeout(loop, 100);
+            return;
+        }
         if ($scope.stopped || !interpreter.run()) {
             onFinish(interpreter.pseudoToNative(interpreter.value));
         }
@@ -277,7 +281,18 @@ const Interpreter = () => {
         });
     }
 
-    return { stop, run, terminateSession, bot, unsubscribeFromTicksService };
+    function pause() {
+        if (interpreter) interpreter.paused_ = true;
+    }
+
+    function resume() {
+        if (interpreter) {
+            interpreter.paused_ = false;
+            loop();
+        }
+    }
+
+    return { stop, run, terminateSession, bot, unsubscribeFromTicksService, pause, resume };
 };
 export default Interpreter;
 

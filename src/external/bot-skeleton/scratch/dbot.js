@@ -369,6 +369,28 @@ class DBot {
     }
 
     /**
+     * Pauses the bot interpreter. Execution can be resumed later.
+     */
+    pauseBot() {
+        if (this.interpreter && this.interpreter.pause) {
+            this.interpreter.pause();
+            this.is_bot_running = false;
+            api_base.setIsRunning(false);
+        }
+    }
+
+    /**
+     * Resumes a paused bot interpreter.
+     */
+    resumeBot() {
+        if (this.interpreter && this.interpreter.resume) {
+            this.interpreter.resume();
+            this.is_bot_running = true;
+            api_base.setIsRunning(true);
+        }
+    }
+
+    /**
      * Instructs the interpreter to stop the bot. If there is an active trade
      * that trade will be completed first to reflect correct contract status in UI.
      */
