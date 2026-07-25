@@ -86,6 +86,10 @@
 
             .dc-tabs__item {
                 padding: 0 2.2rem;
+
+                @include mobile-or-tablet-screen {
+                    padding: 0 0.8rem;
+                }
             }
         }
 
@@ -117,6 +121,10 @@
         list-style: none;
         font-size: 14px !important;
         font-weight: 500 !important;
+
+        @include mobile-or-tablet-screen {
+            font-size: 11px !important;
+        }
         text-align: center;
         white-space: nowrap;
         color: #e0d7c5 !important;
@@ -158,12 +166,16 @@
             }
         }
 
-        &--header-fit-content {
-            padding: 0 29px;
-        }
-
         &--is-hidden {
             display: none;
+        }
+
+        &--header-fit-content {
+            padding: 0 29px;
+
+            @include mobile-or-tablet-screen {
+                padding: 0 0.8rem;
+            }
         }
 
         &--is-scrollable-and-active {
@@ -215,6 +227,11 @@
             'Segoe UI',
             sans-serif !important;
         font-size: 14px !important;
+
+        @include mobile-or-tablet-screen {
+            font-size: 11px !important;
+        }
+
         border-radius: 5px !important;
         position: relative;
         z-index: 1;
