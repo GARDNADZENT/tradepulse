@@ -84,6 +84,7 @@ export default Engine =>
 
         processVirtualTick(tick_data) {
             if (!this.vh_state.virtual_trade_active) return;
+            if (this.$scope?.paused_) return;
 
             const { symbol } = this.tradeOptions;
             if (tick_data.symbol !== symbol) return;
@@ -116,6 +117,8 @@ export default Engine =>
         }
 
         settleVirtualTrade(tick_data) {
+            if (this.$scope?.paused_) return;
+
             const raw_end_spot = tick_data.quote;
             const raw_entry_spot = this.vh_state.virtual_entry_spot;
 
