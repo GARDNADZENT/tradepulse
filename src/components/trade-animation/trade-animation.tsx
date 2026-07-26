@@ -27,7 +27,7 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
     const { has_active_bot, has_saved_bots } = blockly_store;
     const { isMobile } = useDevice();
 
-    const { is_contract_completed, profit } = summary_card;
+    const { is_contract_completed, profit, contract_info } = summary_card;
     const { contract_stage, is_stop_button_visible, is_stop_button_disabled, is_paused, onRunButtonClick, onStopBotClick, onPauseBotClick, onResumeBotClick } =
         run_panel;
     const [shouldDisable, setShouldDisable] = React.useState(false);
@@ -257,7 +257,7 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
                     'animation--disabled': is_disabled,
                 })}
             >
-                {show_overlay && <ContractResultOverlay profit={profit} />}
+                {show_overlay && <ContractResultOverlay profit={profit} display_name={contract_info?.display_name} />}
                 <span className='animation__text'>
                     <ContractStageText contract_stage={contract_stage} />
                 </span>

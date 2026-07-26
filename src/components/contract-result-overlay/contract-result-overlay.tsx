@@ -5,14 +5,17 @@ import {
     LabelPairedCircleCheckMdRegularIcon,
     LabelPairedCircleXmarkMdRegularIcon,
 } from '@deriv/quill-icons/LabelPaired';
-import { Localize } from '@deriv-com/translations';
+import { Localize, localize } from '@deriv-com/translations';
 
 type TContractResultOverlayProps = {
     profit: number;
+    display_name?: string;
 };
 
-const ContractResultOverlay = ({ profit }: TContractResultOverlayProps) => {
+const ContractResultOverlay = ({ profit, display_name }: TContractResultOverlayProps) => {
     const has_won_contract = profit >= 0;
+    const is_virtual = display_name === 'Virtual Win' || display_name === 'Virtual Loss';
+    const label = is_virtual ? display_name : (has_won_contract ? localize('Won') : localize('Lost'));
 
     return (
         <div
@@ -24,12 +27,12 @@ const ContractResultOverlay = ({ profit }: TContractResultOverlayProps) => {
             <Text weight='bold' className='db-contract-card__result-caption'>
                 {has_won_contract ? (
                     <React.Fragment>
-                        <Localize i18n_default_text='Won' />
+                        <span>{label}</span>
                         <LabelPairedCircleCheckMdRegularIcon className='db-contract-card__result-icon' color='green' />
                     </React.Fragment>
                 ) : (
                     <React.Fragment>
-                        <Localize i18n_default_text='Lost' />
+                        <span>{label}</span>
                         <LabelPairedCircleXmarkMdRegularIcon className='db-contract-card__result-icon' color='red' />
                     </React.Fragment>
                 )}
