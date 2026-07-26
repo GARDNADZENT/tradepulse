@@ -233,7 +233,11 @@ const Transaction = ({ contract, active_transaction_id, onClickTransaction }: TT
                                 'transactions__profit--loss': contract?.profit && contract?.profit < 0,
                             })}
                         >
-                            <Money amount={Math.abs(contract.profit || 0)} currency={contract.currency} show_currency />
+                            {contract?.is_virtual && contract?.display_name ? (
+                                <span>{contract.display_name}</span>
+                            ) : (
+                                <Money amount={Math.abs(contract.profit || 0)} currency={contract.currency} show_currency />
+                            )}
                         </div>
                     ) : (
                         <TransactionFieldLoader />

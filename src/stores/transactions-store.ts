@@ -111,7 +111,7 @@ export default class TransactionsStore {
     }
 
     pushTransaction(data: TContractInfo) {
-        const is_completed = isEnded(data as ProposalOpenContract);
+        const is_completed = data.is_completed || isEnded(data as ProposalOpenContract);
         const { run_id } = this.root_store.run_panel;
         const current_account = this.core?.client?.loginid as string;
 
