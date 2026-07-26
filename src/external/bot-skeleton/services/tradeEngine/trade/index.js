@@ -17,13 +17,16 @@ import Sell from './Sell';
 import Ticks from './Ticks';
 import Total from './Total';
 
-const watchBefore = store =>
-    watchScope({
+const watchBefore = store => {
+    const state = store.getState();
+    if (state.scope === constants.STOP) return Promise.resolve(false);
+    return watchScope({
         store,
         stopScope: constants.DURING_PURCHASE,
         passScope: constants.BEFORE_PURCHASE,
         passFlag: 'proposalsReady',
     });
+};
 
 const watchDuring = store =>
     watchScope({

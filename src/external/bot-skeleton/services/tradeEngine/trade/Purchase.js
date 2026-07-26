@@ -4,7 +4,7 @@ import { api_base } from '../../api/api-base';
 import { observer as globalObserver } from '../../../utils/observer';
 import { contractStatus, info, log } from '../utils/broadcast';
 import { doUntilDone, getUUID, recoverFromError, tradeOptionToBuy } from '../utils/helpers';
-import { openContractReceived, purchaseSuccessful, sell, start } from './state/actions';
+import { openContractReceived, purchaseSuccessful, sell } from './state/actions';
 import { BEFORE_PURCHASE } from './state/constants';
 
 let delayIndex = 0;
@@ -192,10 +192,6 @@ export default Engine =>
                     this.afterPromise = null;
                     currentAfterPromise();
                 }
-
-                setTimeout(() => {
-                    this.store.dispatch(start());
-                }, 10);
             }, 0);
         }
 
