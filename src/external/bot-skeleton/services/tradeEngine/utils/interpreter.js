@@ -39,6 +39,7 @@ const Interpreter = () => {
     let bot = Interface($scope);
     let interpreter = {};
     let onFinish;
+    let pauseTimeoutId = null;
 
     $scope.observer.register('REVERT', watchName =>
         revert(watchName === 'before' ? $scope.beforeState : $scope.duringState)
@@ -52,6 +53,8 @@ const Interpreter = () => {
     }
 
     function revert(state) {
+        clearTimeout(pauseTimeoutId);
+        pauseTimeoutId = null;
         interpreter.restoreStateSnapshot(state);
         interpreter.paused_ = false;
         loop();
@@ -59,7 +62,7 @@ const Interpreter = () => {
 
     function loop() {
         if (interpreter.paused_) {
-            setTimeout(loop, 100);
+            pauseTimeoutId = setTimeout(loop, 100);
             return;
         }
         if ($scope.stopped || !interpreter.run()) {
@@ -290,6 +293,8 @@ const Interpreter = () => {
 
     function resume() {
         if (interpreter) {
+            clearTimeout(pauseTimeoutId);
+            pauseTimeoutId = null;
             interpreter.paused_ = false;
             $scope.paused_ = false;
             loop();
