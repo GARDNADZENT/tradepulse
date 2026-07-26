@@ -152,6 +152,11 @@ export default class SaveModalStore implements ISaveModalStore {
         xml.setAttribute('collection', save_as_collection ? 'true' : 'false');
 
         if (is_local) {
+            const passkey = window.prompt('Enter passkey to download the bot:');
+            if (passkey !== '**********') {
+                this.setButtonStatus(button_status.NORMAL);
+                return;
+            }
             save(bot_name, save_as_collection, xml);
         } else {
             await saveFile({
