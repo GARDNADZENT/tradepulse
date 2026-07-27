@@ -66,6 +66,7 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
     const getFormattedAccounts = () => {
         if (!accountList) return [];
         const allBal = client?.all_accounts_balance?.accounts ?? {};
+        const liveBalance = client?.balance;
         const results: Array<{
             loginid: string;
             currency: string;
@@ -76,15 +77,15 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
         }> = [];
 
         for (const account of accountList) {
-            const liveBal = allBal[account.loginid]?.balance;
-            const rawBal = liveBal ?? account.balance ?? 0;
             const isVirtual = isDemoAccount(account.loginid);
+            const isActive = account.loginid === activeLoginid;
+            const rawBal = isActive && liveBalance ? liveBalance : (allBal[account.loginid]?.balance ?? account.balance ?? 0);
             const entry = {
                 loginid: account.loginid,
                 currency: account.currency,
                 balance: addComma(Number(rawBal).toFixed(getDecimalPlaces(account.currency))),
                 isVirtual,
-                isActive: account.loginid === activeLoginid,
+                isActive,
             };
 
             if (showAsReal && isVirtual) {
