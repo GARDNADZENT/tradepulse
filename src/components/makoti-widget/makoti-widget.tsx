@@ -2,10 +2,10 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Scanner } from './scanner';
 import { MarketKiller } from './market-killer';
 import { OverUnderKiller } from './over-under-killer';
-import { Under7 } from './under-7';
+import { HighLow } from './high-low';
 import './makoti-widget.scss';
 
-type Tab = 'scanner' | 'market_killer' | 'over_under' | 'under_7';
+type Tab = 'scanner' | 'market_killer' | 'over_under' | 'high_low';
 const PAD = 8;
 
 function isLoggedIn(): boolean {
@@ -239,7 +239,7 @@ export const MakotiWidget: React.FC = () => {
                 style={{ position: 'fixed', left: btnPosRef.current.x, top: btnPosRef.current.y, zIndex: 100001 }}
                 onPointerDown={onBtnPointerDown}
                 onClick={onBtnClick}
-                title='MAKOTI — Scanner / Market Killer / O/U / Under 7'
+                title='MAKOTI — Scanner / Market Killer / O/U / HIGH/LOW'
             >
                 <span className='mw-fab__pulse' />
                 <span className='mw-fab__icon'>⚔</span>
@@ -296,10 +296,10 @@ export const MakotiWidget: React.FC = () => {
                         O/U Killer
                     </button>
                     <button
-                        className={`mw-tab${tab === 'under_7' ? ' mw-tab--active' : ''}`}
-                        onClick={() => setTab('under_7')}
+                        className={`mw-tab${tab === 'high_low' ? ' mw-tab--active' : ''}`}
+                        onClick={() => setTab('high_low')}
                     >
-                        Under 7
+                        HIGH/LOW
                     </button>
                 </div>
 
@@ -307,7 +307,7 @@ export const MakotiWidget: React.FC = () => {
                     {tab === 'scanner' && <Scanner />}
                     {tab === 'market_killer' && <MarketKiller />}
                     {tab === 'over_under' && <OverUnderKiller />}
-                    {tab === 'under_7' && <Under7 />}
+                    {tab === 'high_low' && <HighLow />}
                 </div>
             </div>
 

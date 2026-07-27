@@ -961,3 +961,47 @@ $mw-radius:   10px;
     line-height: 1.4;
     word-break: break-all;
 }
+
+.mw-killer__signal-strength {
+    font-size: 12px;
+    font-weight: 700;
+    margin-top: 4px;
+}
+
+.mw-killer__rankings {
+    background: rgba(255,255,255,0.03);
+    border-radius: 6px;
+    padding: 8px;
+    margin-top: 8px;
+}
+
+.mw-killer__rank-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: $mw-muted;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.mw-killer__rank-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px;
+    padding: 3px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.mw-killer__rank-score--high {
+    font-weight: 800;
+}
+
+.mw-killer__trades {
+    margin-top: 8px;
+}
+
+.mw-killer__trade-list {
+    max-height: 150px;
+    overflow-y: auto;
+}
