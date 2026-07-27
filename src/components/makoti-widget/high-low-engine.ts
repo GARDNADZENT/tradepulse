@@ -474,23 +474,16 @@ export function runMarketScan(
 
     for (const sym of HL_SYMBOLS) {
         const sd = symbolData[sym];
-        if (!sd || !sd.ready || sd.prices.length < MIN_TICKS_FOR_ANALYSIS) {
-            console.log(`[HL] scan skip ${sym}: ready=${sd?.ready} prices=${sd?.prices?.length ?? 0}`);
-            continue;
-        }
+        if (!sd || !sd.ready || sd.prices.length < MIN_TICKS_FOR_ANALYSIS) continue;
 
         const candles = buildCandles(sd.prices, sd.times);
-        if (candles.length < 20) {
-            console.log(`[HL] scan skip ${sym}: ${candles.length} candles < 20`);
-            continue;
-        }
+        if (candles.length < 20) continue;
 
         const score = analyzeMarket(sym, sd.prices, candles);
         scores.push(score);
     }
 
     scores.sort((a, b) => b.confidence - a.confidence);
-    console.log(`[HL] scan done: ${scores.length} markets scored`);
 
     const topMarkets = scores.slice(0, 5);
     const eligible = scores.filter(s => s.direction && s.confidence >= config.minConfidence);

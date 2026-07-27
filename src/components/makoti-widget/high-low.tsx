@@ -220,24 +220,13 @@ export const HighLow: React.FC = () => {
         if (!runningRef.current) return;
 
         try {
-            if (data.error) {
-                console.warn('[HL] API error:', data.error, data.msg_type, data.echo_req?.ticks_history);
-                return;
-            }
-
             if (data.msg_type === 'history') {
                 const sym: string = data.echo_req?.ticks_history;
-                if (!HL_SYMBOLS.includes(sym) || !sdRef.current[sym]) {
-                    console.warn('[HL] history ignored:', sym, HL_SYMBOLS.includes(sym), !!sdRef.current[sym]);
-                    return;
-                }
+                if (!HL_SYMBOLS.includes(sym) || !sdRef.current[sym]) return;
                 const sd = sdRef.current[sym];
                 const pip = PIP_SIZES[sym] || 2;
                 const rawPrices = data.history?.prices;
-                if (!Array.isArray(rawPrices)) {
-                    console.warn('[HL] no prices array for', sym, data.history);
-                    return;
-                }
+                if (!Array.isArray(rawPrices)) return;
                 const prices = rawPrices.map((p: string | number) => Number(p));
                 let times: number[];
                 const rawTimes = data.history?.times;
@@ -251,7 +240,6 @@ export const HighLow: React.FC = () => {
                 sd.prices = prices.slice(-MAX_TICKS);
                 sd.times = times.slice(-MAX_TICKS);
                 sd.ready = sd.ticks.length >= MIN_TICKS;
-                console.log('[HL] loaded', sym, prices.length, 'prices, ready:', sd.ready);
             }
 
             if (data.msg_type === 'tick') {
@@ -271,7 +259,7 @@ export const HighLow: React.FC = () => {
                 sd.ready = sd.ticks.length >= MIN_TICKS;
             }
         } catch (e) {
-            console.warn('[HL] handler error:', e);
+            // ignore parse errors
         }
     }, []);
 
@@ -319,16 +307,13 @@ export const HighLow: React.FC = () => {
                     setStatus(`Loading ${HL_SYMBOLS.length} markets...`);
                     const pollReady = () => {
                         if (!runningRef.current) return;
-                        let readyCount = 0;
                         for (const s of HL_SYMBOLS) {
                             const sd = sdRef.current[s];
-                            if (sd && sd.ready && sd.prices.length >= MIN_TICKS) readyCount++;
-                        }
-                        console.log(`[HL] pollReady: ${readyCount}/${HL_SYMBOLS.length} markets ready`);
-                        if (readyCount > 0) {
-                            firstScanRef.current = true;
-                            if (runningRef.current) runScanCycle();
-                            return;
+                            if (sd && sd.ready && sd.prices.length >= MIN_TICKS) {
+                                firstScanRef.current = true;
+                                if (runningRef.current) runScanCycle();
+                                return;
+                            }
                         }
                         setTimeout(pollReady, 500);
                     };
