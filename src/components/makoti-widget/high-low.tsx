@@ -7,8 +7,8 @@ import {
 } from './high-low-engine';
 
 const LS_CONFIG_KEY = 'mw_hl_config';
-const SCAN_HISTORY = 2000;
-const MAX_TICKS = 2000;
+const SCAN_HISTORY = 5000;
+const MAX_TICKS = 5000;
 const MIN_TICKS = 100;
 
 function loadConfig(): HighLowConfig {
