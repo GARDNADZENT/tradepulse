@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import clsx from 'clsx';
 import { observer } from 'mobx-react-lite';
 import { generateOAuthURL } from '@/components/shared';
@@ -7,7 +7,6 @@ import useActiveAccount from '@/hooks/api/account/useActiveAccount';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useLogout } from '@/hooks/useLogout';
 import { useStore } from '@/hooks/useStore';
-import { isCustomDemoIconActive, setCustomDemoIconActive } from '@/utils/custom-demo-icon-utils';
 import { Localize } from '@deriv-com/translations';
 import { Header, useDevice, Wrapper } from '@deriv-com/ui';
 import { AppLogo } from '../app-logo';
@@ -23,10 +22,6 @@ const AppHeader = observer(() => {
     const [authTimeout, setAuthTimeout] = useState(false);
     const is_account_regenerating = client?.is_account_regenerating || false;
 
-    // Detect OAuth callback on mount (before App.tsx cleans up the URL).
-    // When ?code=...&state=... is present the full auth flow can take 7-15 s
-    // (token exchange → accounts fetch → OTP → WebSocket auth), so we must
-    // suppress the short fallback timeout and keep the spinner throughout.
     const [isOAuthPending, setIsOAuthPending] = useState(() => {
         const params = new URLSearchParams(window.location.search);
         return Boolean(params.get('code') && params.get('state'));
@@ -39,8 +34,6 @@ const AppHeader = observer(() => {
 
     const handleLogout = useLogout();
 
-    // Clear OAuth-pending flag once the account is set (auth succeeded)
-    // or after a generous timeout in case something goes wrong.
     useEffect(() => {
         if (!isOAuthPending) return;
 
@@ -49,12 +42,10 @@ const AppHeader = observer(() => {
             return;
         }
 
-        // Safety net: give up after 30 s and let the normal flow decide
         const timer = setTimeout(() => setIsOAuthPending(false), 30_000);
         return () => clearTimeout(timer);
     }, [isOAuthPending, activeLoginid]);
 
-    // Handle direct URL access with legacy token param
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
         const account_id = urlParams.get('account_id');
@@ -63,8 +54,6 @@ const AppHeader = observer(() => {
         }
     }, [setIsAuthorizing]);
 
-    // Fallback timeout: show login button if auth never resolves.
-    // Suppressed during the OAuth callback flow (isOAuthPending = true).
     useEffect(() => {
         if (isOAuthPending) return;
 
@@ -82,25 +71,6 @@ const AppHeader = observer(() => {
 
         return () => clearTimeout(timer);
     }, [isAuthorizing, activeLoginid, setIsAuthorizing, authTimeout, isOAuthPending]);
-
-    const [headerTripleClickCount, setHeaderTripleClickCount] = useState(0);
-    const headerTripleClickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-    const handleHeaderTripleClick = useCallback(() => {
-        const newCount = headerTripleClickCount + 1;
-        if (headerTripleClickTimeoutRef.current) {
-            clearTimeout(headerTripleClickTimeoutRef.current);
-        }
-        if (newCount >= 3) {
-            setCustomDemoIconActive(!isCustomDemoIconActive());
-            setHeaderTripleClickCount(0);
-        } else {
-            setHeaderTripleClickCount(newCount);
-            headerTripleClickTimeoutRef.current = setTimeout(() => {
-                setHeaderTripleClickCount(0);
-            }, 500);
-        }
-    }, [headerTripleClickCount]);
 
     const handleSignup = useCallback(async () => {
         try {
@@ -229,12 +199,10 @@ const AppHeader = observer(() => {
                 })}
             >
                 <Wrapper variant='left'>
-                    <div className='app-header__triple-click-area' onClick={handleHeaderTripleClick}>
-                        <MobileMenu onLogout={handleLogout} />
-                        <AppLogo />
-                        {!isDesktop && <span className='app-header__brand-text'>makotitraders.vercel.app</span>}
-                        {isDesktop && <MenuItems />}
-                    </div>
+                    <MobileMenu onLogout={handleLogout} />
+                    <AppLogo />
+                    {!isDesktop && <span className='app-header__brand-text'>makotitraders.vercel.app</span>}
+                    {isDesktop && <MenuItems />}
                 </Wrapper>
                 <Wrapper variant='right'>
                     {renderAccountSection('right')}
