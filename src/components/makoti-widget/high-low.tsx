@@ -173,7 +173,7 @@ export const HighLow: React.FC = () => {
             addLog(`🎯 Selected ${SYMBOL_LABELS[selected.symbol] || selected.symbol} — ${selected.direction === 'CALL' ? 'RISE' : 'FALL'} (${selected.confidence}%)`, 'trade');
 
             const lastPrice = sdRef.current[selected.symbol]?.prices?.slice(-1)[0] || 0;
-            const dur = Math.max(3, Math.min(25, calcDuration(selected.indicators.atr, lastPrice)));
+            const dur = Math.max(3, Math.min(10, calcDuration(selected.indicators.atr, lastPrice)));
             const stake = cfgRef.current.useCompounding && tradesRef.current.length > 0
                 ? Number((pnlRef.current * 0.02).toFixed(2)) || cfgRef.current.stake
                 : cfgRef.current.stake;

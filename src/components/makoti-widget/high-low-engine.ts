@@ -307,7 +307,7 @@ export function calcDuration(atr: number, price: number): number {
     if (volPct > 0.5) return 5;
     if (volPct > 0.3) return 7;
     if (volPct > 0.15) return 10;
-    return 15;
+    return 10;
 }
 
 /* ── Market analysis ────────────────────────────────────────────────────────── */
