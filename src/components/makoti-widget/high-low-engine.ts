@@ -449,9 +449,14 @@ export async function executeHighLowTrade(
     };
     try {
         const response = await sendViaNewSystemWithPromise({ buy: 1, price: stake, parameters: params });
+        if (response?.error) {
+            console.warn('[HL] Trade error:', response.error);
+            return { contractId: null };
+        }
         const contractId = response?.buy?.contract_id ?? response?.contract_id;
         return { contractId: contractId ? String(contractId) : null };
-    } catch {
+    } catch (e: any) {
+        console.warn('[HL] Trade exception:', e?.error || e?.message || e);
         return { contractId: null };
     }
 }
