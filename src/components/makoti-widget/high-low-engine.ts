@@ -87,7 +87,7 @@ export const HL_SYMBOLS = [
     'R_10', 'R_25', 'R_50', 'R_75', 'R_100',
     '1HZ10V', '1HZ25V', '1HZ50V', '1HZ75V', '1HZ100V',
 ];
-const MAX_TICKS = 2000;
+const MAX_TICKS = 5000;
 const MIN_TICKS_FOR_ANALYSIS = 100;
 export const SCAN_INTERVAL_MS = 3000;
 

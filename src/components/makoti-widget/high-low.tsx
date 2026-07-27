@@ -7,8 +7,8 @@ import {
 } from './high-low-engine';
 
 const LS_CONFIG_KEY = 'mw_hl_config';
-const SCAN_HISTORY = 2000;
-const MAX_TICKS = 2000;
+const SCAN_HISTORY = 5000;
+const MAX_TICKS = 5000;
 const MIN_TICKS = 100;
 
 function loadConfig(): HighLowConfig {
@@ -280,6 +280,7 @@ export const HighLow: React.FC = () => {
         });
 
         runningRef.current = true;
+        firstScanRef.current = false;
         setRunning(true);
         setScanning(false);
         setInTrade(false);
@@ -300,7 +301,6 @@ export const HighLow: React.FC = () => {
             () => {
                 try {
                     addLog('Connected ✓', 'info');
-                    firstScanRef.current = false;
                     HL_SYMBOLS.forEach(sym => {
                         mws.send({ ticks_history: sym, count: SCAN_HISTORY, end: 'latest', style: 'ticks', subscribe: 1 });
                     });
