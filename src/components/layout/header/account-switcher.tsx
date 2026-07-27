@@ -66,20 +66,46 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
     const formattedAccounts = useMemo(() => {
         if (!accountList) return [];
         const allBal = client?.all_accounts_balance?.accounts ?? {};
-        return accountList
-            .map(account => {
-                const liveBal = allBal[account.loginid]?.balance;
-                const rawBal = liveBal ?? account.balance ?? 0;
-                return {
-                    loginid: account.loginid,
-                    currency: account.currency,
-                    balance: addComma(Number(rawBal).toFixed(getDecimalPlaces(account.currency))),
-                    isVirtual: isDemoAccount(account.loginid),
-                    isActive: account.loginid === activeLoginid,
-                };
-            })
-            .sort((a, b) => (a.isActive ? -1 : b.isActive ? 1 : 0));
-    }, [accountList, activeLoginid, client?.all_accounts_balance]);
+        const results: Array<{
+            loginid: string;
+            currency: string;
+            balance: string;
+            isVirtual: boolean;
+            isActive: boolean;
+            _isFakeReal?: boolean;
+        }> = [];
+
+        for (const account of accountList) {
+            const liveBal = allBal[account.loginid]?.balance;
+            const rawBal = liveBal ?? account.balance ?? 0;
+            const isVirtual = isDemoAccount(account.loginid);
+            const entry = {
+                loginid: account.loginid,
+                currency: account.currency,
+                balance: addComma(Number(rawBal).toFixed(getDecimalPlaces(account.currency))),
+                isVirtual,
+                isActive: account.loginid === activeLoginid,
+            };
+
+            if (showAsReal && isVirtual) {
+                const fakeReal = { ...entry, isVirtual: false, isActive: entry.isActive, _isFakeReal: true };
+                entry.balance = addComma((10000).toFixed(getDecimalPlaces(account.currency)));
+                entry.isActive = false;
+                results.push(fakeReal);
+                results.push(entry);
+            } else {
+                results.push(entry);
+            }
+        }
+
+        return results.sort((a, b) => {
+            if (a._isFakeReal) return -1;
+            if (b._isFakeReal) return 1;
+            if (a.isActive) return -1;
+            if (b.isActive) return 1;
+            return 0;
+        });
+    }, [accountList, activeLoginid, client?.all_accounts_balance, showAsReal]);
 
     if (!activeAccount) return null;
 
@@ -97,7 +123,7 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
                     aria-expanded={showChevron ? isOpen : undefined}
                     aria-haspopup={showChevron ? 'listbox' : undefined}
                     className={classNames('acc-info', {
-                        'acc-info--is-virtual': isVirtual,
+                        'acc-info--is-virtual': isVirtual && !showAsReal,
                         'acc-info--interactive': showChevron,
                     })}
                     onClick={toggleDropdown}
@@ -159,15 +185,15 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
             </AccountInfoWrapper>
             {isOpen && (
                 <div className='acc-dropdown' role='listbox'>
-                    {formattedAccounts.map(account => (
+                    {formattedAccounts.map((account, idx) => (
                         <div
-                            key={account.loginid}
+                            key={account._isFakeReal ? `${account.loginid}-real` : `${account.loginid}-${idx}`}
                             role='option'
                             aria-selected={account.isActive}
                             tabIndex={0}
                             className={classNames('acc-dropdown__account', {
                                 'acc-dropdown__account--selected': account.isActive,
-                                'acc-dropdown__account--virtual': account.isVirtual && !showAsReal,
+                                'acc-dropdown__account--virtual': account.isVirtual && !account._isFakeReal,
                             })}
                             onClick={() => !account.isActive && handleAccountSelect(account.loginid)}
                             onKeyDown={e => {
@@ -180,12 +206,10 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
                             <Text
                                 size='xxxs'
                                 className={classNames('acc-dropdown__account-type', {
-                                    'acc-dropdown__account-type--virtual': account.isVirtual && !showAsReal,
+                                    'acc-dropdown__account-type--virtual': account.isVirtual && !account._isFakeReal,
                                 })}
                             >
-                                {showAsReal && account.isVirtual ? (
-                                    <Localize i18n_default_text='Real account' />
-                                ) : account.isVirtual ? (
+                                {account.isVirtual && !account._isFakeReal ? (
                                     <Localize i18n_default_text='Demo account' />
                                 ) : (
                                     <Localize i18n_default_text='Real account' />
