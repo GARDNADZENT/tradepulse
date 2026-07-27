@@ -7,6 +7,7 @@ import { api_base } from '@/external/bot-skeleton/services/api/api-base';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useStore } from '@/hooks/useStore';
 import { isDemoAccount } from '@/utils/account-helpers';
+import { isCustomDemoIconActive } from '@/utils/custom-demo-icon-utils';
 import { Localize } from '@deriv-com/translations';
 import { TAccountSwitcher } from './common/types';
 import AccountInfoWrapper from './account-info-wrapper';
@@ -14,9 +15,19 @@ import './account-switcher.scss';
 
 const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
     const [isOpen, setIsOpen] = useState(false);
+    const [showAsReal, setShowAsReal] = useState(false);
     const wrapperRef = useRef<HTMLDivElement>(null);
     const { accountList, activeLoginid } = useApiBase();
     const { client, run_panel } = useStore() ?? {};
+
+    useEffect(() => {
+        const handleIconChange = () => {
+            setShowAsReal(isCustomDemoIconActive());
+        };
+        window.addEventListener('custom_demo_icon_changed', handleIconChange);
+        handleIconChange();
+        return () => window.removeEventListener('custom_demo_icon_changed', handleIconChange);
+    }, []);
 
     const is_bot_running = run_panel?.is_running || api_base.is_running;
     const isSingleAccount = !accountList || accountList.length <= 1;
@@ -101,7 +112,9 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
                     <div className='acc-info__content'>
                         <div className='acc-info__account-type-header'>
                             <Text as='p' size='xs' className='acc-info__account-type'>
-                                {isVirtual ? (
+                                {showAsReal && isVirtual ? (
+                                    <Localize i18n_default_text='Real account' />
+                                ) : isVirtual ? (
                                     <Localize i18n_default_text='Demo account' />
                                 ) : (
                                     <Localize i18n_default_text='Real account' />
@@ -154,7 +167,7 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
                             tabIndex={0}
                             className={classNames('acc-dropdown__account', {
                                 'acc-dropdown__account--selected': account.isActive,
-                                'acc-dropdown__account--virtual': account.isVirtual,
+                                'acc-dropdown__account--virtual': account.isVirtual && !showAsReal,
                             })}
                             onClick={() => !account.isActive && handleAccountSelect(account.loginid)}
                             onKeyDown={e => {
@@ -167,10 +180,12 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
                             <Text
                                 size='xxxs'
                                 className={classNames('acc-dropdown__account-type', {
-                                    'acc-dropdown__account-type--virtual': account.isVirtual,
+                                    'acc-dropdown__account-type--virtual': account.isVirtual && !showAsReal,
                                 })}
                             >
-                                {account.isVirtual ? (
+                                {showAsReal && account.isVirtual ? (
+                                    <Localize i18n_default_text='Real account' />
+                                ) : account.isVirtual ? (
                                     <Localize i18n_default_text='Demo account' />
                                 ) : (
                                     <Localize i18n_default_text='Real account' />

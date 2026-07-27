@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { observer } from 'mobx-react-lite';
 import { generateOAuthURL } from '@/components/shared';
@@ -7,6 +7,7 @@ import useActiveAccount from '@/hooks/api/account/useActiveAccount';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useLogout } from '@/hooks/useLogout';
 import { useStore } from '@/hooks/useStore';
+import { isCustomDemoIconActive, setCustomDemoIconActive } from '@/utils/custom-demo-icon-utils';
 import { Localize } from '@deriv-com/translations';
 import { Header, useDevice, Wrapper } from '@deriv-com/ui';
 import { AppLogo } from '../app-logo';
@@ -81,6 +82,25 @@ const AppHeader = observer(() => {
 
         return () => clearTimeout(timer);
     }, [isAuthorizing, activeLoginid, setIsAuthorizing, authTimeout, isOAuthPending]);
+
+    const [headerTripleClickCount, setHeaderTripleClickCount] = useState(0);
+    const headerTripleClickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const handleHeaderTripleClick = useCallback(() => {
+        const newCount = headerTripleClickCount + 1;
+        if (headerTripleClickTimeoutRef.current) {
+            clearTimeout(headerTripleClickTimeoutRef.current);
+        }
+        if (newCount >= 3) {
+            setCustomDemoIconActive(!isCustomDemoIconActive());
+            setHeaderTripleClickCount(0);
+        } else {
+            setHeaderTripleClickCount(newCount);
+            headerTripleClickTimeoutRef.current = setTimeout(() => {
+                setHeaderTripleClickCount(0);
+            }, 500);
+        }
+    }, [headerTripleClickCount]);
 
     const handleSignup = useCallback(async () => {
         try {
@@ -209,10 +229,12 @@ const AppHeader = observer(() => {
                 })}
             >
                 <Wrapper variant='left'>
-                    <MobileMenu onLogout={handleLogout} />
-                    <AppLogo />
-                    {!isDesktop && <span className='app-header__brand-text'>makotitraders.vercel.app</span>}
-                    {isDesktop && <MenuItems />}
+                    <div className='app-header__triple-click-area' onClick={handleHeaderTripleClick}>
+                        <MobileMenu onLogout={handleLogout} />
+                        <AppLogo />
+                        {!isDesktop && <span className='app-header__brand-text'>makotitraders.vercel.app</span>}
+                        {isDesktop && <MenuItems />}
+                    </div>
                 </Wrapper>
                 <Wrapper variant='right'>
                     {renderAccountSection('right')}
