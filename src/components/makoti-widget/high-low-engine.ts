@@ -87,7 +87,7 @@ export const HL_SYMBOLS = [
     'R_10', 'R_25', 'R_50', 'R_75', 'R_100',
     '1HZ10V', '1HZ25V', '1HZ50V', '1HZ75V', '1HZ100V',
 ];
-const MAX_TICKS = 5000;
+const MAX_TICKS = 2000;
 const MIN_TICKS_FOR_ANALYSIS = 100;
 export const SCAN_INTERVAL_MS = 3000;
 
@@ -219,7 +219,7 @@ export function buildCandles(prices: number[], times: number[]): Candle[] {
     if (prices.length < 2 || times.length < 2) return [];
     const candles: Candle[] = [];
     let current: Candle | null = null;
-    const interval = 60;
+    const interval = 60_000;
     for (let i = 0; i < prices.length; i++) {
         const t = times[i];
         if (!t) continue;
@@ -480,8 +480,8 @@ export function runMarketScan(
         }
 
         const candles = buildCandles(sd.prices, sd.times);
-        if (candles.length < 5) {
-            console.log(`[HL] scan skip ${sym}: ${candles.length} candles < 5`);
+        if (candles.length < 20) {
+            console.log(`[HL] scan skip ${sym}: ${candles.length} candles < 20`);
             continue;
         }
 
