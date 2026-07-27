@@ -105,7 +105,7 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
             if (b.isActive) return 1;
             return 0;
         });
-    }, [accountList, activeLoginid, client?.all_accounts_balance, showAsReal]);
+    }, [accountList, activeLoginid, client?.all_accounts_balance, client?.balance, showAsReal]);
 
     if (!activeAccount) return null;
 
