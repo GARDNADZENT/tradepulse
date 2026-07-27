@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
 import { addComma, getCurrencyDisplayCode, getDecimalPlaces } from '@/components/shared';
@@ -63,7 +63,7 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
         [client]
     );
 
-    const formattedAccounts = useMemo(() => {
+    const getFormattedAccounts = () => {
         if (!accountList) return [];
         const allBal = client?.all_accounts_balance?.accounts ?? {};
         const results: Array<{
@@ -105,7 +105,8 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
             if (b.isActive) return 1;
             return 0;
         });
-    }, [accountList, activeLoginid, client?.all_accounts_balance, client?.balance, showAsReal]);
+    };
+    const formattedAccounts = getFormattedAccounts();
 
     if (!activeAccount) return null;
 
