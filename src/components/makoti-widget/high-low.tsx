@@ -212,6 +212,9 @@ export const HighLow: React.FC = () => {
         }
     }, [addLog]);
 
+    /* ── First scan guard ── */
+    const firstScanRef = useRef(false);
+
     /* ── Tick handler ── */
     const handleTickMsg = useCallback((data: any) => {
         if (!runningRef.current) return;
@@ -223,15 +226,19 @@ export const HighLow: React.FC = () => {
                 const sd = sdRef.current[sym];
                 const pip = PIP_SIZES[sym] || 2;
                 const rawPrices = data.history?.prices;
-                const rawTimes = data.history?.times;
-                if (!Array.isArray(rawPrices) || !Array.isArray(rawTimes)) return;
+                if (!Array.isArray(rawPrices)) return;
                 const prices = rawPrices.map((p: string | number) => Number(p));
-                const times = rawTimes.map((t: string | number) => Number(t));
+                let times: number[];
+                const rawTimes = data.history?.times;
+                if (Array.isArray(rawTimes) && rawTimes.length === prices.length) {
+                    times = rawTimes.map((t: string | number) => Number(t));
+                } else {
+                    times = prices.map((_, i) => Math.floor(Date.now() / 1000) - (prices.length - 1 - i));
+                }
                 const digits = prices.map(p => Number(p.toFixed(pip).slice(-1)));
                 sd.ticks = digits.slice(-MAX_TICKS);
                 sd.prices = prices.slice(-MAX_TICKS);
                 sd.times = times.slice(-MAX_TICKS);
-                sd.candles = buildCandles(sd.prices, sd.times);
                 sd.ready = sd.ticks.length >= MIN_TICKS;
             }
 
@@ -243,13 +250,12 @@ export const HighLow: React.FC = () => {
                 const sd = sdRef.current[sym];
                 const pip = PIP_SIZES[sym] || tick.pip_size || 2;
                 const price = Number(tick.quote);
-                const epoch = Number(tick.epoch);
-                if (!price || !epoch) return;
+                const epoch = tick.epoch ? Number(tick.epoch) : Math.floor(Date.now() / 1000);
+                if (!price) return;
                 const digit = Number(price.toFixed(pip).slice(-1));
                 sd.ticks = [...sd.ticks.slice(-(MAX_TICKS - 1)), digit];
                 sd.prices = [...sd.prices.slice(-(MAX_TICKS - 1)), price];
                 sd.times = [...sd.times.slice(-(MAX_TICKS - 1)), epoch];
-                sd.candles = buildCandles(sd.prices, sd.times);
                 sd.ready = sd.ticks.length >= MIN_TICKS;
             }
         } catch (e) {
@@ -294,13 +300,24 @@ export const HighLow: React.FC = () => {
             () => {
                 try {
                     addLog('Connected ✓', 'info');
+                    firstScanRef.current = false;
                     HL_SYMBOLS.forEach(sym => {
                         mws.send({ ticks_history: sym, count: SCAN_HISTORY, end: 'latest', style: 'ticks', subscribe: 1 });
                     });
-                    setStatus(`Listening to ${HL_SYMBOLS.length} markets — collecting data...`);
-                    setTimeout(() => {
-                        if (runningRef.current) runScanCycle();
-                    }, 8000);
+                    setStatus(`Loading ${HL_SYMBOLS.length} markets...`);
+                    const pollReady = () => {
+                        if (!runningRef.current) return;
+                        for (const s of HL_SYMBOLS) {
+                            const sd = sdRef.current[s];
+                            if (sd && sd.ready && sd.prices.length >= MIN_TICKS) {
+                                firstScanRef.current = true;
+                                if (runningRef.current) runScanCycle();
+                                return;
+                            }
+                        }
+                        setTimeout(pollReady, 500);
+                    };
+                    setTimeout(pollReady, 500);
                 } catch (e) {
                     addLog(`Connection error: ${e}`, 'info');
                     stopEngine();
