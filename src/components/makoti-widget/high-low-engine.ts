@@ -219,7 +219,7 @@ export function buildCandles(prices: number[], times: number[]): Candle[] {
     if (prices.length < 2 || times.length < 2) return [];
     const candles: Candle[] = [];
     let current: Candle | null = null;
-    const interval = 60_000;
+    const interval = 60;
     for (let i = 0; i < prices.length; i++) {
         const t = times[i];
         if (!t) continue;
@@ -477,7 +477,7 @@ export function runMarketScan(
         if (!sd || !sd.ready || sd.prices.length < MIN_TICKS_FOR_ANALYSIS) continue;
 
         const candles = buildCandles(sd.prices, sd.times);
-        if (candles.length < 20) continue;
+        if (candles.length < 5) continue;
 
         const score = analyzeMarket(sym, sd.prices, candles);
         scores.push(score);
