@@ -292,15 +292,20 @@ export const HighLow: React.FC = () => {
         const mws = openMakotiWS(
             (data) => { tickRef.current(data); },
             () => {
-                addLog(`Connected ✓ Subscribing to ${HL_SYMBOLS.length} volatilities...`, 'info');
-                HL_SYMBOLS.forEach(sym => {
-                    mws.send({ ticks_history: sym, count: SCAN_HISTORY, end: 'latest', adjust_start_time: 1 });
-                    mws.send({ ticks: sym, subscribe: 1 });
-                });
-                setStatus(`Listening to ${HL_SYMBOLS.length} markets...`);
-                setTimeout(() => {
-                    if (runningRef.current) runScanCycle();
-                }, 8000);
+                try {
+                    addLog('Connected ✓', 'info');
+                    HL_SYMBOLS.forEach(sym => {
+                        mws.send({ ticks_history: sym, count: SCAN_HISTORY, end: 'latest', adjust_start_time: 1 });
+                        mws.send({ ticks: sym, subscribe: 1 });
+                    });
+                    setStatus(`Listening to ${HL_SYMBOLS.length} markets — collecting data...`);
+                    setTimeout(() => {
+                        if (runningRef.current) runScanCycle();
+                    }, 8000);
+                } catch (e) {
+                    addLog(`Connection error: ${e}`, 'info');
+                    stopEngine();
+                }
             },
             () => {
                 if (runningRef.current) { addLog('Connection lost. Stopping.', 'info'); stopEngine(); }
