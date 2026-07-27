@@ -93,7 +93,7 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
                 entry.isActive = false;
                 results.push(fakeReal);
                 results.push(entry);
-            } else {
+            } else if (!showAsReal) {
                 results.push(entry);
             }
         }
