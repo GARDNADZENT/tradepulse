@@ -335,7 +335,7 @@ export function analyzeMarket(
     const ema50Val = ema50Arr.length > 0 ? ema50Arr[ema50Arr.length - 1] : 0;
     const ema100Val = emaVals.length > 0 ? emaVals[emaVals.length - 1] : 0;
 
-    const m1Trend = getTrend(closesM1.length > 5 ? closesM1.slice(-5) : closesM1, ema20Val, ema50Val, ema100Val);
+    const m1Trend = getTrend(closes.length > 5 ? closes.slice(-5) : closes, ema20Val, ema50Val, ema100Val);
     const m5Trend = closesM5.length > 3 ? getTrend(closesM5, 0, 0, 0) : 'neutral';
     const m15Trend = closesM15.length > 2 ? getTrend(closesM15, 0, 0, 0) : 'neutral';
 
