@@ -3,12 +3,13 @@ import { SYMBOL_LABELS, PIP_SIZES, openMakotiWS, MakotiWS } from './makoti-ws';
 import { sendViaNewSystemWithPromise, onNewSystemMessage } from '@/auth/NewDerivAuth';
 import {
     HL_SYMBOLS, DEFAULT_CONFIG, HighLowConfig, MarketScore, TradeRecord, SymbolData,
-    runMarketScan, executeHighLowTrade, calcDuration, buildCandles,
+    runMarketScan, executeHighLowTrade, calcDuration, buildCandles, SCAN_INTERVAL_MS,
 } from './high-low-engine';
 
 const LS_CONFIG_KEY = 'mw_hl_config';
 const SCAN_HISTORY = 2000;
-const MIN_TICKS = 200;
+const MAX_TICKS = 2000;
+const MIN_TICKS = 100;
 
 function loadConfig(): HighLowConfig {
     try { const raw = localStorage.getItem(LS_CONFIG_KEY); return raw ? { ...DEFAULT_CONFIG, ...JSON.parse(raw) } : DEFAULT_CONFIG; }
@@ -215,31 +216,44 @@ export const HighLow: React.FC = () => {
     const handleTickMsg = useCallback((data: any) => {
         if (!runningRef.current) return;
 
-        if (data.msg_type === 'history') {
-            const sym: string = data.echo_req?.ticks_history;
-            if (!HL_SYMBOLS.includes(sym) || !sdRef.current[sym]) return;
-            const sd = sdRef.current[sym];
-            const pip = PIP_SIZES[sym] || 2;
-            const prices = (data.history.prices as (string | number)[]).map(p => Number(p));
-            const digits = prices.map(p => Number(p.toFixed(pip).slice(-1)));
-            sd.ticks = digits.slice(-MAX_TICKS);
-            sd.prices = prices.slice(-MAX_TICKS);
-            sd.candles = buildCandles(sd.ticks, sd.prices);
-            sd.ready = sd.ticks.length >= MIN_TICKS;
-        }
+        try {
+            if (data.msg_type === 'history') {
+                const sym: string = data.echo_req?.ticks_history;
+                if (!HL_SYMBOLS.includes(sym) || !sdRef.current[sym]) return;
+                const sd = sdRef.current[sym];
+                const pip = PIP_SIZES[sym] || 2;
+                const rawPrices = data.history?.prices;
+                const rawTimes = data.history?.times;
+                if (!Array.isArray(rawPrices) || !Array.isArray(rawTimes)) return;
+                const prices = rawPrices.map((p: string | number) => Number(p));
+                const times = rawTimes.map((t: string | number) => Number(t));
+                const digits = prices.map(p => Number(p.toFixed(pip).slice(-1)));
+                sd.ticks = digits.slice(-MAX_TICKS);
+                sd.prices = prices.slice(-MAX_TICKS);
+                sd.times = times.slice(-MAX_TICKS);
+                sd.candles = buildCandles(sd.prices, sd.times);
+                sd.ready = sd.ticks.length >= MIN_TICKS;
+            }
 
-        if (data.msg_type === 'tick') {
-            const tick = data.tick;
-            const sym: string = tick.symbol;
-            if (!HL_SYMBOLS.includes(sym) || !sdRef.current[sym]) return;
-            const sd = sdRef.current[sym];
-            const pip = PIP_SIZES[sym] || tick.pip_size || 2;
-            const price = Number(tick.quote);
-            const digit = Number(price.toFixed(pip).slice(-1));
-            sd.ticks = [...sd.ticks.slice(-(MAX_TICKS - 1)), digit];
-            sd.prices = [...sd.prices.slice(-(MAX_TICKS - 1)), price];
-            sd.candles = buildCandles(sd.ticks, sd.prices);
-            sd.ready = sd.ticks.length >= MIN_TICKS;
+            if (data.msg_type === 'tick') {
+                const tick = data.tick;
+                if (!tick) return;
+                const sym: string = tick.symbol;
+                if (!HL_SYMBOLS.includes(sym) || !sdRef.current[sym]) return;
+                const sd = sdRef.current[sym];
+                const pip = PIP_SIZES[sym] || tick.pip_size || 2;
+                const price = Number(tick.quote);
+                const epoch = Number(tick.epoch);
+                if (!price || !epoch) return;
+                const digit = Number(price.toFixed(pip).slice(-1));
+                sd.ticks = [...sd.ticks.slice(-(MAX_TICKS - 1)), digit];
+                sd.prices = [...sd.prices.slice(-(MAX_TICKS - 1)), price];
+                sd.times = [...sd.times.slice(-(MAX_TICKS - 1)), epoch];
+                sd.candles = buildCandles(sd.prices, sd.times);
+                sd.ready = sd.ticks.length >= MIN_TICKS;
+            }
+        } catch (e) {
+            // ignore parse errors
         }
     }, []);
 
@@ -256,7 +270,7 @@ export const HighLow: React.FC = () => {
 
         sdRef.current = {};
         HL_SYMBOLS.forEach(sym => {
-            sdRef.current[sym] = { ticks: [], prices: [], candles: [], ready: false };
+            sdRef.current[sym] = { ticks: [], prices: [], times: [], candles: [], ready: false };
         });
 
         runningRef.current = true;
@@ -278,13 +292,15 @@ export const HighLow: React.FC = () => {
         const mws = openMakotiWS(
             (data) => { tickRef.current(data); },
             () => {
-                addLog('Connected ✓ Subscribing to volatilities...', 'info');
+                addLog(`Connected ✓ Subscribing to ${HL_SYMBOLS.length} volatilities...`, 'info');
                 HL_SYMBOLS.forEach(sym => {
-                    mws.send({ ticks_history: sym, count: SCAN_HISTORY, end: 'latest', style: 'ticks', subscribe: 1 });
+                    mws.send({ ticks_history: sym, count: SCAN_HISTORY, end: 'latest', adjust_start_time: 1 });
+                    mws.send({ ticks: sym, subscribe: 1 });
                 });
+                setStatus(`Listening to ${HL_SYMBOLS.length} markets...`);
                 setTimeout(() => {
                     if (runningRef.current) runScanCycle();
-                }, 3000);
+                }, 8000);
             },
             () => {
                 if (runningRef.current) { addLog('Connection lost. Stopping.', 'info'); stopEngine(); }

@@ -83,10 +83,18 @@ export const DEFAULT_CONFIG: HighLowConfig = {
 
 /* ── Constants ──────────────────────────────────────────────────────────────── */
 
-export const HL_SYMBOLS = ['1HZ10V', '1HZ25V', '1HZ50V', '1HZ75V', '1HZ100V'];
+export const HL_SYMBOLS = [
+    'R_10', 'R_25', 'R_50', 'R_75', 'R_100',
+    '1HZ10V', '1HZ15V', '1HZ25V', '1HZ30V', '1HZ50V', '1HZ75V', '1HZ90V', '1HZ100V',
+    '1HZ150V', '1HZ200V', '1HZ250V', '1HZ300V',
+    'STPRNG', 'STPRNG1', 'STPRNG2', 'STPRNG3', 'STPRNG4', 'STPRNG5',
+    'BOOM300N', 'BOOM500', 'BOOM1000', 'CRASH300N', 'CRASH500', 'CRASH1000',
+    'JD10', 'JD25', 'JD50', 'JD75', 'JD100', 'JD150', 'JD200',
+    'RDBEAR', 'RDBULL',
+];
 const MAX_TICKS = 2000;
-const MIN_TICKS_FOR_ANALYSIS = 200;
-const SCAN_INTERVAL_MS = 3000;
+const MIN_TICKS_FOR_ANALYSIS = 100;
+export const SCAN_INTERVAL_MS = 3000;
 
 /* ── Pure indicator math ────────────────────────────────────────────────────── */
 
@@ -212,14 +220,15 @@ function calcATR(candles: Candle[], period: number): number {
 
 /* ── Candle building ────────────────────────────────────────────────────────── */
 
-export function buildCandles(ticks: number[], prices: number[]): Candle[] {
-    if (prices.length < 2) return [];
+export function buildCandles(prices: number[], times: number[]): Candle[] {
+    if (prices.length < 2 || times.length < 2) return [];
     const candles: Candle[] = [];
     let current: Candle | null = null;
     const interval = 60_000;
     for (let i = 0; i < prices.length; i++) {
-        const time = Math.floor(Date.now() / 60000) * 60000 - (prices.length - 1 - i) * 1000;
-        const minuteStart = Math.floor(time / interval) * interval;
+        const t = times[i];
+        if (!t) continue;
+        const minuteStart = Math.floor(t / interval) * interval;
         if (!current || current.time !== minuteStart) {
             if (current) candles.push(current);
             current = { open: prices[i], high: prices[i], low: prices[i], close: prices[i], time: minuteStart };
@@ -457,6 +466,7 @@ export async function executeHighLowTrade(
 export interface SymbolData {
     ticks: number[];
     prices: number[];
+    times: number[];
     candles: Candle[];
     ready: boolean;
 }
@@ -471,7 +481,7 @@ export function runMarketScan(
         const sd = symbolData[sym];
         if (!sd || !sd.ready || sd.prices.length < MIN_TICKS_FOR_ANALYSIS) continue;
 
-        const candles = buildCandles(sd.ticks, sd.prices);
+        const candles = buildCandles(sd.prices, sd.times);
         if (candles.length < 20) continue;
 
         const score = analyzeMarket(sym, sd.prices, candles);

@@ -3,18 +3,38 @@ import { onNewSystemMessage, isNewLoggedIn } from '@/auth/NewDerivAuth';
 
 export const ALL_SYMBOLS = [
     'R_10', 'R_25', 'R_50', 'R_75', 'R_100',
-    '1HZ10V', '1HZ25V', '1HZ50V', '1HZ75V', '1HZ100V',
+    '1HZ10V', '1HZ15V', '1HZ25V', '1HZ30V', '1HZ50V', '1HZ75V', '1HZ90V', '1HZ100V',
+    '1HZ150V', '1HZ200V', '1HZ250V', '1HZ300V',
+    'STPRNG', 'STPRNG1', 'STPRNG2', 'STPRNG3', 'STPRNG4', 'STPRNG5',
+    'BOOM300N', 'BOOM500', 'BOOM1000', 'CRASH300N', 'CRASH500', 'CRASH1000',
+    'JD10', 'JD25', 'JD50', 'JD75', 'JD100', 'JD150', 'JD200',
+    'RDBEAR', 'RDBULL',
 ];
 
 export const SYMBOL_LABELS: Record<string, string> = {
     R_10: 'Volatility 10', R_25: 'Volatility 25', R_50: 'Volatility 50', R_75: 'Volatility 75', R_100: 'Volatility 100',
-    '1HZ10V': 'Volatility 10 (1s)', '1HZ25V': 'Volatility 25 (1s)', '1HZ50V': 'Volatility 50 (1s)',
-    '1HZ75V': 'Volatility 75 (1s)', '1HZ100V': 'Volatility 100 (1s)',
+    '1HZ10V': 'Volatility 10 (1s)', '1HZ15V': 'Volatility 15 (1s)', '1HZ25V': 'Volatility 25 (1s)',
+    '1HZ30V': 'Volatility 30 (1s)', '1HZ50V': 'Volatility 50 (1s)',
+    '1HZ75V': 'Volatility 75 (1s)', '1HZ90V': 'Volatility 90 (1s)', '1HZ100V': 'Volatility 100 (1s)',
+    '1HZ150V': 'Volatility 150 (1s)', '1HZ200V': 'Volatility 200 (1s)',
+    '1HZ250V': 'Volatility 250 (1s)', '1HZ300V': 'Volatility 300 (1s)',
+    STPRNG: 'Step Index 100', STPRNG1: 'Step Index 100', STPRNG2: 'Step Index 200',
+    STPRNG3: 'Step Index 300', STPRNG4: 'Step Index 400', STPRNG5: 'Step Index 500',
+    BOOM300N: 'Boom 300', BOOM500: 'Boom 500', BOOM1000: 'Boom 1000',
+    CRASH300N: 'Crash 300', CRASH500: 'Crash 500', CRASH1000: 'Crash 1000',
+    JD10: 'Jump 10', JD25: 'Jump 25', JD50: 'Jump 50', JD75: 'Jump 75',
+    JD100: 'Jump 100', JD150: 'Jump 150', JD200: 'Jump 200',
+    RDBEAR: 'Bear Market', RDBULL: 'Bull Market',
 };
 
 export const PIP_SIZES: Record<string, number> = {
     R_100: 2, R_75: 4, R_50: 4, R_25: 3, R_10: 3,
     '1HZ100V': 2, '1HZ75V': 2, '1HZ50V': 2, '1HZ25V': 2, '1HZ10V': 2,
+    '1HZ15V': 2, '1HZ30V': 2, '1HZ90V': 2, '1HZ150V': 2, '1HZ200V': 2, '1HZ250V': 2, '1HZ300V': 2,
+    STPRNG: 2, STPRNG1: 2, STPRNG2: 2, STPRNG3: 2, STPRNG4: 2, STPRNG5: 2,
+    BOOM300N: 2, BOOM500: 2, BOOM1000: 2, CRASH300N: 2, CRASH500: 2, CRASH1000: 2,
+    JD10: 2, JD25: 2, JD50: 2, JD75: 2, JD100: 2, JD150: 2, JD200: 2,
+    RDBEAR: 2, RDBULL: 2,
 };
 
 export function getToken(): string | null {
