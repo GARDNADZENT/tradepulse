@@ -295,8 +295,7 @@ export const HighLow: React.FC = () => {
                 try {
                     addLog('Connected ✓', 'info');
                     HL_SYMBOLS.forEach(sym => {
-                        mws.send({ ticks_history: sym, count: SCAN_HISTORY, end: 'latest', adjust_start_time: 1 });
-                        mws.send({ ticks: sym, subscribe: 1 });
+                        mws.send({ ticks_history: sym, count: SCAN_HISTORY, end: 'latest', style: 'ticks', subscribe: 1 });
                     });
                     setStatus(`Listening to ${HL_SYMBOLS.length} markets — collecting data...`);
                     setTimeout(() => {
