@@ -108,19 +108,6 @@ export const HighLow: React.FC = () => {
             addLog(`Contract ${result.contractId} — ${score.direction === 'CALL' ? 'ONLY UPS' : 'ONLY DOWNS'} on ${SYMBOL_LABELS[score.symbol] || score.symbol} @ $${stake} x ${duration}t`, 'trade');
             setSniperPhase('in_trade');
             setStatus(`LIVE — ${SYMBOL_LABELS[score.symbol] || score.symbol} ${score.direction === 'CALL' ? 'ONLY UPS' : 'ONLY DOWNS'} $${stake} x ${duration}t`);
-            try {
-                transactions.onBotContractEvent({
-                    contract_id: result.contractId,
-                    transaction_ids: { buy: result.contractId },
-                    buy_price: stake,
-                    currency: 'USD',
-                    contract_type: score.direction,
-                    underlying: score.symbol,
-                    display_name: SYMBOL_LABELS[score.symbol],
-                    date_start: Math.floor(Date.now() / 1000),
-                    status: 'open',
-                } as any);
-            } catch (_) {}
         } else {
             addLog('Trade execution failed', 'info');
             inTradeRef.current = false;
