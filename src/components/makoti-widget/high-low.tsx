@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useStore } from '@/hooks/useStore';
 import { SYMBOL_LABELS, PIP_SIZES, openMakotiWS, MakotiWS } from './makoti-ws';
 import { sendViaNewSystemWithPromise, onNewSystemMessage } from '@/auth/NewDerivAuth';
 import {
@@ -23,6 +24,7 @@ function saveConfig(cfg: HighLowConfig) {
 }
 
 export const HighLow: React.FC = () => {
+    const { transactions } = useStore();
     const initCfg = loadConfig();
     const [cfg, setCfg] = useState<HighLowConfig>(initCfg);
     const [running, setRunning] = useState(false);
@@ -53,7 +55,7 @@ export const HighLow: React.FC = () => {
     const contractMapRef = useRef<Map<string, { symbol: string; stake: number; duration: number }>>(new Map());
     const dailyResetRef = useRef(Date.now());
     const aimingRef = useRef<MarketScore | null>(null);
-    const sniperTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     cfgRef.current = cfg;
 
@@ -68,7 +70,6 @@ export const HighLow: React.FC = () => {
 
     const clearAiming = useCallback(() => {
         aimingRef.current = null;
-        if (sniperTimerRef.current) { clearTimeout(sniperTimerRef.current); sniperTimerRef.current = null; }
         setSniperPhase('idle');
         setSniperReason('');
     }, []);
@@ -78,12 +79,15 @@ export const HighLow: React.FC = () => {
         inTradeRef.current = false;
         globalLock.current = false;
         clearAiming();
+        if (scanTimerRef.current) { clearTimeout(scanTimerRef.current); scanTimerRef.current = null; }
         setRunning(false);
         setScanning(false);
         setInTrade(false);
         setCurrentSymbol('');
         setCurrentConfidence(0);
         setCurrentDirection(null);
+        setSniperPhase('idle');
+        setSniperReason('');
         setStatus('Stopped');
         try { wsRef.current?.close(); } catch {}
         wsRef.current = null;
@@ -104,19 +108,39 @@ export const HighLow: React.FC = () => {
             addLog(`Contract ${result.contractId} — ${score.direction === 'CALL' ? 'ONLY UPS' : 'ONLY DOWNS'} on ${SYMBOL_LABELS[score.symbol] || score.symbol} @ $${stake} x ${duration}t`, 'trade');
             setSniperPhase('in_trade');
             setStatus(`LIVE — ${SYMBOL_LABELS[score.symbol] || score.symbol} ${score.direction === 'CALL' ? 'ONLY UPS' : 'ONLY DOWNS'} $${stake} x ${duration}t`);
+            try {
+                transactions.onBotContractEvent({
+                    contract_id: result.contractId,
+                    transaction_ids: { buy: result.contractId },
+                    buy_price: stake,
+                    currency: 'USD',
+                    contract_type: score.direction,
+                    underlying: score.symbol,
+                    display_name: SYMBOL_LABELS[score.symbol],
+                    date_start: Math.floor(Date.now() / 1000),
+                    status: 'open',
+                } as any);
+            } catch (_) {}
         } else {
             addLog('Trade execution failed', 'info');
             inTradeRef.current = false;
             setInTrade(false);
             clearAiming();
             globalLock.current = false;
-            setTimeout(() => { if (runningRef.current) runScanCycle(); }, SCAN_INTERVAL_MS);
+            scanTimerRef.current = setTimeout(() => { if (runningRef.current) runScanCycle(); }, 500);
         }
-    }, [addLog, clearAiming]);
+    }, [addLog, clearAiming, transactions]);
 
-    const checkEntry = useCallback(() => {
+    const scheduleScan = useCallback(() => {
+        if (!runningRef.current || inTradeRef.current) return;
+        if (scanTimerRef.current) { clearTimeout(scanTimerRef.current); }
+        scanTimerRef.current = setTimeout(() => {
+            if (runningRef.current) runScanCycle();
+        }, SCAN_INTERVAL_MS);
+    }, []);
+
+    const checkEntryOnTick = useCallback(() => {
         if (!runningRef.current || inTradeRef.current || !aimingRef.current) return;
-
         const aim = aimingRef.current;
         const sd = sdRef.current[aim.symbol];
         if (!sd || sd.prices.length < 10) return;
@@ -131,17 +155,12 @@ export const HighLow: React.FC = () => {
                 ? Number((pnlRef.current * 0.02).toFixed(2)) || cfgRef.current.stake
                 : cfgRef.current.stake;
             executeTrade(aim, stake, duration);
-        } else {
-            sniperTimerRef.current = setTimeout(checkEntry, 500);
         }
     }, [addLog, executeTrade]);
 
     const runScanCycle = useCallback(() => {
         if (!runningRef.current || inTradeRef.current || globalLock.current) return;
-        if (aimingRef.current) {
-            checkEntry();
-            return;
-        }
+        if (aimingRef.current) return;
 
         globalLock.current = true;
         setScanning(true);
@@ -159,18 +178,16 @@ export const HighLow: React.FC = () => {
             aimingRef.current = selected;
             setSniperPhase('aiming');
             setSniperReason('Waiting for entry...');
-
             globalLock.current = false;
             setScanning(false);
-
-            sniperTimerRef.current = setTimeout(checkEntry, 300);
+            checkEntryOnTick();
         } else {
             setStatus('Scanning...');
             globalLock.current = false;
             setScanning(false);
-            setTimeout(() => { if (runningRef.current) runScanCycle(); }, SCAN_INTERVAL_MS);
+            scheduleScan();
         }
-    }, [addLog, checkEntry]);
+    }, [addLog, scheduleScan, checkEntryOnTick]);
 
     const firstScanRef = useRef(false);
 
@@ -215,14 +232,30 @@ export const HighLow: React.FC = () => {
                 sd.prices = [...sd.prices.slice(-(MAX_TICKS - 1)), price];
                 sd.times = [...sd.times.slice(-(MAX_TICKS - 1)), epoch];
                 sd.ready = sd.ticks.length >= MIN_TICKS;
+
+                if (aimingRef.current && !inTradeRef.current) {
+                    checkEntryOnTick();
+                }
             }
         } catch (e) {
             // ignore parse errors
         }
-    }, []);
+    }, [checkEntryOnTick]);
 
     const tickRef = useRef(handleTickMsg);
     tickRef.current = handleTickMsg;
+
+    const pocUnsubRef = useRef<(() => void) | null>(null);
+
+    const scheduleNextScan = useCallback(() => {
+        if (!runningRef.current) return;
+        clearAiming();
+        setStatus('Scanning...');
+        if (scanTimerRef.current) { clearTimeout(scanTimerRef.current); }
+        scanTimerRef.current = setTimeout(() => {
+            if (runningRef.current) runScanCycle();
+        }, 500);
+    }, [clearAiming]);
 
     const startEngine = useCallback(() => {
         const stake = Math.max(0.35, cfg.stake);
@@ -288,8 +321,6 @@ export const HighLow: React.FC = () => {
         wsRef.current = mws;
     }, [cfg, addLog, stopEngine, runScanCycle, clearAiming]);
 
-    const pocUnsubRef = useRef<(() => void) | null>(null);
-
     useEffect(() => {
         if (!running) return;
         if (pocUnsubRef.current) pocUnsubRef.current();
@@ -321,6 +352,11 @@ export const HighLow: React.FC = () => {
                 tradesRef.current = [trade, ...tradesRef.current].slice(0, 50);
                 setTrades(tradesRef.current);
 
+                try {
+                    const pocWithDisplay = !(c as any).display_name ? { ...c, display_name: SYMBOL_LABELS[entry.symbol] } : c;
+                    transactions.onBotContractEvent(pocWithDisplay);
+                } catch (_) {}
+
                 if (won) {
                     consecutiveLossesRef.current = 0;
                     setConsecutiveLosses(0);
@@ -351,21 +387,19 @@ export const HighLow: React.FC = () => {
                 globalLock.current = false;
                 inTradeRef.current = false;
                 setInTrade(false);
-                clearAiming();
-                setStatus('Scanning...');
-                setTimeout(() => { if (runningRef.current) runScanCycle(); }, 500);
+                scheduleNextScan();
             } catch {}
         });
         pocUnsubRef.current = unsub;
         return () => { unsub(); pocUnsubRef.current = null; };
-    }, [running, addLog, stopEngine, clearAiming]);
+    }, [running, addLog, stopEngine, transactions, scheduleNextScan]);
 
     useEffect(() => {
         return () => {
             runningRef.current = false;
             try { wsRef.current?.close(); } catch {}
             if (pocUnsubRef.current) { pocUnsubRef.current(); pocUnsubRef.current = null; }
-            if (sniperTimerRef.current) { clearTimeout(sniperTimerRef.current); }
+            if (scanTimerRef.current) { clearTimeout(scanTimerRef.current); }
         };
     }, []);
 
@@ -415,7 +449,7 @@ export const HighLow: React.FC = () => {
                 </label>
             </div>
 
-            <button className={`mw-btn${running ? ' mw-btn--stop' : ''}`}
+            <button className={`mw-btn${running ? ' mw-btn--stop' : ' mw-btn--kill'}`}
                 onClick={running ? stopEngine : startEngine}>
                 {running ? <><span className='mw-pulse' /> STOP</> : 'RUN'}
             </button>
