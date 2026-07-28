@@ -245,6 +245,7 @@ export const HighLow: React.FC = () => {
     }, [clearAiming]);
 
     const startEngine = useCallback(() => {
+        sessionStorage.removeItem('transaction_cache');
         const stake = Math.max(0.35, cfg.stake);
         consecutiveLossesRef.current = 0;
         globalLock.current = false;
