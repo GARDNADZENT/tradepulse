@@ -15,6 +15,10 @@ export interface IndicatorValues {
     bbUpper: number; bbMiddle: number; bbLower: number;
     atr: number;
     support: number; resistance: number;
+    last70Slope: number;
+    last70Strength: number;
+    consecUp: number;
+    consecDown: number;
 }
 
 export interface MarketScore {
@@ -40,23 +44,6 @@ export interface TradeRecord {
     profit: number;
     won: boolean;
     reasons: string[];
-}
-
-export interface EngineState {
-    running: boolean;
-    scanning: boolean;
-    inTrade: boolean;
-    currentSymbol: string;
-    confidence: number;
-    direction: 'CALL' | 'PUT' | null;
-    status: string;
-    pnl: number;
-    trades: TradeRecord[];
-    rankings: { symbol: string; score: number; direction: string }[];
-    indicators: IndicatorValues | null;
-    topMarkets: { symbol: string; score: number; direction: string }[];
-    dailyProfit: number;
-    consecutiveLosses: number;
 }
 
 export interface HighLowConfig {
@@ -88,8 +75,9 @@ export const HL_SYMBOLS = [
     '1HZ10V', '1HZ25V', '1HZ50V', '1HZ75V', '1HZ100V',
 ];
 const MAX_TICKS = 5000;
-const MIN_TICKS_FOR_ANALYSIS = 100;
-export const SCAN_INTERVAL_MS = 3000;
+const MIN_TICKS_FOR_ANALYSIS = 70;
+export const SCAN_INTERVAL_MS = 1500;
+export const SNIPER_CHECK_MS = 1000;
 
 /* ── Pure indicator math ────────────────────────────────────────────────────── */
 
@@ -300,13 +288,178 @@ function getTrend(closes: number[], ema20: number, ema50: number, ema100: number
     return 'neutral';
 }
 
+/* ── Last 70 ticks analysis — sniper-grade direction ────────────────────────── */
+
+function analyzeLast70(prices: number[]): {
+    slope: number;
+    direction: 'up' | 'down' | 'neutral';
+    strength: number;
+    ema5: number;
+    ema13: number;
+    ema5Above13: boolean;
+    lastPeakPrice: number;
+    lastDipPrice: number;
+    peaks: { price: number; idx: number }[];
+    dips: { price: number; idx: number }[];
+    consecUp: number;
+    consecDown: number;
+    pullbackFromPeak: number;
+    bounceFromDip: number;
+    velocity: number;
+} {
+    const empty = {
+        slope: 0, direction: 'neutral' as const, strength: 0,
+        ema5: 0, ema13: 0, ema5Above13: false,
+        lastPeakPrice: 0, lastDipPrice: 0,
+        peaks: [], dips: [],
+        consecUp: 0, consecDown: 0,
+        pullbackFromPeak: 0, bounceFromDip: 0,
+        velocity: 0,
+    };
+
+    if (prices.length < 10) return empty;
+
+    const data = prices.slice(-70);
+
+    /* ── Linear regression slope on last 70 ── */
+    const n = data.length;
+    let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+    for (let i = 0; i < n; i++) {
+        sumX += i;
+        sumY += data[i];
+        sumXY += i * data[i];
+        sumX2 += i * i;
+    }
+    const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+    const intercept = (sumY - slope * sumX) / n;
+
+    /* ── Direction + strength ── */
+    const direction = slope > 0.0001 ? 'up' as const : slope < -0.0001 ? 'down' as const : 'neutral' as const;
+    const residuals = data.map((y, i) => Math.abs(y - (slope * i + intercept)));
+    const mae = residuals.reduce((a, b) => a + b, 0) / n;
+    const avgPrice = data.reduce((a, b) => a + b, 0) / n;
+    const fitQuality = avgPrice > 0 ? Math.max(0, 1 - mae / (avgPrice * 0.01)) : 0;
+    const slopeStrength = Math.min(1, Math.abs(slope) / 0.001);
+    const strength = Math.round(Math.min(100, (slopeStrength * 50 + fitQuality * 50)));
+
+    /* ── EMA(5) and EMA(13) on tick prices ── */
+    const ema5Arr = ema(data, 5);
+    const ema13Arr = ema(data, 13);
+    const ema5 = ema5Arr.length > 0 ? ema5Arr[ema5Arr.length - 1] : data[data.length - 1];
+    const ema13 = ema13Arr.length > 0 ? ema13Arr[ema13Arr.length - 1] : data[data.length - 1];
+    const ema5Above13 = ema5 > ema13;
+
+    /* ── Consecutive direction count in last 10 ── */
+    const last10 = data.slice(-10);
+    let consecUp = 0, consecDown = 0;
+    for (let i = last10.length - 1; i > 0; i--) {
+        if (last10[i] > last10[i - 1]) { consecUp++; consecDown = 0; }
+        else if (last10[i] < last10[i - 1]) { consecDown++; consecUp = 0; }
+        else break;
+    }
+
+    /* ── Micro-peaks and dips (local extrema in last 30 ticks) ── */
+    const recent30 = data.slice(-30);
+    const peaks: { price: number; idx: number }[] = [];
+    const dips: { price: number; idx: number }[] = [];
+    const lookback = 3;
+    for (let i = lookback; i < recent30.length - lookback; i++) {
+        let isPeak = true, isDip = true;
+        for (let j = i - lookback; j <= i + lookback; j++) {
+            if (j === i) continue;
+            if (recent30[j] > recent30[i]) isPeak = false;
+            if (recent30[j] < recent30[i]) isDip = false;
+        }
+        if (isPeak) peaks.push({ price: recent30[i], idx: data.length - 30 + i });
+        if (isDip) dips.push({ price: recent30[i], idx: data.length - 30 + i });
+    }
+
+    const lastPeakPrice = peaks.length > 0 ? Math.max(...peaks.map(p => p.price)) : Math.max(...data);
+    const lastDipPrice = dips.length > 0 ? Math.min(...dips.map(d => d.price)) : Math.min(...data);
+
+    /* ── Pullback / bounce from extremes ── */
+    const currentPrice = data[data.length - 1];
+    const pullbackFromPeak = lastPeakPrice > 0 ? ((lastPeakPrice - currentPrice) / lastPeakPrice) * 100 : 0;
+    const bounceFromDip = lastDipPrice > 0 ? ((currentPrice - lastDipPrice) / lastDipPrice) * 100 : 0;
+
+    /* ── Velocity: avg move per tick in last 10 vs prior 10 ── */
+    const v10 = data.slice(-10);
+    const vPrior = data.slice(-20, -10);
+    const velo10 = v10.length > 1 ? Math.abs(v10[v10.length - 1] - v10[0]) / v10.length : 0;
+    const veloPrior = vPrior.length > 1 ? Math.abs(vPrior[vPrior.length - 1] - vPrior[0]) / vPrior.length : 0;
+    const velocity = Math.max(velo10, veloPrior);
+
+    return {
+        slope, direction, strength,
+        ema5, ema13, ema5Above13,
+        lastPeakPrice, lastDipPrice,
+        peaks, dips,
+        consecUp, consecDown,
+        pullbackFromPeak, bounceFromDip,
+        velocity,
+    };
+}
+
+/* ── Sniper entry check ─────────────────────────────────────────────────────── */
+
+export function checkSniperEntry(
+    direction: 'CALL' | 'PUT',
+    prices: number[],
+): { trigger: boolean; reason: string; entryPrice: number } {
+    const l70 = analyzeLast70(prices);
+    const currentPrice = prices[prices.length - 1];
+    const notrigger = { trigger: false, reason: '', entryPrice: currentPrice };
+
+    if (direction === 'CALL') {
+        if (l70.direction !== 'up') return { ...notrigger, reason: 'Micro-trend not up' };
+        if (l70.ema5 <= l70.ema13) return { ...notrigger, reason: 'EMA5 < EMA13 (momentum fading)' };
+        if (l70.consecUp > 3) return { ...notrigger, reason: `Too extended (${l70.consecUp} up ticks)` };
+
+        const pullbackOk = l70.pullbackFromPeak >= 0.005 && l70.pullbackFromPeak <= 0.5;
+        if (!pullbackOk && l70.consecDown >= 2) {
+            return { trigger: true, reason: 'Pullback entry (dip after rally)', entryPrice: currentPrice };
+        }
+        if (pullbackOk) {
+            return { trigger: true, reason: `Sniper pullback ${l70.pullbackFromPeak.toFixed(3)}% from peak`, entryPrice: currentPrice };
+        }
+
+        return { ...notrigger, reason: `Waiting pullback (peak: ${l70.lastPeakPrice.toFixed(4)}, pullback: ${l70.pullbackFromPeak.toFixed(3)}%)` };
+    }
+
+    if (direction === 'PUT') {
+        if (l70.direction !== 'down') return { ...notrigger, reason: 'Micro-trend not down' };
+        if (l70.ema5 >= l70.ema13) return { ...notrigger, reason: 'EMA5 > EMA13 (momentum fading)' };
+        if (l70.consecDown > 3) return { ...notrigger, reason: `Too extended (${l70.consecDown} down ticks)` };
+
+        const bounceOk = l70.bounceFromDip >= 0.005 && l70.bounceFromDip <= 0.5;
+        if (!bounceOk && l70.consecUp >= 2) {
+            return { trigger: true, reason: 'Bounce entry (rally after dip)', entryPrice: currentPrice };
+        }
+        if (bounceOk) {
+            return { trigger: true, reason: `Sniper bounce ${l70.bounceFromDip.toFixed(3)}% from dip`, entryPrice: currentPrice };
+        }
+
+        return { ...notrigger, reason: `Waiting bounce (dip: ${l70.lastDipPrice.toFixed(4)}, bounce: ${l70.bounceFromDip.toFixed(3)}%)` };
+    }
+
+    return notrigger;
+}
+
 /* ── Duration calculation ───────────────────────────────────────────────────── */
 
-export function calcDuration(atr: number, price: number): number {
+export function calcDuration(atr: number, price: number, velocity?: number): number {
     const volPct = (atr / price) * 100;
-    if (volPct > 0.5) return 3;
-    if (volPct > 0.3) return 4;
-    return 5;
+    let base = 4;
+    if (volPct > 0.5) base = 3;
+    else if (volPct > 0.3) base = 4;
+    else base = 5;
+
+    if (velocity && velocity > 0) {
+        if (velocity > 0.01) base = Math.max(2, base - 1);
+        else if (velocity < 0.001) base = Math.min(5, base + 1);
+    }
+
+    return Math.max(2, Math.min(5, base));
 }
 
 /* ── Market analysis ────────────────────────────────────────────────────────── */
@@ -326,22 +479,43 @@ export function analyzeMarket(
     let confidence = 0;
     let direction: 'CALL' | 'PUT' | null = null;
 
-    /* ── EMA ── */
+    /* ── Last 70 ticks analysis (primary) ── */
+    const l70 = analyzeLast70(prices);
+    const isLast70Up = l70.direction === 'up' && l70.strength >= 30;
+    const isLast70Down = l70.direction === 'down' && l70.strength >= 30;
+    if (isLast70Up) { confidence += 15; reasons.push(`Last70 trend + (strength ${l70.strength})`); }
+    else if (isLast70Down) { confidence += 15; reasons.push(`Last70 trend - (strength ${l70.strength})`); }
+    else if (l70.strength >= 15) {
+        if (l70.direction === 'up') { confidence += 8; reasons.push(`Last70 mild + (${l70.strength})`); }
+        else if (l70.direction === 'down') { confidence += 8; reasons.push(`Last70 mild - (${l70.strength})`); }
+    }
+
+    /* ── Consecutive tick pressure ── */
+    const consecTotal = l70.consecUp + l70.consecDown;
+    const bullishPressure = l70.consecUp > 2 && l70.consecUp >= l70.consecDown * 1.5;
+    const bearishPressure = l70.consecDown > 2 && l70.consecDown >= l70.consecUp * 1.5;
+    if (bullishPressure) { confidence += 10; reasons.push(`${l70.consecUp}/${consecTotal} ticks up`); }
+    else if (bearishPressure) { confidence += 10; reasons.push(`${l70.consecDown}/${consecTotal} ticks down`); }
+    else if (l70.consecUp > 1 && l70.consecDown === 0) { confidence += 5; reasons.push(`${l70.consecUp} consecutive up`); }
+    else if (l70.consecDown > 1 && l70.consecUp === 0) { confidence += 5; reasons.push(`${l70.consecDown} consecutive down`); }
+
+    /* ── EMA on candles ── */
     const ema100Arr = closes.length > 100 ? ema(closes, 100) : [];
     const ema50Arr = closes.length > 50 ? ema(closes, 50) : [];
     const ema20Arr = closes.length > 20 ? ema(closes, 20) : [];
     const ema20Val = ema20Arr.length > 0 ? ema20Arr[ema20Arr.length - 1] : 0;
     const ema50Val = ema50Arr.length > 0 ? ema50Arr[ema50Arr.length - 1] : 0;
     const ema100Val = ema100Arr.length > 0 ? ema100Arr[ema100Arr.length - 1] : 0;
+
     const lastPrice = closes[closes.length - 1];
     const isPriceAbove20 = ema20Val > 0 && lastPrice > ema20Val;
     const isPriceBelow20 = ema20Val > 0 && lastPrice < ema20Val;
     const isEMABullish = ema20Val > 0 && ema50Val > 0 && ema20Val > ema50Val;
     const isEMABearish = ema20Val > 0 && ema50Val > 0 && ema20Val < ema50Val;
-    const m1Trend = closes.length > 5 ? getTrend(closes.slice(-5), ema20Val, ema50Val, ema100Val) : 'neutral';
-    const m5Trend = closesM5.length > 3 ? getTrend(closesM5, 0, 0, 0) : 'neutral';
 
-    /* ── M5/M15 trend via slope ── */
+    const m1Trend = closes.length > 5 ? getTrend(closes.slice(-5), ema20Val, ema50Val, ema100Val) : 'neutral';
+
+    /* ── M5/M15 slope ── */
     const slopeM5 = closesM5.length > 4 ? (closesM5[closesM5.length - 1] - closesM5[closesM5.length - 5]) / 5 : 0;
     const slopeM15 = closesM15.length > 2 ? (closesM15[closesM15.length - 1] - closesM15[closesM15.length - 3]) / 3 : 0;
     const m5TrendDerived = slopeM5 > 0 ? 'bullish' : slopeM5 < 0 ? 'bearish' : 'neutral';
@@ -349,18 +523,17 @@ export function analyzeMarket(
 
     const isBullish = m1Trend === 'bullish' || (isEMABullish && isPriceAbove20);
     const isBearish = m1Trend === 'bearish' || (isEMABearish && isPriceBelow20);
+
     if (closes.length > 100 && ema20Val && ema50Val && ema100Val) {
-        if (ema20Val > ema50Val && ema50Val > ema100Val) { confidence += 15; reasons.push('EMA bullish alignment'); }
-        else if (ema20Val < ema50Val && ema50Val < ema100Val) { confidence += 15; reasons.push('EMA bearish alignment'); }
+        if (ema20Val > ema50Val && ema50Val > ema100Val) { confidence += 12; reasons.push('EMA bullish alignment'); }
+        else if (ema20Val < ema50Val && ema50Val < ema100Val) { confidence += 12; reasons.push('EMA bearish alignment'); }
     }
 
     /* ── RSI ── */
     const rsiVals = closes.length > 14 ? rsi(closes, 14) : [];
     const rsiVal = rsiVals.length > 0 ? rsiVals[rsiVals.length - 1] : 50;
-    if (rsiVal > 55 && rsiVal < 75) { confidence += 15; reasons.push(`RSI ${rsiVal.toFixed(1)} — bullish`); }
-    else if (rsiVal < 45 && rsiVal > 25) { confidence += 15; reasons.push(`RSI ${rsiVal.toFixed(1)} — bearish`); }
-    else if (rsiVal >= 75) { reasons.push('RSI overbought'); }
-    else if (rsiVal <= 25) { reasons.push('RSI oversold'); }
+    if (rsiVal > 55 && rsiVal < 75) { confidence += 12; reasons.push(`RSI ${rsiVal.toFixed(1)}`); }
+    else if (rsiVal < 45 && rsiVal > 25) { confidence += 12; reasons.push(`RSI ${rsiVal.toFixed(1)}`); }
 
     /* ── MACD ── */
     const macdData = closes.length > 26 ? macd(closes) : null;
@@ -369,21 +542,21 @@ export function analyzeMarket(
         const prevHist = macdData.histogram[macdData.histogram.length - 2];
         const lastMacd = macdData.macd[macdData.macd.length - 1];
         const lastSig = macdData.signal[macdData.signal.length - 1];
-        if (lastMacd > lastSig && lastHist > 0 && prevHist < 0) { confidence += 10; reasons.push('MACD bullish cross'); }
-        else if (lastMacd < lastSig && lastHist < 0 && prevHist > 0) { confidence += 10; reasons.push('MACD bearish cross'); }
-        else if (lastMacd > lastSig && lastHist > prevHist) { confidence += 5; reasons.push('MACD bullish momentum'); }
-        else if (lastMacd < lastSig && lastHist < prevHist) { confidence += 5; reasons.push('MACD bearish momentum'); }
+        if (lastMacd > lastSig && lastHist > 0 && prevHist < 0) { confidence += 12; reasons.push('MACD cross'); }
+        else if (lastMacd < lastSig && lastHist < 0 && prevHist > 0) { confidence += 12; reasons.push('MACD cross'); }
+        else if (lastMacd > lastSig && lastHist > prevHist) { confidence += 6; reasons.push('MACD momentum'); }
+        else if (lastMacd < lastSig && lastHist < prevHist) { confidence += 6; reasons.push('MACD momentum'); }
     }
 
     /* ── ADX ── */
     const adxVal = candlesM1.length > 14 ? adx(candlesM1, 14) : 0;
-    if (adxVal > 30) { confidence += 10; reasons.push(`ADX ${adxVal.toFixed(1)} — strong`); }
-    else if (adxVal > 22) { confidence += 5; reasons.push(`ADX ${adxVal.toFixed(1)} — moderate`); }
+    if (adxVal > 30) { confidence += 12; reasons.push(`ADX ${adxVal.toFixed(1)}`); }
+    else if (adxVal > 22) { confidence += 6; reasons.push(`ADX ${adxVal.toFixed(1)}`); }
 
     /* ── Bollinger Bands ── */
     const bb = bollinger(closes, 20, 2);
-    if (bb.upper && lastPrice > bb.upper) { confidence += 5; reasons.push('Above upper BB — bullish'); }
-    else if (bb.lower && lastPrice < bb.lower) { confidence += 5; reasons.push('Below lower BB — bearish'); }
+    if (bb.upper && lastPrice > bb.upper) { confidence += 5; reasons.push('BB breakout'); }
+    else if (bb.lower && lastPrice < bb.lower) { confidence += 5; reasons.push('BB breakout'); }
 
     /* ── ATR ── */
     const atrVal = candlesM1.length > 14 ? calcATR(candlesM1, 14) : 0;
@@ -392,58 +565,24 @@ export function analyzeMarket(
     const sr = findSR(prices);
     const distToResistance = sr.resistance > 0 ? ((sr.resistance - lastPrice) / lastPrice) * 100 : 99;
     const distToSupport = sr.support > 0 ? ((lastPrice - sr.support) / lastPrice) * 100 : 99;
-    if (isBullish && distToResistance > 1) { confidence += 10; reasons.push(`Room to resistance ${distToResistance.toFixed(1)}%`); }
-    else if (isBearish && distToSupport > 1) { confidence += 10; reasons.push(`Room to support ${distToSupport.toFixed(1)}%`); }
+    if (isBullish && distToResistance > 1) { confidence += 8; reasons.push(`S/R room ${distToResistance.toFixed(1)}%`); }
+    else if (isBearish && distToSupport > 1) { confidence += 8; reasons.push(`S/R room ${distToSupport.toFixed(1)}%`); }
 
     /* ── Price action ── */
     const pattern = candlesM1.length > 1 ? detectCandlePattern(candlesM1) : 'none';
-    if (pattern === 'bullish_engulfing' && isBullish) { confidence += 10; reasons.push('Bullish engulfing'); }
-    else if (pattern === 'bearish_engulfing' && isBearish) { confidence += 10; reasons.push('Bearish engulfing'); }
-    else if (pattern === 'pin_bar') { confidence += 5; reasons.push('Pin bar — reversal'); }
+    if (pattern === 'bullish_engulfing' && isBullish) { confidence += 8; reasons.push('Engulfing'); }
+    else if (pattern === 'bearish_engulfing' && isBearish) { confidence += 8; reasons.push('Engulfing'); }
+    else if (pattern === 'pin_bar') { confidence += 4; reasons.push('Pin bar'); }
 
-    /* ── Higher timeframe confirmation ── */
-    if (m15TrendDerived === 'bullish' && m5TrendDerived === 'bullish' && isBullish) { confidence += 15; reasons.push('M1+M5+M15 bullish'); }
-    else if (m15TrendDerived === 'bearish' && m5TrendDerived === 'bearish' && isBearish) { confidence += 15; reasons.push('M1+M5+M15 bearish'); }
-    else if (m5TrendDerived === 'bullish' && isBullish) { confidence += 8; reasons.push('M1+M5 bullish'); }
-    else if (m5TrendDerived === 'bearish' && isBearish) { confidence += 8; reasons.push('M1+M5 bearish'); }
-
-    /* ── Micro-momentum (up to 20 pts) — key for 2-5 tick prediction ── */
-    const recent = prices.slice(-20);
-    if (recent.length >= 10) {
-        const half = Math.floor(recent.length / 2);
-        const oldHalf = recent.slice(0, half);
-        const newHalf = recent.slice(half);
-        const oldAvg = oldHalf.reduce((a, b) => a + b, 0) / oldHalf.length;
-        const newAvg = newHalf.reduce((a, b) => a + b, 0) / newHalf.length;
-
-        const last5 = prices.slice(-5);
-        let upCount = 0, downCount = 0;
-        for (let i = 1; i < last5.length; i++) {
-            if (last5[i] > last5[i-1]) upCount++;
-            else if (last5[i] < last5[i-1]) downCount++;
-        }
-
-        const netDir = newAvg - oldAvg;
-        const netPct = (netDir / oldAvg) * 100;
-
-        if (netPct > 0.05 && upCount >= 3) {
-            confidence += 20;
-            reasons.push(`Micro-momentum +${netPct.toFixed(2)}% (${upCount}/5 up)`);
-        } else if (netPct < -0.05 && downCount >= 3) {
-            confidence += 20;
-            reasons.push(`Micro-momentum ${netPct.toFixed(2)}% (${downCount}/5 down)`);
-        } else if (netPct > 0.02 && upCount >= 3) {
-            confidence += 10;
-            reasons.push(`Mild bullish ticks (${upCount}/5 up)`);
-        } else if (netPct < -0.02 && downCount >= 3) {
-            confidence += 10;
-            reasons.push(`Mild bearish ticks (${downCount}/5 down)`);
-        }
-    }
+    /* ── Timeframe alignment ── */
+    if (m15TrendDerived === 'bullish' && m5TrendDerived === 'bullish' && isBullish) { confidence += 12; reasons.push('M1+M5+M15 up'); }
+    else if (m15TrendDerived === 'bearish' && m5TrendDerived === 'bearish' && isBearish) { confidence += 12; reasons.push('M1+M5+M15 down'); }
+    else if (m5TrendDerived === 'bullish' && isBullish) { confidence += 6; reasons.push('M1+M5 up'); }
+    else if (m5TrendDerived === 'bearish' && isBearish) { confidence += 6; reasons.push('M1+M5 down'); }
 
     /* ── Direction decision ── */
-    const isBullishFinal = isBullish && m5TrendDerived !== 'bearish';
-    const isBearishFinal = isBearish && m5TrendDerived !== 'bullish';
+    const isBullishFinal = isLast70Up || (isBullish && m5TrendDerived !== 'bearish');
+    const isBearishFinal = isLast70Down || (isBearish && m5TrendDerived !== 'bullish');
     if (isBullishFinal && confidence >= 50) direction = 'CALL';
     else if (isBearishFinal && confidence >= 50) direction = 'PUT';
 
@@ -461,6 +600,10 @@ export function analyzeMarket(
             bbUpper: bb.upper, bbMiddle: bb.middle, bbLower: bb.lower,
             atr: atrVal,
             support: sr.support, resistance: sr.resistance,
+            last70Slope: l70.slope,
+            last70Strength: l70.strength,
+            consecUp: l70.consecUp,
+            consecDown: l70.consecDown,
         },
         trendM1: m1Trend, trendM5: m5TrendDerived, trendM15: m15TrendDerived,
     };
@@ -503,7 +646,7 @@ export interface SymbolData {
 export function runMarketScan(
     symbolData: Record<string, SymbolData>,
     config: HighLowConfig,
-): { topMarkets: MarketScore[]; selected: MarketScore | null } {
+): { selected: MarketScore | null } {
     const scores: MarketScore[] = [];
 
     for (const sym of HL_SYMBOLS) {
@@ -511,7 +654,7 @@ export function runMarketScan(
         if (!sd || !sd.ready || sd.prices.length < MIN_TICKS_FOR_ANALYSIS) continue;
 
         const candles = buildCandles(sd.prices, sd.times);
-        if (candles.length < 5) continue;
+        if (candles.length < 2) continue;
 
         const score = analyzeMarket(sym, sd.prices, candles);
         scores.push(score);
@@ -519,9 +662,8 @@ export function runMarketScan(
 
     scores.sort((a, b) => b.confidence - a.confidence);
 
-    const topMarkets = scores.slice(0, 5);
     const eligible = scores.filter(s => s.direction && s.confidence >= config.minConfidence);
     const selected = eligible.length > 0 ? eligible[0] : null;
 
-    return { topMarkets, selected };
+    return { selected };
 }

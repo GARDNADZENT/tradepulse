@@ -3,13 +3,16 @@ import { SYMBOL_LABELS, PIP_SIZES, openMakotiWS, MakotiWS } from './makoti-ws';
 import { sendViaNewSystemWithPromise, onNewSystemMessage } from '@/auth/NewDerivAuth';
 import {
     HL_SYMBOLS, DEFAULT_CONFIG, HighLowConfig, MarketScore, TradeRecord, SymbolData,
-    runMarketScan, executeHighLowTrade, calcDuration, buildCandles, SCAN_INTERVAL_MS,
+    runMarketScan, executeHighLowTrade, calcDuration, buildCandles,
+    SCAN_INTERVAL_MS, checkSniperEntry,
 } from './high-low-engine';
 
 const LS_CONFIG_KEY = 'mw_hl_config';
 const SCAN_HISTORY = 5000;
 const MAX_TICKS = 5000;
-const MIN_TICKS = 100;
+const MIN_TICKS = 70;
+
+type SniperPhase = 'idle' | 'aiming' | 'firing' | 'in_trade';
 
 function loadConfig(): HighLowConfig {
     try { const raw = localStorage.getItem(LS_CONFIG_KEY); return raw ? { ...DEFAULT_CONFIG, ...JSON.parse(raw) } : DEFAULT_CONFIG; }
@@ -32,11 +35,11 @@ export const HighLow: React.FC = () => {
     const [currentSymbol, setCurrentSymbol] = useState('');
     const [currentConfidence, setCurrentConfidence] = useState(0);
     const [currentDirection, setCurrentDirection] = useState<'CALL' | 'PUT' | null>(null);
-    const [topMarkets, setTopMarkets] = useState<{ symbol: string; score: number; direction: string }[]>([]);
     const [consecutiveLosses, setConsecutiveLosses] = useState(0);
+    const [sniperPhase, setSniperPhase] = useState<SniperPhase>('idle');
+    const [sniperReason, setSniperReason] = useState('');
     const [logs, setLogs] = useState<{ time: string; msg: string; type: string }[]>([]);
 
-    /* ── Refs ── */
     const wsRef = useRef<MakotiWS | null>(null);
     const sdRef = useRef<Record<string, SymbolData>>({});
     const runningRef = useRef(false);
@@ -49,13 +52,13 @@ export const HighLow: React.FC = () => {
     const globalLock = useRef(false);
     const contractMapRef = useRef<Map<string, { symbol: string; stake: number; duration: number }>>(new Map());
     const dailyResetRef = useRef(Date.now());
+    const aimingRef = useRef<MarketScore | null>(null);
+    const sniperTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     cfgRef.current = cfg;
 
-    /* ── Persist config ── */
     useEffect(() => { saveConfig(cfg); }, [cfg]);
 
-    /* ── Log ── */
     const addLog = useCallback((msg: string, type: string = 'info') => {
         const time = new Date().toLocaleTimeString();
         setLogs(prev => [{ time, msg, type }, ...prev].slice(0, 100));
@@ -63,11 +66,18 @@ export const HighLow: React.FC = () => {
 
     const clearLogs = useCallback(() => { setLogs([]); }, []);
 
-    /* ── Stop ── */
+    const clearAiming = useCallback(() => {
+        aimingRef.current = null;
+        if (sniperTimerRef.current) { clearTimeout(sniperTimerRef.current); sniperTimerRef.current = null; }
+        setSniperPhase('idle');
+        setSniperReason('');
+    }, []);
+
     const stopEngine = useCallback(() => {
         runningRef.current = false;
         inTradeRef.current = false;
         globalLock.current = false;
+        clearAiming();
         setRunning(false);
         setScanning(false);
         setInTrade(false);
@@ -75,147 +85,95 @@ export const HighLow: React.FC = () => {
         setCurrentConfidence(0);
         setCurrentDirection(null);
         setStatus('Stopped');
-        setTopMarkets([]);
         try { wsRef.current?.close(); } catch {}
         wsRef.current = null;
         addLog('HIGH/LOW engine stopped.', 'info');
-    }, [addLog]);
+    }, [addLog, clearAiming]);
 
-    /* ── POC listener ── */
-    const pocUnsubRef = useRef<(() => void) | null>(null);
-
-    useEffect(() => {
-        if (!running) return;
-        if (pocUnsubRef.current) pocUnsubRef.current();
-        const unsub = onNewSystemMessage((event: MessageEvent) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.msg_type !== 'proposal_open_contract') return;
-                const c = data.proposal_open_contract;
-                if (!c?.is_sold) return;
-                const cid = String(c.contract_id);
-                const entry = contractMapRef.current.get(cid);
-                if (!entry) return;
-                contractMapRef.current.delete(cid);
-
-                const profit = Number(c.profit);
-                const won = profit >= 0;
-                pnlRef.current += profit;
-                dailyPnlRef.current += profit;
-                setPnl(pnlRef.current);
-                setDailyPnl(dailyPnlRef.current);
-
-                const trade: TradeRecord = {
-                    time: new Date().toLocaleTimeString(),
-                    symbol: entry.symbol, direction: c.contract_type === 'CALL' ? 'CALL' : 'PUT',
-                    confidence: 0, stake: entry.stake, duration: entry.duration,
-                    entryPrice: Number(c.entry_tick ?? 0), exitPrice: Number(c.exit_tick ?? 0),
-                    profit, won, reasons: [],
-                };
-                tradesRef.current = [trade, ...tradesRef.current].slice(0, 50);
-                setTrades(tradesRef.current);
-
-                if (won) {
-                    consecutiveLossesRef.current = 0;
-                    setConsecutiveLosses(0);
-                    addLog(`✅ WON +$${profit.toFixed(2)} on ${SYMBOL_LABELS[entry.symbol] || entry.symbol} | P&L $${pnlRef.current.toFixed(2)}`, 'win');
-                } else {
-                    consecutiveLossesRef.current++;
-                    setConsecutiveLosses(consecutiveLossesRef.current);
-                    addLog(`❌ LOST -$${Math.abs(profit).toFixed(2)} on ${SYMBOL_LABELS[entry.symbol] || entry.symbol} | P&L $${pnlRef.current.toFixed(2)}`, 'loss');
-
-                    if (consecutiveLossesRef.current >= cfgRef.current.maxConsecutiveLosses) {
-                        addLog(`⚠️ Max consecutive losses (${cfgRef.current.maxConsecutiveLosses}) reached. Stopping.`, 'info');
-                        stopEngine();
-                        return;
-                    }
-                    if (dailyPnlRef.current <= cfgRef.current.dailyStopLoss) {
-                        addLog(`⚠️ Daily stop loss ($${cfgRef.current.dailyStopLoss}) reached. Stopping.`, 'info');
-                        stopEngine();
-                        return;
-                    }
-                }
-
-                if (dailyPnlRef.current >= cfgRef.current.dailyProfitTarget) {
-                    addLog(`🎯 Daily profit target ($${cfgRef.current.dailyProfitTarget}) reached. Stopping.`, 'info');
-                    stopEngine();
-                    return;
-                }
-
-                globalLock.current = false;
-                inTradeRef.current = false;
-                setInTrade(false);
-                setStatus('Scanning...');
-                setTimeout(() => { if (runningRef.current) runScanCycle(); }, 1000);
-            } catch {}
-        });
-        pocUnsubRef.current = unsub;
-        return () => { unsub(); pocUnsubRef.current = null; };
-    }, [running, addLog, stopEngine]);
-
-    /* ── Scan cycle ── */
-    const runScanCycle = useCallback(() => {
-        if (!runningRef.current || inTradeRef.current || globalLock.current) return;
-
-        globalLock.current = true;
-        setScanning(true);
-        setStatus('Scanning all volatilities...');
-
-        const { topMarkets: tops, selected } = runMarketScan(sdRef.current, cfgRef.current);
-
-        setTopMarkets(tops.map(t => ({ symbol: t.symbol, score: t.confidence, direction: t.direction || '-' })));
-
-        if (selected) {
-            setCurrentSymbol(selected.symbol);
-            setCurrentConfidence(selected.confidence);
-            setCurrentDirection(selected.direction);
-            setStatus(`🎯 ${SYMBOL_LABELS[selected.symbol] || selected.symbol} — ${selected.direction === 'CALL' ? 'ONLY UPS' : 'ONLY DOWNS'} @ ${selected.confidence}% confidence`);
-            addLog(`🎯 Selected ${SYMBOL_LABELS[selected.symbol] || selected.symbol} — ${selected.direction === 'CALL' ? 'ONLY UPS' : 'ONLY DOWNS'} (${selected.confidence}%)`, 'trade');
-
-            const lastPrice = sdRef.current[selected.symbol]?.prices?.slice(-1)[0] || 0;
-            const dur = Math.max(2, Math.min(5, calcDuration(selected.indicators.atr, lastPrice)));
-            const stake = cfgRef.current.useCompounding && tradesRef.current.length > 0
-                ? Number((pnlRef.current * 0.02).toFixed(2)) || cfgRef.current.stake
-                : cfgRef.current.stake;
-
-            executeTrade(selected, stake, dur);
-        } else {
-            if (tops.length > 0) {
-                setStatus(`No market ≥ ${cfgRef.current.minConfidence}% — top: ${SYMBOL_LABELS[tops[0].symbol] || tops[0].symbol} ${tops[0].score}%`);
-            } else {
-                setStatus('No data ready — waiting for ticks...');
-            }
-            globalLock.current = false;
-            setScanning(false);
-            setTimeout(() => { if (runningRef.current) runScanCycle(); }, SCAN_INTERVAL_MS);
-        }
-    }, [addLog]);
-
-    /* ── Execute trade ── */
     const executeTrade = useCallback(async (score: MarketScore, stake: number, duration: number) => {
         if (!runningRef.current || !score.direction) return;
 
         inTradeRef.current = true;
         setInTrade(true);
-        setStatus(`⏳ Executing ${score.direction === 'CALL' ? 'ONLY UPS' : 'ONLY DOWNS'} on ${SYMBOL_LABELS[score.symbol] || score.symbol}...`);
+        setSniperPhase('firing');
+        setStatus(`Firing ${score.direction === 'CALL' ? 'ONLY UPS' : 'ONLY DOWNS'} on ${SYMBOL_LABELS[score.symbol] || score.symbol}...`);
 
         const result = await executeHighLowTrade(score.symbol, score.direction, stake, duration);
         if (result.contractId) {
             contractMapRef.current.set(result.contractId, { symbol: score.symbol, stake, duration });
-            addLog(`📡 Contract ${result.contractId} — ${score.direction === 'CALL' ? 'ONLY UPS' : 'ONLY DOWNS'} on ${SYMBOL_LABELS[score.symbol] || score.symbol} @ $${stake} × ${duration}t`, 'trade');
+            addLog(`Contract ${result.contractId} — ${score.direction === 'CALL' ? 'ONLY UPS' : 'ONLY DOWNS'} on ${SYMBOL_LABELS[score.symbol] || score.symbol} @ $${stake} x ${duration}t`, 'trade');
+            setSniperPhase('in_trade');
+            setStatus(`LIVE — ${SYMBOL_LABELS[score.symbol] || score.symbol} ${score.direction === 'CALL' ? 'ONLY UPS' : 'ONLY DOWNS'} $${stake} x ${duration}t`);
         } else {
-            addLog('⚠️ Trade execution failed', 'info');
+            addLog('Trade execution failed', 'info');
             inTradeRef.current = false;
             setInTrade(false);
+            clearAiming();
             globalLock.current = false;
             setTimeout(() => { if (runningRef.current) runScanCycle(); }, SCAN_INTERVAL_MS);
         }
-    }, [addLog]);
+    }, [addLog, clearAiming]);
 
-    /* ── First scan guard ── */
+    const checkEntry = useCallback(() => {
+        if (!runningRef.current || inTradeRef.current || !aimingRef.current) return;
+
+        const aim = aimingRef.current;
+        const sd = sdRef.current[aim.symbol];
+        if (!sd || sd.prices.length < 10) return;
+
+        const result = checkSniperEntry(aim.direction!, sd.prices);
+        setSniperReason(result.reason);
+
+        if (result.trigger) {
+            addLog(`Sniper trigger: ${result.reason}`, 'trade');
+            const duration = Math.max(2, Math.min(5, calcDuration(aim.indicators.atr, result.entryPrice)));
+            const stake = cfgRef.current.useCompounding && tradesRef.current.length > 0
+                ? Number((pnlRef.current * 0.02).toFixed(2)) || cfgRef.current.stake
+                : cfgRef.current.stake;
+            executeTrade(aim, stake, duration);
+        } else {
+            sniperTimerRef.current = setTimeout(checkEntry, 500);
+        }
+    }, [addLog, executeTrade]);
+
+    const runScanCycle = useCallback(() => {
+        if (!runningRef.current || inTradeRef.current || globalLock.current) return;
+        if (aimingRef.current) {
+            checkEntry();
+            return;
+        }
+
+        globalLock.current = true;
+        setScanning(true);
+        setStatus('Scanning all volatilities...');
+
+        const { selected } = runMarketScan(sdRef.current, cfgRef.current);
+
+        if (selected) {
+            setCurrentSymbol(selected.symbol);
+            setCurrentConfidence(selected.confidence);
+            setCurrentDirection(selected.direction);
+            setStatus(`Locked ${SYMBOL_LABELS[selected.symbol] || selected.symbol} ${selected.direction === 'CALL' ? 'ONLY UPS' : 'ONLY DOWNS'} @ ${selected.confidence}%`);
+            addLog(`Locked ${SYMBOL_LABELS[selected.symbol] || selected.symbol} ${selected.direction === 'CALL' ? 'ONLY UPS' : 'ONLY DOWNS'} (${selected.confidence}%)`, 'trade');
+
+            aimingRef.current = selected;
+            setSniperPhase('aiming');
+            setSniperReason('Waiting for entry...');
+
+            globalLock.current = false;
+            setScanning(false);
+
+            sniperTimerRef.current = setTimeout(checkEntry, 300);
+        } else {
+            setStatus('Scanning...');
+            globalLock.current = false;
+            setScanning(false);
+            setTimeout(() => { if (runningRef.current) runScanCycle(); }, SCAN_INTERVAL_MS);
+        }
+    }, [addLog, checkEntry]);
+
     const firstScanRef = useRef(false);
 
-    /* ── Tick handler ── */
     const handleTickMsg = useCallback((data: any) => {
         if (!runningRef.current) return;
 
@@ -266,13 +224,13 @@ export const HighLow: React.FC = () => {
     const tickRef = useRef(handleTickMsg);
     tickRef.current = handleTickMsg;
 
-    /* ── Start ── */
     const startEngine = useCallback(() => {
         const stake = Math.max(0.35, cfg.stake);
         consecutiveLossesRef.current = 0;
         globalLock.current = false;
         inTradeRef.current = false;
         contractMapRef.current = new Map();
+        clearAiming();
 
         sdRef.current = {};
         HL_SYMBOLS.forEach(sym => {
@@ -287,12 +245,12 @@ export const HighLow: React.FC = () => {
         setCurrentSymbol('');
         setCurrentConfidence(0);
         setCurrentDirection(null);
+        setSniperPhase('idle');
+        setSniperReason('');
         setStatus('Connecting...');
-        setTopMarkets([]);
         setConsecutiveLosses(0);
 
-        addLog(`🔍 HIGH/LOW — Scanning ${HL_SYMBOLS.length} volatilities | stake $${stake} | min ${cfg.minConfidence}%`, 'info');
-        if (cfg.martingaleEnabled) addLog(`📊 Martingale ×${cfg.martingale} enabled`, 'info');
+        addLog(`HIGH/LOW — ${HL_SYMBOLS.length} volatilities | stake $${stake} | min ${cfg.minConfidence}%`, 'info');
 
         if (wsRef.current) { try { wsRef.current.close(); } catch {} wsRef.current = null; }
 
@@ -300,7 +258,7 @@ export const HighLow: React.FC = () => {
             (data) => { tickRef.current(data); },
             () => {
                 try {
-                    addLog('Connected ✓', 'info');
+                    addLog('Connected', 'info');
                     HL_SYMBOLS.forEach(sym => {
                         mws.send({ ticks_history: sym, count: SCAN_HISTORY, end: 'latest', style: 'ticks', subscribe: 1 });
                     });
@@ -328,23 +286,96 @@ export const HighLow: React.FC = () => {
             },
         );
         wsRef.current = mws;
-    }, [cfg, addLog, stopEngine, runScanCycle]);
+    }, [cfg, addLog, stopEngine, runScanCycle, clearAiming]);
 
-    /* ── Cleanup ── */
+    const pocUnsubRef = useRef<(() => void) | null>(null);
+
+    useEffect(() => {
+        if (!running) return;
+        if (pocUnsubRef.current) pocUnsubRef.current();
+        const unsub = onNewSystemMessage((event: MessageEvent) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.msg_type !== 'proposal_open_contract') return;
+                const c = data.proposal_open_contract;
+                if (!c?.is_sold) return;
+                const cid = String(c.contract_id);
+                const entry = contractMapRef.current.get(cid);
+                if (!entry) return;
+                contractMapRef.current.delete(cid);
+
+                const profit = Number(c.profit);
+                const won = profit >= 0;
+                pnlRef.current += profit;
+                dailyPnlRef.current += profit;
+                setPnl(pnlRef.current);
+                setDailyPnl(dailyPnlRef.current);
+
+                const trade: TradeRecord = {
+                    time: new Date().toLocaleTimeString(),
+                    symbol: entry.symbol, direction: c.contract_type === 'CALL' ? 'CALL' : 'PUT',
+                    confidence: 0, stake: entry.stake, duration: entry.duration,
+                    entryPrice: Number(c.entry_tick ?? 0), exitPrice: Number(c.exit_tick ?? 0),
+                    profit, won, reasons: [],
+                };
+                tradesRef.current = [trade, ...tradesRef.current].slice(0, 50);
+                setTrades(tradesRef.current);
+
+                if (won) {
+                    consecutiveLossesRef.current = 0;
+                    setConsecutiveLosses(0);
+                    addLog(`WON +$${profit.toFixed(2)} on ${SYMBOL_LABELS[entry.symbol] || entry.symbol} | P&L $${pnlRef.current.toFixed(2)}`, 'win');
+                } else {
+                    consecutiveLossesRef.current++;
+                    setConsecutiveLosses(consecutiveLossesRef.current);
+                    addLog(`LOST -$${Math.abs(profit).toFixed(2)} on ${SYMBOL_LABELS[entry.symbol] || entry.symbol} | P&L $${pnlRef.current.toFixed(2)}`, 'loss');
+
+                    if (consecutiveLossesRef.current >= cfgRef.current.maxConsecutiveLosses) {
+                        addLog(`Max consecutive losses (${cfgRef.current.maxConsecutiveLosses}) reached. Stopping.`, 'info');
+                        stopEngine();
+                        return;
+                    }
+                    if (dailyPnlRef.current <= cfgRef.current.dailyStopLoss) {
+                        addLog(`Daily stop loss ($${cfgRef.current.dailyStopLoss}) reached. Stopping.`, 'info');
+                        stopEngine();
+                        return;
+                    }
+                }
+
+                if (dailyPnlRef.current >= cfgRef.current.dailyProfitTarget) {
+                    addLog(`Daily profit target ($${cfgRef.current.dailyProfitTarget}) reached. Stopping.`, 'info');
+                    stopEngine();
+                    return;
+                }
+
+                globalLock.current = false;
+                inTradeRef.current = false;
+                setInTrade(false);
+                clearAiming();
+                setStatus('Scanning...');
+                setTimeout(() => { if (runningRef.current) runScanCycle(); }, 500);
+            } catch {}
+        });
+        pocUnsubRef.current = unsub;
+        return () => { unsub(); pocUnsubRef.current = null; };
+    }, [running, addLog, stopEngine, clearAiming]);
+
     useEffect(() => {
         return () => {
             runningRef.current = false;
             try { wsRef.current?.close(); } catch {}
             if (pocUnsubRef.current) { pocUnsubRef.current(); pocUnsubRef.current = null; }
+            if (sniperTimerRef.current) { clearTimeout(sniperTimerRef.current); }
         };
     }, []);
 
-    /* ── Win rate ── */
     const totalTrades = trades.length;
     const wins = trades.filter(t => t.won).length;
     const winRate = totalTrades > 0 ? ((wins / totalTrades) * 100).toFixed(1) : '0.0';
 
-    /* ── Render ── */
+    const phaseColor = sniperPhase === 'aiming' ? '#f59e0b' : sniperPhase === 'firing' ? '#ef4444' : sniperPhase === 'in_trade' ? '#22c55e' : '#6b7280';
+    const phaseLabel = sniperPhase === 'idle' ? 'SCANNING' : sniperPhase === 'aiming' ? 'AIMING' : sniperPhase === 'firing' ? 'FIRING' : sniperPhase === 'in_trade' ? 'LIVE' : '';
+
     return (
         <div className='mw-killer'>
             <div className='mw-killer__fields'>
@@ -375,7 +406,7 @@ export const HighLow: React.FC = () => {
                 <label className='mw-killer__vh-toggle'>
                     <input type='checkbox' checked={cfg.martingaleEnabled}
                         onChange={e => setCfg(p => ({ ...p, martingaleEnabled: e.target.checked }))} disabled={running} />
-                    <span>Martingale <small>(×{cfg.martingale} on loss)</small></span>
+                    <span>Martingale <small>(x{cfg.martingale} on loss)</small></span>
                 </label>
                 <label className='mw-killer__vh-toggle'>
                     <input type='checkbox' checked={cfg.useCompounding}
@@ -386,7 +417,7 @@ export const HighLow: React.FC = () => {
 
             <button className={`mw-btn${running ? ' mw-btn--stop' : ''}`}
                 onClick={running ? stopEngine : startEngine}>
-                {running ? <><span className='mw-pulse' /> STOP</> : '▶ RUN'}
+                {running ? <><span className='mw-pulse' /> STOP</> : 'RUN'}
             </button>
 
             {running && (
@@ -395,27 +426,32 @@ export const HighLow: React.FC = () => {
                     {currentSymbol && (
                         <div className='mw-killer__signal-strength'>
                             <span style={{ color: currentConfidence >= cfg.minConfidence ? '#22c55e' : '#f97316' }}>
-                                {SYMBOL_LABELS[currentSymbol] || currentSymbol} — {currentDirection === 'CALL' ? 'ONLY UPS' : currentDirection === 'PUT' ? 'ONLY DOWNS' : '—'} — {currentConfidence}%
+                                {SYMBOL_LABELS[currentSymbol] || currentSymbol}
                             </span>
-                            {inTrade && <span className='mw-killer__active-dot'> ● LIVE</span>}
-                            {consecutiveLosses > 0 && <span style={{ color: '#ef4444', marginLeft: 8 }}>×{consecutiveLosses} losses</span>}
+                            <span style={{ color: '#facc15', marginLeft: 8 }}>
+                                {currentConfidence}%
+                            </span>
+                            <span style={{
+                                display: 'inline-block',
+                                marginLeft: 8,
+                                padding: '1px 6px',
+                                borderRadius: 3,
+                                fontSize: 11,
+                                fontWeight: 600,
+                                background: phaseColor,
+                                color: '#000',
+                            }}>
+                                {phaseLabel}
+                            </span>
+                            {sniperPhase === 'aiming' && sniperReason && (
+                                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+                                    {sniperReason}
+                                </div>
+                            )}
+                            {inTrade && <span className='mw-killer__active-dot'> LIVE</span>}
+                            {consecutiveLosses > 0 && <span style={{ color: '#ef4444', marginLeft: 8 }}>x{consecutiveLosses} losses</span>}
                         </div>
                     )}
-                </div>
-            )}
-
-            {topMarkets.length > 0 && (
-                <div className='mw-killer__rankings'>
-                    <div className='mw-killer__rank-title'>Market Rankings</div>
-                    {topMarkets.map((m, i) => (
-                        <div key={m.symbol} className='mw-killer__rank-row'>
-                            <span>{i + 1}. {SYMBOL_LABELS[m.symbol] || m.symbol}</span>
-                            <span className={m.score >= cfg.minConfidence ? 'mw-killer__rank-score--high' : ''}
-                                style={{ color: m.score >= cfg.minConfidence ? '#22c55e' : '#f97316' }}>
-                                {m.score}% {m.direction === 'CALL' ? '↑' : m.direction === 'PUT' ? '↓' : '—'}
-                            </span>
-                        </div>
-                    ))}
                 </div>
             )}
 
@@ -442,7 +478,7 @@ export const HighLow: React.FC = () => {
                             <div key={i} className={`mw-log-line mw-log-line--${t.won ? 'win' : 'loss'}`}>
                                 <span className='mw-log-time'>{t.time}</span>
                                 <span className='mw-log-msg'>
-                                    {t.won ? '✅' : '❌'} {SYMBOL_LABELS[t.symbol] || t.symbol} {t.direction === 'CALL' ? '↑' : '↓'} {t.won ? '+' : ''}${t.profit.toFixed(2)}
+                                    {t.won ? '+' : '-'}{t.direction === 'CALL' ? 'U' : 'D'} {SYMBOL_LABELS[t.symbol] || t.symbol} {t.won ? '+' : ''}${t.profit.toFixed(2)}
                                 </span>
                             </div>
                         ))}
