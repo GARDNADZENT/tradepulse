@@ -169,11 +169,11 @@ export const HighLow: React.FC = () => {
             setCurrentSymbol(selected.symbol);
             setCurrentConfidence(selected.confidence);
             setCurrentDirection(selected.direction);
-            setStatus(`🎯 ${SYMBOL_LABELS[selected.symbol] || selected.symbol} — ${selected.direction === 'CALL' ? 'RISE' : 'FALL'} @ ${selected.confidence}% confidence`);
-            addLog(`🎯 Selected ${SYMBOL_LABELS[selected.symbol] || selected.symbol} — ${selected.direction === 'CALL' ? 'RISE' : 'FALL'} (${selected.confidence}%)`, 'trade');
+            setStatus(`🎯 ${SYMBOL_LABELS[selected.symbol] || selected.symbol} — ${selected.direction === 'CALL' ? 'ONLY UPS' : 'ONLY DOWNS'} @ ${selected.confidence}% confidence`);
+            addLog(`🎯 Selected ${SYMBOL_LABELS[selected.symbol] || selected.symbol} — ${selected.direction === 'CALL' ? 'ONLY UPS' : 'ONLY DOWNS'} (${selected.confidence}%)`, 'trade');
 
             const lastPrice = sdRef.current[selected.symbol]?.prices?.slice(-1)[0] || 0;
-            const dur = Math.max(3, Math.min(10, calcDuration(selected.indicators.atr, lastPrice)));
+            const dur = Math.max(2, Math.min(5, calcDuration(selected.indicators.atr, lastPrice)));
             const stake = cfgRef.current.useCompounding && tradesRef.current.length > 0
                 ? Number((pnlRef.current * 0.02).toFixed(2)) || cfgRef.current.stake
                 : cfgRef.current.stake;
@@ -197,12 +197,12 @@ export const HighLow: React.FC = () => {
 
         inTradeRef.current = true;
         setInTrade(true);
-        setStatus(`⏳ Executing ${score.direction === 'CALL' ? 'RISE' : 'FALL'} on ${SYMBOL_LABELS[score.symbol] || score.symbol}...`);
+        setStatus(`⏳ Executing ${score.direction === 'CALL' ? 'ONLY UPS' : 'ONLY DOWNS'} on ${SYMBOL_LABELS[score.symbol] || score.symbol}...`);
 
         const result = await executeHighLowTrade(score.symbol, score.direction, stake, duration);
         if (result.contractId) {
             contractMapRef.current.set(result.contractId, { symbol: score.symbol, stake, duration });
-            addLog(`📡 Contract ${result.contractId} — ${score.direction === 'CALL' ? 'RISE' : 'FALL'} on ${SYMBOL_LABELS[score.symbol] || score.symbol} @ $${stake} × ${duration}t`, 'trade');
+            addLog(`📡 Contract ${result.contractId} — ${score.direction === 'CALL' ? 'ONLY UPS' : 'ONLY DOWNS'} on ${SYMBOL_LABELS[score.symbol] || score.symbol} @ $${stake} × ${duration}t`, 'trade');
         } else {
             addLog('⚠️ Trade execution failed', 'info');
             inTradeRef.current = false;
@@ -395,7 +395,7 @@ export const HighLow: React.FC = () => {
                     {currentSymbol && (
                         <div className='mw-killer__signal-strength'>
                             <span style={{ color: currentConfidence >= cfg.minConfidence ? '#22c55e' : '#f97316' }}>
-                                {SYMBOL_LABELS[currentSymbol] || currentSymbol} — {currentDirection === 'CALL' ? 'RISE' : currentDirection === 'PUT' ? 'FALL' : '—'} — {currentConfidence}%
+                                {SYMBOL_LABELS[currentSymbol] || currentSymbol} — {currentDirection === 'CALL' ? 'ONLY UPS' : currentDirection === 'PUT' ? 'ONLY DOWNS' : '—'} — {currentConfidence}%
                             </span>
                             {inTrade && <span className='mw-killer__active-dot'> ● LIVE</span>}
                             {consecutiveLosses > 0 && <span style={{ color: '#ef4444', marginLeft: 8 }}>×{consecutiveLosses} losses</span>}

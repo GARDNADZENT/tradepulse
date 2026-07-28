@@ -304,10 +304,9 @@ function getTrend(closes: number[], ema20: number, ema50: number, ema100: number
 
 export function calcDuration(atr: number, price: number): number {
     const volPct = (atr / price) * 100;
-    if (volPct > 0.5) return 5;
-    if (volPct > 0.3) return 7;
-    if (volPct > 0.15) return 10;
-    return 10;
+    if (volPct > 0.5) return 3;
+    if (volPct > 0.3) return 4;
+    return 5;
 }
 
 /* ── Market analysis ────────────────────────────────────────────────────────── */
@@ -328,59 +327,63 @@ export function analyzeMarket(
     let direction: 'CALL' | 'PUT' | null = null;
 
     /* ── EMA ── */
-    const emaVals = closes.length > 100 ? ema(closes, 100) : [];
+    const ema100Arr = closes.length > 100 ? ema(closes, 100) : [];
     const ema50Arr = closes.length > 50 ? ema(closes, 50) : [];
     const ema20Arr = closes.length > 20 ? ema(closes, 20) : [];
     const ema20Val = ema20Arr.length > 0 ? ema20Arr[ema20Arr.length - 1] : 0;
     const ema50Val = ema50Arr.length > 0 ? ema50Arr[ema50Arr.length - 1] : 0;
-    const ema100Val = emaVals.length > 0 ? emaVals[emaVals.length - 1] : 0;
-
-    const m1Trend = getTrend(closes.length > 5 ? closes.slice(-5) : closes, ema20Val, ema50Val, ema100Val);
+    const ema100Val = ema100Arr.length > 0 ? ema100Arr[ema100Arr.length - 1] : 0;
+    const lastPrice = closes[closes.length - 1];
+    const isPriceAbove20 = ema20Val > 0 && lastPrice > ema20Val;
+    const isPriceBelow20 = ema20Val > 0 && lastPrice < ema20Val;
+    const isEMABullish = ema20Val > 0 && ema50Val > 0 && ema20Val > ema50Val;
+    const isEMABearish = ema20Val > 0 && ema50Val > 0 && ema20Val < ema50Val;
+    const m1Trend = closes.length > 5 ? getTrend(closes.slice(-5), ema20Val, ema50Val, ema100Val) : 'neutral';
     const m5Trend = closesM5.length > 3 ? getTrend(closesM5, 0, 0, 0) : 'neutral';
-    const m15Trend = closesM15.length > 2 ? getTrend(closesM15, 0, 0, 0) : 'neutral';
 
     /* ── M5/M15 trend via slope ── */
     const slopeM5 = closesM5.length > 4 ? (closesM5[closesM5.length - 1] - closesM5[closesM5.length - 5]) / 5 : 0;
     const slopeM15 = closesM15.length > 2 ? (closesM15[closesM15.length - 1] - closesM15[closesM15.length - 3]) / 3 : 0;
-    const m5TrendDerived: 'bullish' | 'bearish' | 'neutral' = slopeM5 > 0 ? 'bullish' : slopeM5 < 0 ? 'bearish' : 'neutral';
-    const m15TrendDerived: 'bullish' | 'bearish' | 'neutral' = slopeM15 > 0 ? 'bullish' : slopeM15 < 0 ? 'bearish' : 'neutral';
+    const m5TrendDerived = slopeM5 > 0 ? 'bullish' : slopeM5 < 0 ? 'bearish' : 'neutral';
+    const m15TrendDerived = slopeM15 > 0 ? 'bullish' : slopeM15 < 0 ? 'bearish' : 'neutral';
 
-    const isBullish = m1Trend === 'bullish' || (ema20Val > ema50Val && closes[closes.length - 1] > ema20Val);
-    const isBearish = m1Trend === 'bearish' || (ema20Val < ema50Val && closes[closes.length - 1] < ema20Val);
+    const isBullish = m1Trend === 'bullish' || (isEMABullish && isPriceAbove20);
+    const isBearish = m1Trend === 'bearish' || (isEMABearish && isPriceBelow20);
     if (closes.length > 100 && ema20Val && ema50Val && ema100Val) {
-        if (ema20Val > ema50Val && ema50Val > ema100Val) { confidence += 20; reasons.push('EMA bullish alignment'); }
-        else if (ema20Val < ema50Val && ema50Val < ema100Val) { confidence += 20; reasons.push('EMA bearish alignment'); }
+        if (ema20Val > ema50Val && ema50Val > ema100Val) { confidence += 15; reasons.push('EMA bullish alignment'); }
+        else if (ema20Val < ema50Val && ema50Val < ema100Val) { confidence += 15; reasons.push('EMA bearish alignment'); }
     }
 
     /* ── RSI ── */
     const rsiVals = closes.length > 14 ? rsi(closes, 14) : [];
     const rsiVal = rsiVals.length > 0 ? rsiVals[rsiVals.length - 1] : 50;
-    if (rsiVal > 55 && rsiVal < 75) { confidence += 15; reasons.push(`RSI ${rsiVal.toFixed(1)} — bullish strength`); }
-    else if (rsiVal < 45 && rsiVal > 25) { confidence += 15; reasons.push(`RSI ${rsiVal.toFixed(1)} — bearish strength`); }
-    else if (rsiVal >= 75) { reasons.push('RSI overbought — avoid buying'); }
-    else if (rsiVal <= 25) { reasons.push('RSI oversold — avoid selling'); }
+    if (rsiVal > 55 && rsiVal < 75) { confidence += 15; reasons.push(`RSI ${rsiVal.toFixed(1)} — bullish`); }
+    else if (rsiVal < 45 && rsiVal > 25) { confidence += 15; reasons.push(`RSI ${rsiVal.toFixed(1)} — bearish`); }
+    else if (rsiVal >= 75) { reasons.push('RSI overbought'); }
+    else if (rsiVal <= 25) { reasons.push('RSI oversold'); }
 
     /* ── MACD ── */
     const macdData = closes.length > 26 ? macd(closes) : null;
-    if (macdData && macdData.histogram.length > 0) {
+    if (macdData && macdData.histogram.length > 1) {
         const lastHist = macdData.histogram[macdData.histogram.length - 1];
-        const prevHist = macdData.histogram.length > 1 ? macdData.histogram[macdData.histogram.length - 2] : 0;
+        const prevHist = macdData.histogram[macdData.histogram.length - 2];
         const lastMacd = macdData.macd[macdData.macd.length - 1];
         const lastSig = macdData.signal[macdData.signal.length - 1];
-        if (lastMacd > lastSig && lastHist >= 0 && prevHist < 0) { confidence += 15; reasons.push('MACD bullish crossover'); }
-        else if (lastMacd < lastSig && lastHist <= 0 && prevHist > 0) { confidence += 15; reasons.push('MACD bearish crossover'); }
+        if (lastMacd > lastSig && lastHist > 0 && prevHist < 0) { confidence += 10; reasons.push('MACD bullish cross'); }
+        else if (lastMacd < lastSig && lastHist < 0 && prevHist > 0) { confidence += 10; reasons.push('MACD bearish cross'); }
+        else if (lastMacd > lastSig && lastHist > prevHist) { confidence += 5; reasons.push('MACD bullish momentum'); }
+        else if (lastMacd < lastSig && lastHist < prevHist) { confidence += 5; reasons.push('MACD bearish momentum'); }
     }
 
     /* ── ADX ── */
     const adxVal = candlesM1.length > 14 ? adx(candlesM1, 14) : 0;
-    if (adxVal > 25) { confidence += 15; reasons.push(`ADX ${adxVal.toFixed(1)} — strong trend`); }
-    else { reasons.push(`ADX ${adxVal.toFixed(1)} — weak trend`); }
+    if (adxVal > 30) { confidence += 10; reasons.push(`ADX ${adxVal.toFixed(1)} — strong`); }
+    else if (adxVal > 22) { confidence += 5; reasons.push(`ADX ${adxVal.toFixed(1)} — moderate`); }
 
     /* ── Bollinger Bands ── */
     const bb = bollinger(closes, 20, 2);
-    const lastPrice = closes[closes.length - 1];
-    if (bb.upper && lastPrice > bb.upper) { confidence += 5; reasons.push('Price above upper BB — bullish breakout'); }
-    else if (bb.lower && lastPrice < bb.lower) { confidence += 5; reasons.push('Price below lower BB — bearish breakout'); }
+    if (bb.upper && lastPrice > bb.upper) { confidence += 5; reasons.push('Above upper BB — bullish'); }
+    else if (bb.lower && lastPrice < bb.lower) { confidence += 5; reasons.push('Below lower BB — bearish'); }
 
     /* ── ATR ── */
     const atrVal = candlesM1.length > 14 ? calcATR(candlesM1, 14) : 0;
@@ -394,22 +397,48 @@ export function analyzeMarket(
 
     /* ── Price action ── */
     const pattern = candlesM1.length > 1 ? detectCandlePattern(candlesM1) : 'none';
-    if (pattern === 'bullish_engulfing' && isBullish) { confidence += 10; reasons.push('Bullish engulfing confirmation'); }
-    else if (pattern === 'bearish_engulfing' && isBearish) { confidence += 10; reasons.push('Bearish engulfing confirmation'); }
-    else if (pattern === 'pin_bar') { confidence += 5; reasons.push('Pin bar — potential reversal'); }
+    if (pattern === 'bullish_engulfing' && isBullish) { confidence += 10; reasons.push('Bullish engulfing'); }
+    else if (pattern === 'bearish_engulfing' && isBearish) { confidence += 10; reasons.push('Bearish engulfing'); }
+    else if (pattern === 'pin_bar') { confidence += 5; reasons.push('Pin bar — reversal'); }
 
     /* ── Higher timeframe confirmation ── */
-    if (m15TrendDerived === 'bullish' && m5TrendDerived === 'bullish' && isBullish) { confidence += 15; reasons.push('M1+M5+M15 alignment bullish'); }
-    else if (m15TrendDerived === 'bearish' && m5TrendDerived === 'bearish' && isBearish) { confidence += 15; reasons.push('M1+M5+M15 alignment bearish'); }
-    else if (m5TrendDerived === 'bullish' && isBullish) { confidence += 8; reasons.push('M1+M5 alignment bullish'); }
-    else if (m5TrendDerived === 'bearish' && isBearish) { confidence += 8; reasons.push('M1+M5 alignment bearish'); }
+    if (m15TrendDerived === 'bullish' && m5TrendDerived === 'bullish' && isBullish) { confidence += 15; reasons.push('M1+M5+M15 bullish'); }
+    else if (m15TrendDerived === 'bearish' && m5TrendDerived === 'bearish' && isBearish) { confidence += 15; reasons.push('M1+M5+M15 bearish'); }
+    else if (m5TrendDerived === 'bullish' && isBullish) { confidence += 8; reasons.push('M1+M5 bullish'); }
+    else if (m5TrendDerived === 'bearish' && isBearish) { confidence += 8; reasons.push('M1+M5 bearish'); }
 
-    /* ── Last 50 ticks momentum ── */
-    const last50 = prices.slice(-50);
-    if (last50.length >= 10) {
-        const momentum = (last50[last50.length - 1] - last50[0]) / last50[0] * 100;
-        if (momentum > 0.1 && isBullish) { confidence += 5; reasons.push(`Momentum +${momentum.toFixed(2)}%`); }
-        else if (momentum < -0.1 && isBearish) { confidence += 5; reasons.push(`Momentum ${momentum.toFixed(2)}%`); }
+    /* ── Micro-momentum (up to 20 pts) — key for 2-5 tick prediction ── */
+    const recent = prices.slice(-20);
+    if (recent.length >= 10) {
+        const half = Math.floor(recent.length / 2);
+        const oldHalf = recent.slice(0, half);
+        const newHalf = recent.slice(half);
+        const oldAvg = oldHalf.reduce((a, b) => a + b, 0) / oldHalf.length;
+        const newAvg = newHalf.reduce((a, b) => a + b, 0) / newHalf.length;
+
+        const last5 = prices.slice(-5);
+        let upCount = 0, downCount = 0;
+        for (let i = 1; i < last5.length; i++) {
+            if (last5[i] > last5[i-1]) upCount++;
+            else if (last5[i] < last5[i-1]) downCount++;
+        }
+
+        const netDir = newAvg - oldAvg;
+        const netPct = (netDir / oldAvg) * 100;
+
+        if (netPct > 0.05 && upCount >= 3) {
+            confidence += 20;
+            reasons.push(`Micro-momentum +${netPct.toFixed(2)}% (${upCount}/5 up)`);
+        } else if (netPct < -0.05 && downCount >= 3) {
+            confidence += 20;
+            reasons.push(`Micro-momentum ${netPct.toFixed(2)}% (${downCount}/5 down)`);
+        } else if (netPct > 0.02 && upCount >= 3) {
+            confidence += 10;
+            reasons.push(`Mild bullish ticks (${upCount}/5 up)`);
+        } else if (netPct < -0.02 && downCount >= 3) {
+            confidence += 10;
+            reasons.push(`Mild bearish ticks (${downCount}/5 down)`);
+        }
     }
 
     /* ── Direction decision ── */
