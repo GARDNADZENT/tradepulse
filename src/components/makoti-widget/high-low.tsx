@@ -57,6 +57,8 @@ export const HighLow: React.FC = () => {
     const aimingRef = useRef<MarketScore | null>(null);
     const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastEntryAttemptRef = useRef(0);
+    const aimingStartRef = useRef(0);
+    const aimChecksRef = useRef(0);
 
     cfgRef.current = cfg;
 
@@ -71,6 +73,8 @@ export const HighLow: React.FC = () => {
 
     const clearAiming = useCallback(() => {
         aimingRef.current = null;
+        aimingStartRef.current = 0;
+        aimChecksRef.current = 0;
         setSniperPhase('idle');
         setSniperReason('');
     }, []);
@@ -130,9 +134,19 @@ export const HighLow: React.FC = () => {
     const checkEntryOnTick = useCallback(() => {
         if (!runningRef.current || inTradeRef.current || !aimingRef.current) return;
         if (Date.now() - lastEntryAttemptRef.current < 2000) return;
+
         const aim = aimingRef.current;
         const sd = sdRef.current[aim.symbol];
         if (!sd || sd.prices.length < 10) return;
+
+        aimChecksRef.current++;
+
+        if (Date.now() - aimingStartRef.current > 20000 || aimChecksRef.current > 40) {
+            addLog(`Aiming timeout on ${SYMBOL_LABELS[aim.symbol] || aim.symbol} — rescanning`, 'info');
+            clearAiming();
+            scheduleScan();
+            return;
+        }
 
         const result = checkSniperEntry(aim.direction!, sd.prices);
         setSniperReason(result.reason);
@@ -147,7 +161,7 @@ export const HighLow: React.FC = () => {
             }
             executeTrade(aim, stake, duration);
         }
-    }, [addLog, executeTrade]);
+    }, [addLog, executeTrade, clearAiming, scheduleScan]);
 
     const runScanCycle = useCallback(() => {
         if (!runningRef.current || inTradeRef.current || globalLock.current) return;
@@ -167,6 +181,8 @@ export const HighLow: React.FC = () => {
             addLog(`Locked ${SYMBOL_LABELS[selected.symbol] || selected.symbol} ${selected.direction === 'RUNHIGH' ? 'ONLY UPS' : 'ONLY DOWNS'} (${selected.confidence}%)`, 'trade');
 
             aimingRef.current = selected;
+            aimingStartRef.current = Date.now();
+            aimChecksRef.current = 0;
             setSniperPhase('aiming');
             setSniperReason('Waiting for entry...');
             globalLock.current = false;

@@ -453,48 +453,45 @@ export function checkSniperEntry(
     if (prices.length < 4) return notrigger;
 
     const penultimatePrice = prices[prices.length - 2];
-    const antepenultimatePrice = prices.length > 3 ? prices[prices.length - 3] : penultimatePrice;
 
     if (direction === 'RUNHIGH') {
-        if (l70.direction !== 'up' || l70.strength < 30) return { ...notrigger, reason: 'Trend not strong up' };
-        if (l70.ema5 <= l70.ema13) return { ...notrigger, reason: 'EMA5 below EMA13' };
-        if (l70.momentumConviction < 0.2) return { ...notrigger, reason: 'Low conviction' };
+        if (l70.direction !== 'up' || l70.strength < 20) return { ...notrigger, reason: `Trend not up (${l70.strength})` };
 
         const lastTickUp = currentPrice > penultimatePrice;
         if (!lastTickUp) return { ...notrigger, reason: 'Last tick not up' };
 
-        const nearPeak = l70.pullbackFromPeak < 0.002;
-        if (!nearPeak) return { ...notrigger, reason: `Off peak ${l70.pullbackFromPeak.toFixed(3)}%` };
+        let score = 0;
+        if (l70.ema5 > l70.ema13) score += 2;
+        if (l70.momentumConviction > 0.1) score += 2;
+        if (l70.pullbackFromPeak < 0.005) score += 2;
+        if (l70.consecUp >= 1 && l70.consecUp <= 4) score += 2;
+        if (l70.slopeAccel > 0.00002 || l70.velocity > 0.001) score += 2;
 
-        const consecOk = l70.consecUp >= 1 && l70.consecUp <= 3;
-        if (!consecOk) return { ...notrigger, reason: `Consec ${l70.consecUp} not ideal` };
-
-        if (l70.slopeAccel > 0.00005 || l70.velocity > 0.003) {
-            return { trigger: true, reason: `At peak +accel`, entryPrice: currentPrice };
+        if (score >= 6) {
+            return { trigger: true, reason: `Up score ${score}/10`, entryPrice: currentPrice };
         }
 
-        return { ...notrigger, reason: 'Waiting up momentum' };
+        return { ...notrigger, reason: `Up score ${score}/10` };
     }
 
     if (direction === 'RUNLOW') {
-        if (l70.direction !== 'down' || l70.strength < 30) return { ...notrigger, reason: 'Trend not strong down' };
-        if (l70.ema5 >= l70.ema13) return { ...notrigger, reason: 'EMA5 above EMA13' };
-        if (l70.momentumConviction > -0.2) return { ...notrigger, reason: 'Low conviction' };
+        if (l70.direction !== 'down' || l70.strength < 20) return { ...notrigger, reason: `Trend not down (${l70.strength})` };
 
         const lastTickDown = currentPrice < penultimatePrice;
         if (!lastTickDown) return { ...notrigger, reason: 'Last tick not down' };
 
-        const nearDip = l70.bounceFromDip < 0.002;
-        if (!nearDip) return { ...notrigger, reason: `Off dip ${l70.bounceFromDip.toFixed(3)}%` };
+        let score = 0;
+        if (l70.ema5 < l70.ema13) score += 2;
+        if (l70.momentumConviction < -0.1) score += 2;
+        if (l70.bounceFromDip < 0.005) score += 2;
+        if (l70.consecDown >= 1 && l70.consecDown <= 4) score += 2;
+        if (l70.slopeAccel < -0.00002 || l70.velocity > 0.001) score += 2;
 
-        const consecOk = l70.consecDown >= 1 && l70.consecDown <= 3;
-        if (!consecOk) return { ...notrigger, reason: `Consec ${l70.consecDown} not ideal` };
-
-        if (l70.slopeAccel < -0.00005 || l70.velocity > 0.003) {
-            return { trigger: true, reason: `At dip +accel`, entryPrice: currentPrice };
+        if (score >= 6) {
+            return { trigger: true, reason: `Down score ${score}/10`, entryPrice: currentPrice };
         }
 
-        return { ...notrigger, reason: 'Waiting down momentum' };
+        return { ...notrigger, reason: `Down score ${score}/10` };
     }
 
     return notrigger;
