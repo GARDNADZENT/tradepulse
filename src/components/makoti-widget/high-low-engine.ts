@@ -450,48 +450,55 @@ export function checkSniperEntry(
     const currentPrice = prices[prices.length - 1];
     const notrigger = { trigger: false, reason: '', entryPrice: currentPrice };
 
-    if (prices.length < 4) return notrigger;
+    if (prices.length < 3) return notrigger;
 
-    const penultimatePrice = prices[prices.length - 2];
+    const prev = prices[prices.length - 2];
+    const thirdLast = prices.length > 2 ? prices[prices.length - 3] : prev;
 
     if (direction === 'RUNHIGH') {
-        if (l70.direction !== 'up' || l70.strength < 20) return { ...notrigger, reason: `Trend not up (${l70.strength})` };
+        if (l70.direction !== 'up' || l70.strength < 25) return { ...notrigger, reason: `Trend not up (${l70.strength})` };
+        if (l70.ema5 <= l70.ema13) return { ...notrigger, reason: 'EMA5 not bullish' };
+        if (l70.momentumConviction < 0.15) return { ...notrigger, reason: `Low conviction ${l70.momentumConviction.toFixed(2)}` };
 
-        const lastTickUp = currentPrice > penultimatePrice;
-        if (!lastTickUp) return { ...notrigger, reason: 'Last tick not up' };
+        const lastTickDown = currentPrice < prev;
+        if (!lastTickDown) return { ...notrigger, reason: 'Last not down (want dip)' };
 
-        let score = 0;
-        if (l70.ema5 > l70.ema13) score += 2;
-        if (l70.momentumConviction > 0.1) score += 2;
-        if (l70.pullbackFromPeak < 0.005) score += 2;
-        if (l70.consecUp >= 1 && l70.consecUp <= 4) score += 2;
-        if (l70.slopeAccel > 0.00002 || l70.velocity > 0.001) score += 2;
+        const dipShallow = l70.pullbackFromPeak < 0.01;
+        if (!dipShallow) return { ...notrigger, reason: `Dip too deep ${l70.pullbackFromPeak.toFixed(3)}%` };
 
-        if (score >= 6) {
-            return { trigger: true, reason: `Up score ${score}/10`, entryPrice: currentPrice };
+        const bounceSign = l70.consecUp >= 1 && thirdLast < prev;
+        if (!bounceSign && l70.slopeAccel > 0.00003) {
+            return { trigger: true, reason: `Accel dip +bounce`, entryPrice: currentPrice };
         }
 
-        return { ...notrigger, reason: `Up score ${score}/10` };
+        if (bounceSign) {
+            return { trigger: true, reason: `Dip +bounce ready`, entryPrice: currentPrice };
+        }
+
+        return { ...notrigger, reason: `Waiting dip bounce` };
     }
 
     if (direction === 'RUNLOW') {
-        if (l70.direction !== 'down' || l70.strength < 20) return { ...notrigger, reason: `Trend not down (${l70.strength})` };
+        if (l70.direction !== 'down' || l70.strength < 25) return { ...notrigger, reason: `Trend not down (${l70.strength})` };
+        if (l70.ema5 >= l70.ema13) return { ...notrigger, reason: 'EMA5 not bearish' };
+        if (l70.momentumConviction > -0.15) return { ...notrigger, reason: `Low conviction ${l70.momentumConviction.toFixed(2)}` };
 
-        const lastTickDown = currentPrice < penultimatePrice;
-        if (!lastTickDown) return { ...notrigger, reason: 'Last tick not down' };
+        const lastTickUp = currentPrice > prev;
+        if (!lastTickUp) return { ...notrigger, reason: 'Last not up (want peak)' };
 
-        let score = 0;
-        if (l70.ema5 < l70.ema13) score += 2;
-        if (l70.momentumConviction < -0.1) score += 2;
-        if (l70.bounceFromDip < 0.005) score += 2;
-        if (l70.consecDown >= 1 && l70.consecDown <= 4) score += 2;
-        if (l70.slopeAccel < -0.00002 || l70.velocity > 0.001) score += 2;
+        const peakShallow = l70.bounceFromDip < 0.01;
+        if (!peakShallow) return { ...notrigger, reason: `Peak too high ${l70.bounceFromDip.toFixed(3)}%` };
 
-        if (score >= 6) {
-            return { trigger: true, reason: `Down score ${score}/10`, entryPrice: currentPrice };
+        const declineSign = l70.consecDown >= 1 && thirdLast > prev;
+        if (!declineSign && l70.slopeAccel < -0.00003) {
+            return { trigger: true, reason: `Accel peak +decline`, entryPrice: currentPrice };
         }
 
-        return { ...notrigger, reason: `Down score ${score}/10` };
+        if (declineSign) {
+            return { trigger: true, reason: `Peak +decline ready`, entryPrice: currentPrice };
+        }
+
+        return { ...notrigger, reason: `Waiting peak decline` };
     }
 
     return notrigger;
@@ -500,23 +507,7 @@ export function checkSniperEntry(
 /* ── Duration calculation ───────────────────────────────────────────────────── */
 
 export function calcDuration(atr: number, price: number, velocity?: number, slopeAccel?: number): number {
-    const volPct = (atr / price) * 100;
-
-    let base = 2;
-
-    if (volPct > 0.8) base = 2;
-    else if (volPct > 0.5) base = 2;
-    else if (volPct > 0.2) base = 2;
-    else if (volPct > 0.08) base = 3;
-    else base = 3;
-
-    if (velocity && velocity > 0.008) { base = 2; }
-    else if (velocity && velocity > 0.003) { }
-    else if (velocity && velocity < 0.0003) { base = Math.min(3, base + 1); }
-
-    if (slopeAccel && Math.abs(slopeAccel) > 0.00015) base = Math.max(2, base);
-
-    return Math.max(2, Math.min(4, base));
+    return 2;
 }
 
 /* ── Market analysis ────────────────────────────────────────────────────────── */

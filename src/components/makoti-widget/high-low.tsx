@@ -59,6 +59,8 @@ export const HighLow: React.FC = () => {
     const lastEntryAttemptRef = useRef(0);
     const aimingStartRef = useRef(0);
     const aimChecksRef = useRef(0);
+    const pollReadyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const generationRef = useRef(0);
 
     cfgRef.current = cfg;
 
@@ -83,8 +85,10 @@ export const HighLow: React.FC = () => {
         runningRef.current = false;
         inTradeRef.current = false;
         globalLock.current = false;
+        generationRef.current++;
         clearAiming();
         if (scanTimerRef.current) { clearTimeout(scanTimerRef.current); scanTimerRef.current = null; }
+        if (pollReadyTimerRef.current) { clearTimeout(pollReadyTimerRef.current); pollReadyTimerRef.current = null; }
         setRunning(false);
         setScanning(false);
         setInTrade(false);
@@ -271,6 +275,8 @@ export const HighLow: React.FC = () => {
         globalLock.current = false;
         inTradeRef.current = false;
         contractMapRef.current = new Map();
+        generationRef.current++;
+        const gen = generationRef.current;
         clearAiming();
 
         sdRef.current = {};
@@ -294,6 +300,7 @@ export const HighLow: React.FC = () => {
         addLog(`HIGH/LOW — ${HL_SYMBOLS.length} volatilities | stake $${stake} | min ${cfg.minConfidence}%`, 'info');
 
         if (wsRef.current) { try { wsRef.current.close(); } catch {} wsRef.current = null; }
+        if (pollReadyTimerRef.current) { clearTimeout(pollReadyTimerRef.current); pollReadyTimerRef.current = null; }
 
         const mws = openMakotiWS(
             (data) => { tickRef.current(data); },
@@ -305,7 +312,7 @@ export const HighLow: React.FC = () => {
                     });
                     setStatus(`Loading ${HL_SYMBOLS.length} markets...`);
                     const pollReady = () => {
-                        if (!runningRef.current) return;
+                        if (!runningRef.current || gen !== generationRef.current) return;
                         for (const s of HL_SYMBOLS) {
                             const sd = sdRef.current[s];
                             if (sd && sd.ready && sd.prices.length >= MIN_TICKS) {
@@ -314,9 +321,9 @@ export const HighLow: React.FC = () => {
                                 return;
                             }
                         }
-                        setTimeout(pollReady, 500);
+                        pollReadyTimerRef.current = setTimeout(pollReady, 500);
                     };
-                    setTimeout(pollReady, 500);
+                    pollReadyTimerRef.current = setTimeout(pollReady, 500);
                 } catch (e) {
                     addLog(`Connection error: ${e}`, 'info');
                     stopEngine();
