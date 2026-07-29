@@ -450,54 +450,51 @@ export function checkSniperEntry(
     const currentPrice = prices[prices.length - 1];
     const notrigger = { trigger: false, reason: '', entryPrice: currentPrice };
 
+    if (prices.length < 4) return notrigger;
+
+    const penultimatePrice = prices[prices.length - 2];
+    const antepenultimatePrice = prices.length > 3 ? prices[prices.length - 3] : penultimatePrice;
+
     if (direction === 'RUNHIGH') {
-        if (l70.direction !== 'up') return { ...notrigger, reason: 'Micro-trend not up' };
+        if (l70.direction !== 'up' || l70.strength < 30) return { ...notrigger, reason: 'Trend not strong up' };
+        if (l70.ema5 <= l70.ema13) return { ...notrigger, reason: 'EMA5 below EMA13' };
+        if (l70.momentumConviction < 0.2) return { ...notrigger, reason: 'Low conviction' };
 
-        const momentumFading = l70.ema5 <= l70.ema13 && l70.slopeAccel < 0;
-        if (momentumFading) return { ...notrigger, reason: 'EMA5<EMA13 + decel' };
+        const lastTickUp = currentPrice > penultimatePrice;
+        if (!lastTickUp) return { ...notrigger, reason: 'Last tick not up' };
 
-        if (l70.consecUp > 4) return { ...notrigger, reason: `Extended ${l70.consecUp} up` };
+        const nearPeak = l70.pullbackFromPeak < 0.002;
+        if (!nearPeak) return { ...notrigger, reason: `Off peak ${l70.pullbackFromPeak.toFixed(3)}%` };
 
-        const accelOk = l70.slopeAccel > 0.00005;
-        const pullbackOk = l70.pullbackFromPeak >= 0.003;
-        const momentumOk = l70.momentumConviction > 0.3;
+        const consecOk = l70.consecUp >= 1 && l70.consecUp <= 3;
+        if (!consecOk) return { ...notrigger, reason: `Consec ${l70.consecUp} not ideal` };
 
-        if (pullbackOk) {
-            return { trigger: true, reason: `Pullback ${l70.pullbackFromPeak.toFixed(3)}%`, entryPrice: currentPrice };
-        }
-        if (l70.consecDown >= 2 && (accelOk || momentumOk)) {
-            return { trigger: true, reason: 'Dip into accel trend', entryPrice: currentPrice };
-        }
-        if (l70.consecDown === 1 && l70.slopeAccel > 0.0001 && l70.ema5Above13) {
-            return { trigger: true, reason: 'Flash dip + strong up accel', entryPrice: currentPrice };
+        if (l70.slopeAccel > 0.00005 || l70.velocity > 0.003) {
+            return { trigger: true, reason: `At peak +accel`, entryPrice: currentPrice };
         }
 
-        return { ...notrigger, reason: `Peak ${l70.lastPeakPrice.toFixed(4)} pull ${l70.pullbackFromPeak.toFixed(3)}%` };
+        return { ...notrigger, reason: 'Waiting up momentum' };
     }
 
     if (direction === 'RUNLOW') {
-        if (l70.direction !== 'down') return { ...notrigger, reason: 'Micro-trend not down' };
+        if (l70.direction !== 'down' || l70.strength < 30) return { ...notrigger, reason: 'Trend not strong down' };
+        if (l70.ema5 >= l70.ema13) return { ...notrigger, reason: 'EMA5 above EMA13' };
+        if (l70.momentumConviction > -0.2) return { ...notrigger, reason: 'Low conviction' };
 
-        const momentumFading = l70.ema5 >= l70.ema13 && l70.slopeAccel > 0;
-        if (momentumFading) return { ...notrigger, reason: 'EMA5>EMA13 + decel' };
+        const lastTickDown = currentPrice < penultimatePrice;
+        if (!lastTickDown) return { ...notrigger, reason: 'Last tick not down' };
 
-        if (l70.consecDown > 4) return { ...notrigger, reason: `Extended ${l70.consecDown} down` };
+        const nearDip = l70.bounceFromDip < 0.002;
+        if (!nearDip) return { ...notrigger, reason: `Off dip ${l70.bounceFromDip.toFixed(3)}%` };
 
-        const accelOk = l70.slopeAccel < -0.00005;
-        const bounceOk = l70.bounceFromDip >= 0.003;
-        const momentumOk = l70.momentumConviction < -0.3;
+        const consecOk = l70.consecDown >= 1 && l70.consecDown <= 3;
+        if (!consecOk) return { ...notrigger, reason: `Consec ${l70.consecDown} not ideal` };
 
-        if (bounceOk) {
-            return { trigger: true, reason: `Bounce ${l70.bounceFromDip.toFixed(3)}%`, entryPrice: currentPrice };
-        }
-        if (l70.consecUp >= 2 && (accelOk || momentumOk)) {
-            return { trigger: true, reason: 'Rally into accel trend', entryPrice: currentPrice };
-        }
-        if (l70.consecUp === 1 && l70.slopeAccel < -0.0001 && !l70.ema5Above13) {
-            return { trigger: true, reason: 'Flash rally + strong down accel', entryPrice: currentPrice };
+        if (l70.slopeAccel < -0.00005 || l70.velocity > 0.003) {
+            return { trigger: true, reason: `At dip +accel`, entryPrice: currentPrice };
         }
 
-        return { ...notrigger, reason: `Dip ${l70.lastDipPrice.toFixed(4)} bounce ${l70.bounceFromDip.toFixed(3)}%` };
+        return { ...notrigger, reason: 'Waiting down momentum' };
     }
 
     return notrigger;
@@ -507,20 +504,22 @@ export function checkSniperEntry(
 
 export function calcDuration(atr: number, price: number, velocity?: number, slopeAccel?: number): number {
     const volPct = (atr / price) * 100;
-    let base = 3;
 
-    if (volPct > 0.6) base = 2;
-    else if (volPct > 0.35) base = 3;
-    else if (volPct > 0.15) base = 4;
-    else base = 5;
+    let base = 2;
 
-    if (velocity && velocity > 0.005) base = Math.max(2, base - 1);
-    if (velocity && velocity > 0.01) base = Math.max(2, base - 1);
-    if (velocity && velocity < 0.0005) base = Math.min(5, base + 1);
+    if (volPct > 0.8) base = 2;
+    else if (volPct > 0.5) base = 2;
+    else if (volPct > 0.2) base = 2;
+    else if (volPct > 0.08) base = 3;
+    else base = 3;
 
-    if (slopeAccel && Math.abs(slopeAccel) > 0.0001) base = Math.max(2, base - 1);
+    if (velocity && velocity > 0.008) { base = 2; }
+    else if (velocity && velocity > 0.003) { }
+    else if (velocity && velocity < 0.0003) { base = Math.min(3, base + 1); }
 
-    return Math.max(2, Math.min(5, base));
+    if (slopeAccel && Math.abs(slopeAccel) > 0.00015) base = Math.max(2, base);
+
+    return Math.max(2, Math.min(4, base));
 }
 
 /* ── Market analysis ────────────────────────────────────────────────────────── */
@@ -692,7 +691,7 @@ export function analyzeMarket(
     if (l70.momentumConviction > 0.8 && l70.slopeAccel > 0) isBullishFinal = true;
     if (l70.momentumConviction < -0.8 && l70.slopeAccel < 0) isBearishFinal = true;
 
-    const minDirectionalConfidence = Math.max(30, Math.min(50, 50 - Math.abs(l70.momentumConviction) * 20));
+    const minDirectionalConfidence = Math.max(55, Math.min(75, 75 - Math.abs(l70.momentumConviction) * 25));
     if (isBullishFinal && confidence >= minDirectionalConfidence) direction = 'RUNHIGH';
     else if (isBearishFinal && confidence >= minDirectionalConfidence) direction = 'RUNLOW';
 
