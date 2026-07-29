@@ -9,9 +9,9 @@ import {
 } from './high-low-engine';
 
 const LS_CONFIG_KEY = 'mw_hl_config';
-const SCAN_HISTORY = 5000;
-const MAX_TICKS = 5000;
-const MIN_TICKS = 70;
+const SCAN_HISTORY = 1000;
+const MAX_TICKS = 1000;
+const MIN_TICKS = 50;
 
 type SniperPhase = 'idle' | 'aiming' | 'firing' | 'in_trade';
 
@@ -36,7 +36,7 @@ export const HighLow: React.FC = () => {
     const [status, setStatus] = useState('');
     const [currentSymbol, setCurrentSymbol] = useState('');
     const [currentConfidence, setCurrentConfidence] = useState(0);
-    const [currentDirection, setCurrentDirection] = useState<'CALL' | 'PUT' | null>(null);
+    const [currentDirection, setCurrentDirection] = useState<'RUNHIGH' | 'RUNLOW' | null>(null);
     const [consecutiveLosses, setConsecutiveLosses] = useState(0);
     const [sniperPhase, setSniperPhase] = useState<SniperPhase>('idle');
     const [sniperReason, setSniperReason] = useState('');
@@ -56,6 +56,7 @@ export const HighLow: React.FC = () => {
     const dailyResetRef = useRef(Date.now());
     const aimingRef = useRef<MarketScore | null>(null);
     const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastEntryAttemptRef = useRef(0);
 
     cfgRef.current = cfg;
 
@@ -100,14 +101,14 @@ export const HighLow: React.FC = () => {
         inTradeRef.current = true;
         setInTrade(true);
         setSniperPhase('firing');
-        setStatus(`Firing ${score.direction === 'CALL' ? 'ONLY UPS' : 'ONLY DOWNS'} on ${SYMBOL_LABELS[score.symbol] || score.symbol}...`);
+        setStatus(`Firing ${score.direction === 'RUNHIGH' ? 'ONLY UPS' : 'ONLY DOWNS'} on ${SYMBOL_LABELS[score.symbol] || score.symbol}...`);
 
         const result = await executeHighLowTrade(score.symbol, score.direction, stake, duration);
         if (result.contractId) {
             contractMapRef.current.set(result.contractId, { symbol: score.symbol, stake, duration });
-            addLog(`Contract ${result.contractId} — ${score.direction === 'CALL' ? 'ONLY UPS' : 'ONLY DOWNS'} on ${SYMBOL_LABELS[score.symbol] || score.symbol} @ $${stake} x ${duration}t`, 'trade');
+            addLog(`Contract ${result.contractId} — ${score.direction === 'RUNHIGH' ? 'ONLY UPS' : 'ONLY DOWNS'} on ${SYMBOL_LABELS[score.symbol] || score.symbol} @ $${stake} x ${duration}t`, 'trade');
             setSniperPhase('in_trade');
-            setStatus(`LIVE — ${SYMBOL_LABELS[score.symbol] || score.symbol} ${score.direction === 'CALL' ? 'ONLY UPS' : 'ONLY DOWNS'} $${stake} x ${duration}t`);
+            setStatus(`LIVE — ${SYMBOL_LABELS[score.symbol] || score.symbol} ${score.direction === 'RUNHIGH' ? 'ONLY UPS' : 'ONLY DOWNS'} $${stake} x ${duration}t`);
         } else {
             addLog('Trade execution failed', 'info');
             inTradeRef.current = false;
@@ -128,6 +129,7 @@ export const HighLow: React.FC = () => {
 
     const checkEntryOnTick = useCallback(() => {
         if (!runningRef.current || inTradeRef.current || !aimingRef.current) return;
+        if (Date.now() - lastEntryAttemptRef.current < 2000) return;
         const aim = aimingRef.current;
         const sd = sdRef.current[aim.symbol];
         if (!sd || sd.prices.length < 10) return;
@@ -136,11 +138,13 @@ export const HighLow: React.FC = () => {
         setSniperReason(result.reason);
 
         if (result.trigger) {
+            lastEntryAttemptRef.current = Date.now();
             addLog(`Sniper trigger: ${result.reason}`, 'trade');
-            const duration = Math.max(2, Math.min(5, calcDuration(aim.indicators.atr, result.entryPrice)));
-            const stake = cfgRef.current.useCompounding && tradesRef.current.length > 0
-                ? Number((pnlRef.current * 0.02).toFixed(2)) || cfgRef.current.stake
-                : cfgRef.current.stake;
+            const duration = calcDuration(aim.indicators.atr, result.entryPrice, aim.indicators.last70Slope, aim.indicators.slopeAccel);
+            let stake = cfgRef.current.stake;
+            if (cfgRef.current.useCompounding && tradesRef.current.length > 0 && pnlRef.current > 0) {
+                stake = Math.max(0.35, Number((pnlRef.current * 0.02).toFixed(2)));
+            }
             executeTrade(aim, stake, duration);
         }
     }, [addLog, executeTrade]);
@@ -159,8 +163,8 @@ export const HighLow: React.FC = () => {
             setCurrentSymbol(selected.symbol);
             setCurrentConfidence(selected.confidence);
             setCurrentDirection(selected.direction);
-            setStatus(`Locked ${SYMBOL_LABELS[selected.symbol] || selected.symbol} ${selected.direction === 'CALL' ? 'ONLY UPS' : 'ONLY DOWNS'} @ ${selected.confidence}%`);
-            addLog(`Locked ${SYMBOL_LABELS[selected.symbol] || selected.symbol} ${selected.direction === 'CALL' ? 'ONLY UPS' : 'ONLY DOWNS'} (${selected.confidence}%)`, 'trade');
+            setStatus(`Locked ${SYMBOL_LABELS[selected.symbol] || selected.symbol} ${selected.direction === 'RUNHIGH' ? 'ONLY UPS' : 'ONLY DOWNS'} @ ${selected.confidence}%`);
+            addLog(`Locked ${SYMBOL_LABELS[selected.symbol] || selected.symbol} ${selected.direction === 'RUNHIGH' ? 'ONLY UPS' : 'ONLY DOWNS'} (${selected.confidence}%)`, 'trade');
 
             aimingRef.current = selected;
             setSniperPhase('aiming');
@@ -332,7 +336,7 @@ export const HighLow: React.FC = () => {
 
                 const trade: TradeRecord = {
                     time: new Date().toLocaleTimeString(),
-                    symbol: entry.symbol, direction: c.contract_type === 'CALL' ? 'CALL' : 'PUT',
+                    symbol: entry.symbol, direction: c.contract_type === 'RUNHIGH' ? 'RUNHIGH' : 'RUNLOW',
                     confidence: 0, stake: entry.stake, duration: entry.duration,
                     entryPrice: Number(c.entry_tick ?? 0), exitPrice: Number(c.exit_tick ?? 0),
                     profit, won, reasons: [],
@@ -408,8 +412,8 @@ export const HighLow: React.FC = () => {
                 </div>
                 <div className='mw-field'>
                     <label className='mw-label'>Min Confidence</label>
-                    <input className='mw-input' type='number' min='50' max='100' step='1'
-                        value={cfg.minConfidence} onChange={e => setCfg(p => ({ ...p, minConfidence: Math.min(100, Math.max(50, parseInt(e.target.value) || 85)) }))} disabled={running} />
+                    <input className='mw-input' type='number' min='0' max='100' step='1'
+                        value={cfg.minConfidence} onChange={e => setCfg(p => ({ ...p, minConfidence: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) }))} disabled={running} />
                 </div>
             </div>
             <div className='mw-killer__fields'>
@@ -500,7 +504,7 @@ export const HighLow: React.FC = () => {
                             <div key={i} className={`mw-log-line mw-log-line--${t.won ? 'win' : 'loss'}`}>
                                 <span className='mw-log-time'>{t.time}</span>
                                 <span className='mw-log-msg'>
-                                    {t.won ? '+' : '-'}{t.direction === 'CALL' ? 'U' : 'D'} {SYMBOL_LABELS[t.symbol] || t.symbol} {t.won ? '+' : ''}${t.profit.toFixed(2)}
+                                    {t.won ? '+' : '-'}{t.direction === 'RUNHIGH' ? 'U' : 'D'} {SYMBOL_LABELS[t.symbol] || t.symbol} {t.won ? '+' : ''}${t.profit.toFixed(2)}
                                 </span>
                             </div>
                         ))}
