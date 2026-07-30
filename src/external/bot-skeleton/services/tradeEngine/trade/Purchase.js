@@ -232,26 +232,37 @@ export default Engine =>
 
             const now = Math.floor(Date.now() / 1000);
             const virtual_id = `virtual_${now}_${Math.random()}`;
+            const entrySpotNum = Number(contract.entry_spot);
+            const exitSpotNum = Number(contract.exit_spot);
             const virtual_contract = {
-                ...contract,
+                ask_price: Number(contract.ask_price),
                 buy_price: Number(contract.ask_price),
                 sell_price: contract.profit > 0 ? Number(contract.payout) : 0,
+                payout: contract.payout,
                 profit: Number(contract.profit),
+                status: 'sold',
+                is_sold: true,
+                is_virtual: true,
+                is_completed: true,
+                contract_type: contract.contract_type,
+                symbol: contract.symbol,
+                entry_spot: entrySpotNum,
+                exit_spot: exitSpotNum,
+                entry_tick: entrySpotNum,
+                exit_tick: exitSpotNum,
                 transaction_ids: { buy: virtual_id },
-                entry_tick: contract.entry_spot,
-                exit_tick: contract.exit_spot,
                 date_start: now,
                 entry_tick_time: now,
                 exit_tick_time: now + (this.vh_state.virtual_target_duration || 1),
                 display_name: win ? localize('Virtual Win') : localize('Virtual Loss'),
-                is_virtual: true,
-                is_completed: true,
                 underlying: this.tradeOptions.symbol,
                 currency: this.tradeOptions.currency || 'USD',
                 shortcode: `${contract.contract_type}_S0P_${this.tradeOptions.symbol.toUpperCase()}`,
+                id: virtual_id,
+                contract_id: virtual_id,
             };
 
-            globalObserver.emit('bot.contract', { ...virtual_contract, is_sold: true, is_virtual: true });
+            globalObserver.emit('bot.contract', { ...virtual_contract, is_sold: true });
         }
 
         applyAlternateMarketsToCurrentTradeOptions() {
