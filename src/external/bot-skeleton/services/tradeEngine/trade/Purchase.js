@@ -425,8 +425,10 @@ export default Engine =>
             // If this is the first real trade after switching from virtual, use initial_stake.
             // The bot's martingale logic inflated the Stake variable during virtual losses,
             // reading it would give an absurdly high amount.
+            // NOTE: do NOT clear needs_stake_reset here — it's cleared in afterPromise after
+            // the contract settles, so the interpreter's Stake variable gets reset before
+            // the bot's martingale logic runs.
             if (this.vh_state.needs_stake_reset) {
-                this.vh_state.needs_stake_reset = false;
                 this.tradeOptions.amount = this.vh_state.initial_stake || this.tradeOptions.amount || 1;
             } else {
                 try {
