@@ -18,13 +18,24 @@ export const CUSTOM_DEMO_SVG = (
     </svg>
 );
 
+const STORAGE_KEY = 'is_custom_demo_icon_active';
+
+// Migrate from sessionStorage to localStorage on first load
+if (typeof window !== 'undefined' && !localStorage.getItem(STORAGE_KEY)) {
+    const oldVal = sessionStorage.getItem(STORAGE_KEY);
+    if (oldVal !== null) {
+        localStorage.setItem(STORAGE_KEY, oldVal);
+        sessionStorage.removeItem(STORAGE_KEY);
+    }
+}
+
 export const isCustomDemoIconActive = () => {
     if (typeof window === 'undefined') return false;
-    return sessionStorage.getItem('is_custom_demo_icon_active') === 'true';
+    return localStorage.getItem(STORAGE_KEY) === 'true';
 };
 
 export const setCustomDemoIconActive = (active: boolean) => {
     if (typeof window === 'undefined') return;
-    sessionStorage.setItem('is_custom_demo_icon_active', active ? 'true' : 'false');
+    localStorage.setItem(STORAGE_KEY, active ? 'true' : 'false');
     window.dispatchEvent(new Event('custom_demo_icon_changed'));
 };
