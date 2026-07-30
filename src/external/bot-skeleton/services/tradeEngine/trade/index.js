@@ -83,6 +83,7 @@ export default class TradeEngine extends Balance(Purchase(Sell(OpenContract(Prop
             loss_count: 0,
             enabled: false,
             threshold: 0,
+            needs_stake_reset: false,
             martingaleFactor: 1.5,
             maxSteps: 3,
             minTradesOnReal: 1,
