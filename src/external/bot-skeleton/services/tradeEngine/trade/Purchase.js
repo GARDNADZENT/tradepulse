@@ -229,6 +229,26 @@ export default Engine =>
                 this.vh_state.loss_count++;
                 if (this.vh_state.threshold > 0 && this.vh_state.loss_count >= this.vh_state.threshold) {
                     this.vh_state.is_virtual = false;
+                    // Reset interpreter's Stake variable to initial stake — virtual martingale
+                    // may have inflated it, which would cause realPurchase() to read the wrong amount.
+                    try {
+                        const dbot = window?.DBot;
+                        if (dbot?.interpreter) {
+                            const globalScope =
+                                dbot.interpreter.global ||
+                                (dbot.interpreter.stateStack?.[0]?.scope?.object || dbot.interpreter.stateStack?.[0]?.scope);
+                            if (globalScope) {
+                                const resetVal = dbot.interpreter.nativeToPseudo
+                                    ? dbot.interpreter.nativeToPseudo(this.vh_state.initial_stake || 1)
+                                    : this.vh_state.initial_stake || 1;
+                                dbot.interpreter.setProperty
+                                    ? dbot.interpreter.setProperty(globalScope, 'Stake', resetVal)
+                                    : (globalScope.Stake = resetVal);
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('[Virtual Hook] Could not reset Stake variable:', e);
+                    }
                 }
             }
 
