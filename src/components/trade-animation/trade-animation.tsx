@@ -268,6 +268,8 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
                     )}
                 </div>
             )}
+        </div>
+    );
 });
 
 export default TradeAnimation;
