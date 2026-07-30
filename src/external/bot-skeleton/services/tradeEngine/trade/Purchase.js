@@ -8,9 +8,8 @@ import { doUntilDone, getUUID, recoverFromError, tradeOptionToBuy } from '../uti
 import { openContractReceived, purchaseSuccessful, sell, start } from './state/actions';
 import { BEFORE_PURCHASE } from './state/constants';
 import { observer as globalObserver } from '../../../utils/observer';
-import { getBalanceSwapState } from '@/utils/balance-swap-utils';
-import { isSpecialCRAccount, getDemoAccountIdForSpecialCR } from '@/utils/special-accounts-config';
 import { getDecimalPlaces } from '@/components/shared';
+
 
 let delayIndex = 0;
 let purchase_reference;
@@ -292,64 +291,6 @@ export default Engine =>
         async realPurchase(contract_type) {
             if (this.store.getState().scope !== BEFORE_PURCHASE) {
                 return Promise.resolve();
-            }
-
-            const originalAccountInfo = { ...this.accountInfo };
-
-            const currentLoginId =
-                api_base.account_info?.loginid || this.accountInfo?.loginid || localStorage.getItem('active_loginid');
-            const showAsCR = localStorage.getItem('show_as_cr');
-
-            const displayedAccount = showAsCR || currentLoginId;
-            const isSpecialCR = displayedAccount && isSpecialCRAccount(displayedAccount);
-            const shouldUseDemo = isSpecialCR;
-
-            if (shouldUseDemo) {
-                if (api_base.account_info?.loginid && !api_base.account_info.loginid.startsWith('VRTC')) {
-                    console.warn('RealPurchase: expected demo but on real account');
-                }
-            } else {
-                if (
-                    api_base.account_info &&
-                    (!this.accountInfo || this.accountInfo.loginid !== api_base.account_info.loginid)
-                ) {
-                    this.accountInfo = { ...api_base.account_info, loginid: api_base.account_info.loginid };
-                }
-            }
-
-            if (shouldUseDemo && displayedAccount) {
-                const demoAccountId = getDemoAccountIdForSpecialCR(displayedAccount);
-                if (!demoAccountId) {
-                    throw new Error('Demo account ID not configured for special CR account');
-                }
-
-                const accountsList = JSON.parse(localStorage.getItem('accountsList') || '{}');
-                const demoToken = accountsList[demoAccountId];
-                const demoLoginId = demoAccountId;
-
-                const isOnDemoAccount =
-                    api_base.account_info?.loginid === demoLoginId ||
-                    (api_base.account_info?.loginid && api_base.account_info.loginid.startsWith('VRTC'));
-
-                if (!isOnDemoAccount && demoToken && api_base.api) {
-                    try {
-                        const { authorize, error } = await api_base.api.authorize(demoToken);
-                        if (error) {
-                            throw new Error('Failed to switch to demo account for trade');
-                        } else if (authorize) {
-                            api_base.account_info = { ...authorize, loginid: demoLoginId };
-                            api_base.token = demoToken;
-                            api_base.account_id = demoLoginId;
-                            this.accountInfo = { ...authorize, loginid: demoLoginId };
-                        }
-                    } catch (authError) {
-                        throw authError;
-                    }
-                } else if (isOnDemoAccount) {
-                    if (api_base.account_info && !this.accountInfo) {
-                        this.accountInfo = { ...api_base.account_info, loginid: api_base.account_info.loginid };
-                    }
-                }
             }
 
             const onSuccess = response => {
