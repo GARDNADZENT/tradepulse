@@ -1,64 +1,52 @@
 @use 'components/shared/styles/constants' as *;
 @use 'components/shared/styles/devices' as *;
 
+$hacker-green: #00ff41;
+$hacker-glow: rgba(0, 255, 65, 0.6);
+
 @keyframes animate-progress {
-    0% {
-        width: 0%;
-    }
-    100% {
-        width: 51%;
-    }
+    0% { width: 0%; }
+    100% { width: 51%; }
 }
 
 @keyframes animate-progress-complete {
-    0% {
-        width: 50%;
-    }
-    100% {
-        width: 100%;
-    }
+    0% { width: 50%; }
+    100% { width: 100%; }
 }
 
-@keyframes progress-shimmer {
-    0% {
-        background-position: -200% 0;
-    }
-    100% {
-        background-position: 200% 0;
-    }
+@keyframes scan-line {
+    0% { top: -100%; }
+    100% { top: 200%; }
+}
+
+@keyframes flicker {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.85; }
+}
+
+@keyframes glitch {
+    0%, 100% { clip-path: inset(0 0 0 0); }
+    20% { clip-path: inset(40% 0 0 0); }
+    40% { clip-path: inset(0 0 60% 0); }
+    60% { clip-path: inset(20% 0 40% 0); }
+    80% { clip-path: inset(0 0 20% 0); }
 }
 
 @keyframes animate-circle {
-    0% {
-        transform: scale(0);
-    }
-    50% {
-        transform: scale(1.5);
-    }
-    100% {
-        transform: scale(0);
-    }
+    0% { transform: scale(0); }
+    50% { transform: scale(1.5); }
+    100% { transform: scale(0); }
 }
 
 @keyframes animate-circle-appear {
-    0% {
-        transform: scale(0);
-    }
-    100% {
-        transform: scale(1);
-    }
+    0% { transform: scale(0); }
+    100% { transform: scale(1); }
 }
 
 @keyframes animate-circle-pop {
-    0% {
-        transform: scale(0);
-    }
-    50% {
-        transform: scale(1);
-    }
-    100% {
-        transform: scale(0);
-    }
+    0% { transform: scale(0); }
+    50% { transform: scale(1); }
+    100% { transform: scale(0); }
 }
 
 .animation {
@@ -125,23 +113,26 @@
         justify-content: space-evenly;
         border: solid 1px var(--border-normal);
         position: relative;
-    
     }
 
     &__text {
-        color: var(--text-general);
+        color: $hacker-green;
         font-size: 12px;
         font-weight: bold;
         text-align: center;
         margin-bottom: 5px;
         line-height: 18px;
+        text-shadow: 0 0 6px $hacker-glow;
+        animation: flicker 3s ease-in-out infinite;
+        font-family: 'Courier New', monospace;
+        letter-spacing: 1px;
     }
 
     &__progress {
         display: flex;
         justify-content: space-between;
         position: relative;
-        height: 6px;
+        height: 8px;
 
         .circular-wrapper {
             width: $static-circle-diameter;
@@ -152,10 +143,11 @@
             .static-circle {
                 width: $static-circle-diameter;
                 height: $static-circle-diameter;
-                background-color: $color-black-7;
+                background-color: rgba(0, 255, 65, 0.25);
                 border-radius: 100%;
                 align-self: center;
                 z-index: 1;
+                box-shadow: 0 0 3px $hacker-glow;
             }
 
             .dynamic-circle {
@@ -164,7 +156,7 @@
                 width: $dynamic-circle-diameter;
                 margin-left: -4px;
                 margin-top: -4px;
-                opacity: 0.32;
+                opacity: 0.4;
                 position: absolute;
             }
 
@@ -178,33 +170,35 @@
         }
 
         &-line {
-            background-color: rgba(255,255,255,0.08);
+            background-color: rgba(0, 255, 65, 0.08);
             height: 100%;
             width: 100%;
-            border-radius: 4px;
+            border-radius: 2px;
             position: absolute;
             overflow: hidden;
+            box-shadow: inset 0 0 6px rgba(0, 255, 65, 0.1);
         }
 
         &-bar {
             height: 100%;
             width: 0;
-            border-radius: 4px;
-            background: var(--status-success);
+            border-radius: 2px;
+            background: $hacker-green;
             position: relative;
-            &::after {
+            box-shadow: 0 0 8px $hacker-glow, 0 0 20px rgba(0, 255, 65, 0.25);
+            &::before {
                 content: '';
                 position: absolute;
-                inset: 0;
-                border-radius: 4px;
-                background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
-                background-size: 200% 100%;
-                animation: progress-shimmer 1.5s linear infinite;
+                left: 0;
+                right: 0;
+                height: 2px;
+                background: rgba(255, 255, 255, 0.4);
+                animation: scan-line 1.5s linear infinite;
             }
         }
 
         &-4 {
-            animation: animate-progress 0.5s 1;
+            animation: animate-progress 0.5s 1, flicker 3s ease-in-out infinite;
             animation-fill-mode: forwards;
         }
 
@@ -213,7 +207,7 @@
         }
 
         &-6 {
-            animation: animate-progress-complete 0.5s 1;
+            animation: animate-progress-complete 0.5s 1, glitch 0.3s ease-in-out 2;
             animation-fill-mode: forwards;
         }
     }
@@ -224,7 +218,8 @@
                 &.completed,
                 &.active {
                     .static-circle {
-                        background-color: $color-green-2;
+                        background-color: $hacker-green;
+                        box-shadow: 0 0 6px $hacker-glow;
                     }
                 }
 
@@ -232,21 +227,19 @@
                     .dynamic-circle {
                         animation: animate-circle 0.8s infinite;
                         animation-timing-function: cubic-bezier(0.25, 0.1, 0.25, 1);
-                        background-color: var(--status-success);
-
-                        // transform: translate(-50%, -50%);
-                        // z-index: 1;
+                        background-color: $hacker-green;
                     }
                 }
 
                 .static-circle {
                     animation: animate-circle-appear 1s;
-                    background-color: $COLOR_CORAL_RED;
+                    background-color: $hacker-green;
+                    box-shadow: 0 0 6px $hacker-glow;
                 }
 
                 .dynamic-circle {
                     animation: animate-circle 1s;
-                    background-color: $COLOR_CORAL_RED;
+                    background-color: $hacker-green;
                     transform: scale(0);
                 }
             }
