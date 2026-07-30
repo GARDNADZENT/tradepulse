@@ -5,7 +5,6 @@
     0% {
         width: 0%;
     }
-
     100% {
         width: 51%;
     }
@@ -15,9 +14,26 @@
     0% {
         width: 50%;
     }
-
     100% {
         width: 100%;
+    }
+}
+
+@keyframes progress-shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+@keyframes pulse-glow {
+    0%, 100% {
+        box-shadow: 0 0 4px rgba(255, 183, 77, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 12px rgba(255, 183, 77, 0.8);
     }
 }
 
@@ -25,11 +41,9 @@
     0% {
         transform: scale(0);
     }
-
     50% {
         transform: scale(1.5);
     }
-
     100% {
         transform: scale(0);
     }
@@ -39,7 +53,6 @@
     0% {
         transform: scale(0);
     }
-
     100% {
         transform: scale(1);
     }
@@ -49,11 +62,9 @@
     0% {
         transform: scale(0);
     }
-
     50% {
         transform: scale(1);
     }
-
     100% {
         transform: scale(0);
     }
@@ -105,10 +116,12 @@
     &__pause-button {
         width: fit-content;
         height: 100% !important;
-        background-color: var(--button-primary-default);
+        background-color: #f5a623;
+        border-color: #f5a623;
 
         &:hover {
-            background-color: var(--button-primary-hover) !important;
+            background-color: #d4891a !important;
+            border-color: #d4891a !important;
         }
     }
 
@@ -120,8 +133,10 @@
         flex-direction: column;
         justify-content: space-evenly;
         border: solid 1px var(--border-normal);
-        border-radius: 0;
+        border-left: none;
+        border-right: none;
         position: relative;
+        background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 100%);
     }
 
     &__text {
@@ -174,18 +189,31 @@
         }
 
         &-line {
-            background-color: var(--border-normal);
+            background-color: rgba(255,255,255,0.08);
             height: 100%;
             width: 100%;
-            border-radius: $BORDER_RADIUS;
+            border-radius: 4px;
             position: absolute;
+            overflow: hidden;
         }
 
         &-bar {
-            background-color: var(--status-success);
-            border-radius: $BORDER_RADIUS;
-            width: 0;
             height: 100%;
+            width: 0;
+            border-radius: 4px;
+            background: linear-gradient(90deg, #ffb74d, #ff9800, #ffb74d);
+            background-size: 200% 100%;
+            position: relative;
+            box-shadow: 0 0 6px rgba(255, 183, 77, 0.5);
+            &::after {
+                content: '';
+                position: absolute;
+                inset: 0;
+                border-radius: 4px;
+                background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+                background-size: 200% 100%;
+                animation: progress-shimmer 1.5s linear infinite;
+            }
         }
 
         &-4 {
@@ -195,7 +223,6 @@
 
         &-5 {
             width: 51%;
-            border-radius: 5px 0 0 5px;
         }
 
         &-6 {
