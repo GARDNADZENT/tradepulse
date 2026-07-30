@@ -57,7 +57,6 @@ const Interpreter = () => {
         pauseTimeoutId = null;
         interpreter.restoreStateSnapshot(state);
         interpreter.paused_ = false;
-        interpreter._pauseQueue = [];
         loop();
     }
 
@@ -69,12 +68,6 @@ const Interpreter = () => {
         if ($scope.stopped || !interpreter.run()) {
             onFinish(interpreter.pseudoToNative(interpreter.value));
         }
-    }
-
-    function processPauseQueue() {
-        const queue = interpreter._pauseQueue || [];
-        interpreter._pauseQueue = [];
-        queue.forEach(cb => cb());
     }
 
     function createAsync(js_interpreter, func) {
@@ -91,16 +84,7 @@ const Interpreter = () => {
 
             func(...function_args.map(arg => js_interpreter.pseudoToNative(arg)))
                 .then(rv => {
-                    const pseudoRv = js_interpreter.nativeToPseudo(rv);
-                    if (interpreter.paused_) {
-                        if (!interpreter._pauseQueue) interpreter._pauseQueue = [];
-                        interpreter._pauseQueue.push(() => {
-                            callback(pseudoRv);
-                            loop();
-                        });
-                        return;
-                    }
-                    callback(pseudoRv);
+                    callback(js_interpreter.nativeToPseudo(rv));
                     loop();
                 })
                 .catch(e => {
@@ -313,13 +297,7 @@ const Interpreter = () => {
             pauseTimeoutId = null;
             interpreter.paused_ = false;
             $scope.paused_ = false;
-            const queue = interpreter._pauseQueue || [];
-            interpreter._pauseQueue = [];
-            if (queue.length > 0) {
-                queue.forEach(cb => cb());
-            } else {
-                loop();
-            }
+            loop();
         }
     }
 

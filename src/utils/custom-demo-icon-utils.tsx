@@ -20,22 +20,34 @@ export const CUSTOM_DEMO_SVG = (
 
 const STORAGE_KEY = 'is_custom_demo_icon_active';
 
+function safeGet(key) {
+    try { return localStorage.getItem(key); } catch { return null; }
+}
+function safeSet(key, val) {
+    try { localStorage.setItem(key, val); } catch { /* noop */ }
+}
+function safeRemove(key) {
+    try { sessionStorage.removeItem(key); } catch { /* noop */ }
+}
+
 // Migrate from sessionStorage to localStorage on first load
-if (typeof window !== 'undefined' && !localStorage.getItem(STORAGE_KEY)) {
-    const oldVal = sessionStorage.getItem(STORAGE_KEY);
-    if (oldVal !== null) {
-        localStorage.setItem(STORAGE_KEY, oldVal);
-        sessionStorage.removeItem(STORAGE_KEY);
-    }
+if (typeof window !== 'undefined' && !safeGet(STORAGE_KEY)) {
+    try {
+        const oldVal = sessionStorage.getItem(STORAGE_KEY);
+        if (oldVal !== null) {
+            safeSet(STORAGE_KEY, oldVal);
+            safeRemove(STORAGE_KEY);
+        }
+    } catch { /* noop */ }
 }
 
 export const isCustomDemoIconActive = () => {
     if (typeof window === 'undefined') return false;
-    return localStorage.getItem(STORAGE_KEY) === 'true';
+    return safeGet(STORAGE_KEY) === 'true';
 };
 
 export const setCustomDemoIconActive = (active: boolean) => {
     if (typeof window === 'undefined') return;
-    localStorage.setItem(STORAGE_KEY, active ? 'true' : 'false');
+    safeSet(STORAGE_KEY, active ? 'true' : 'false');
     window.dispatchEvent(new Event('custom_demo_icon_changed'));
 };
