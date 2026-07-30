@@ -16,6 +16,7 @@ import './app-root.scss';
 
 const Layout = lazy(() => import('../components/layout'));
 const AppRoot = lazy(() => import('./app-root'));
+const StandaloneLoginScreen = lazy(() => import('../components/login-screen/StandaloneLoginScreen'));
 
 /**
  * Component wrapper to handle language URL parameter
@@ -113,7 +114,14 @@ function App() {
         handleCallback();
     }, []);
 
-    return <RouterProvider router={router} />;
+    return (
+        <>
+            <RouterProvider router={router} />
+            <Suspense fallback={null}>
+                <StandaloneLoginScreen />
+            </Suspense>
+        </>
+    );
 }
 
 export default App;
