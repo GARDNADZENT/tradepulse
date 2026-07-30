@@ -9,9 +9,9 @@ import {
 } from './high-low-engine';
 
 const LS_CONFIG_KEY = 'mw_hl_config';
-const SCAN_HISTORY = 1000;
-const MAX_TICKS = 1000;
-const MIN_TICKS = 50;
+const SCAN_HISTORY = 200;
+const MAX_TICKS = 500;
+const MIN_TICKS = 30;
 
 type SniperPhase = 'idle' | 'aiming' | 'firing' | 'in_trade';
 
@@ -137,7 +137,7 @@ export const HighLow: React.FC = () => {
 
     const checkEntryOnTick = useCallback(() => {
         if (!runningRef.current || inTradeRef.current || !aimingRef.current) return;
-        if (Date.now() - lastEntryAttemptRef.current < 2000) return;
+        if (Date.now() - lastEntryAttemptRef.current < 500) return;
 
         const aim = aimingRef.current;
         const sd = sdRef.current[aim.symbol];
@@ -145,7 +145,7 @@ export const HighLow: React.FC = () => {
 
         aimChecksRef.current++;
 
-        if (Date.now() - aimingStartRef.current > 20000 || aimChecksRef.current > 40) {
+        if (Date.now() - aimingStartRef.current > 10000 || aimChecksRef.current > 20) {
             addLog(`Aiming timeout on ${SYMBOL_LABELS[aim.symbol] || aim.symbol} — rescanning`, 'info');
             clearAiming();
             scheduleScan();
@@ -160,10 +160,13 @@ export const HighLow: React.FC = () => {
             addLog(`Sniper trigger: ${result.reason}`, 'trade');
             const duration = calcDuration(aim.indicators.atr, result.entryPrice, aim.indicators.last70Slope, aim.indicators.slopeAccel);
             let stake = cfgRef.current.stake;
+            if (cfgRef.current.martingaleEnabled && consecutiveLossesRef.current > 0) {
+                stake = Math.min(stake * Math.pow(cfgRef.current.martingale, consecutiveLossesRef.current), 100);
+            }
             if (cfgRef.current.useCompounding && tradesRef.current.length > 0 && pnlRef.current > 0) {
                 stake = Math.max(0.35, Number((pnlRef.current * 0.02).toFixed(2)));
             }
-            executeTrade(aim, stake, duration);
+            executeTrade(aim, Math.max(0.35, stake), duration);
         }
     }, [addLog, executeTrade, clearAiming, scheduleScan]);
 
@@ -307,9 +310,13 @@ export const HighLow: React.FC = () => {
             () => {
                 try {
                     addLog('Connected', 'info');
-                    HL_SYMBOLS.forEach(sym => {
-                        mws.send({ ticks_history: sym, count: SCAN_HISTORY, end: 'latest', style: 'ticks', subscribe: 1 });
-                    });
+                    mws.send({ forget_all: 'ticks' });
+                    setTimeout(() => {
+                        if (!runningRef.current) return;
+                        HL_SYMBOLS.forEach(sym => {
+                            mws.send({ ticks_history: sym, count: SCAN_HISTORY, end: 'latest', style: 'ticks', subscribe: 1 });
+                        });
+                    }, 300);
                     setStatus(`Loading ${HL_SYMBOLS.length} markets...`);
                     const pollReady = () => {
                         if (!runningRef.current || gen !== generationRef.current) return;
@@ -321,9 +328,9 @@ export const HighLow: React.FC = () => {
                                 return;
                             }
                         }
-                        pollReadyTimerRef.current = setTimeout(pollReady, 500);
+                        pollReadyTimerRef.current = setTimeout(pollReady, 200);
                     };
-                    pollReadyTimerRef.current = setTimeout(pollReady, 500);
+                    pollReadyTimerRef.current = setTimeout(pollReady, 200);
                 } catch (e) {
                     addLog(`Connection error: ${e}`, 'info');
                     stopEngine();

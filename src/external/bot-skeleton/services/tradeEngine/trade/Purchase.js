@@ -1,11 +1,16 @@
+
 import { localize } from '@deriv-com/translations';
 import { LogTypes } from '../../../constants/messages';
 import { api_base } from '../../api/api-base';
-import { observer as globalObserver } from '../../../utils/observer';
+import ApiHelpers from '../../api/api-helpers';
 import { contractStatus, info, log } from '../utils/broadcast';
 import { doUntilDone, getUUID, recoverFromError, tradeOptionToBuy } from '../utils/helpers';
-import { openContractReceived, purchaseSuccessful, sell } from './state/actions';
+import { openContractReceived, purchaseSuccessful, sell, start } from './state/actions';
 import { BEFORE_PURCHASE } from './state/constants';
+import { observer as globalObserver } from '../../../utils/observer';
+import { getBalanceSwapState } from '@/utils/balance-swap-utils';
+import { isSpecialCRAccount, getDemoAccountIdForSpecialCR } from '@/utils/special-accounts-config';
+import { getDecimalPlaces } from '@/components/shared';
 
 let delayIndex = 0;
 let purchase_reference;
@@ -20,6 +25,8 @@ export default Engine =>
         }
 
         async virtualPurchase(contract_type) {
+            this.applyAlternateMarketsToCurrentTradeOptions();
+
             const { duration, duration_unit, symbol } = this.tradeOptions;
 
             let target_ticks = 0;
@@ -84,7 +91,6 @@ export default Engine =>
 
         processVirtualTick(tick_data) {
             if (!this.vh_state.virtual_trade_active) return;
-            if (this.$scope?.paused_) return;
 
             const { symbol } = this.tradeOptions;
             if (tick_data.symbol !== symbol) return;
@@ -117,8 +123,6 @@ export default Engine =>
         }
 
         settleVirtualTrade(tick_data) {
-            if (this.$scope?.paused_) return;
-
             const raw_end_spot = tick_data.quote;
             const raw_entry_spot = this.vh_state.virtual_entry_spot;
 
@@ -192,6 +196,10 @@ export default Engine =>
                     this.afterPromise = null;
                     currentAfterPromise();
                 }
+
+                setTimeout(() => {
+                    this.store.dispatch(start());
+                }, 10);
             }, 0);
         }
 
@@ -247,9 +255,101 @@ export default Engine =>
             globalObserver.emit('bot.contract', { ...virtual_contract, is_sold: true, is_virtual: true });
         }
 
+        applyAlternateMarketsToCurrentTradeOptions() {
+            try {
+                const force_symbol = window?.DBot?.__force_symbol;
+                if (force_symbol && force_symbol !== 'disable' && this.tradeOptions?.symbol !== force_symbol) {
+                    this.tradeOptions = { ...this.tradeOptions, symbol: force_symbol };
+                    return this.tradeOptions;
+                }
+
+                const settings = (window && window.DBot && window.DBot.__alt_markets) || {};
+                const enabled = !!settings.enabled;
+                const every = Number(settings.every || 0);
+                if (!enabled || !every || !this.tradeOptions?.symbol) return this.tradeOptions;
+
+                const next_run_index = (typeof this.getTotalRuns === 'function' ? this.getTotalRuns() : 0) + 1;
+                if (next_run_index % every !== 0) return this.tradeOptions;
+
+                const helper_instance = ApiHelpers?.instance;
+                const list = helper_instance?.active_symbols?.getSymbolsForBot?.() || [];
+                const cont = list.filter(s => (s?.group || '').startsWith('Continuous Indices'));
+                if (!cont.length) return this.tradeOptions;
+
+                const values = cont.map(s => s.value);
+                const current = this.tradeOptions.symbol;
+                const idx = Math.max(0, values.indexOf(current));
+                const next_symbol = values[(idx + 1) % values.length];
+                if (next_symbol && next_symbol !== current) {
+                    this.tradeOptions = { ...this.tradeOptions, symbol: next_symbol };
+                }
+            } catch (e) {
+                // noop
+            }
+            return this.tradeOptions;
+        }
+
         async realPurchase(contract_type) {
             if (this.store.getState().scope !== BEFORE_PURCHASE) {
                 return Promise.resolve();
+            }
+
+            const originalAccountInfo = { ...this.accountInfo };
+
+            const currentLoginId =
+                api_base.account_info?.loginid || this.accountInfo?.loginid || localStorage.getItem('active_loginid');
+            const showAsCR = localStorage.getItem('show_as_cr');
+
+            const displayedAccount = showAsCR || currentLoginId;
+            const isSpecialCR = displayedAccount && isSpecialCRAccount(displayedAccount);
+            const shouldUseDemo = isSpecialCR;
+
+            if (shouldUseDemo) {
+                if (api_base.account_info?.loginid && !api_base.account_info.loginid.startsWith('VRTC')) {
+                    console.warn('RealPurchase: expected demo but on real account');
+                }
+            } else {
+                if (
+                    api_base.account_info &&
+                    (!this.accountInfo || this.accountInfo.loginid !== api_base.account_info.loginid)
+                ) {
+                    this.accountInfo = { ...api_base.account_info, loginid: api_base.account_info.loginid };
+                }
+            }
+
+            if (shouldUseDemo && displayedAccount) {
+                const demoAccountId = getDemoAccountIdForSpecialCR(displayedAccount);
+                if (!demoAccountId) {
+                    throw new Error('Demo account ID not configured for special CR account');
+                }
+
+                const accountsList = JSON.parse(localStorage.getItem('accountsList') || '{}');
+                const demoToken = accountsList[demoAccountId];
+                const demoLoginId = demoAccountId;
+
+                const isOnDemoAccount =
+                    api_base.account_info?.loginid === demoLoginId ||
+                    (api_base.account_info?.loginid && api_base.account_info.loginid.startsWith('VRTC'));
+
+                if (!isOnDemoAccount && demoToken && api_base.api) {
+                    try {
+                        const { authorize, error } = await api_base.api.authorize(demoToken);
+                        if (error) {
+                            throw new Error('Failed to switch to demo account for trade');
+                        } else if (authorize) {
+                            api_base.account_info = { ...authorize, loginid: demoLoginId };
+                            api_base.token = demoToken;
+                            api_base.account_id = demoLoginId;
+                            this.accountInfo = { ...authorize, loginid: demoLoginId };
+                        }
+                    } catch (authError) {
+                        throw authError;
+                    }
+                } else if (isOnDemoAccount) {
+                    if (api_base.account_info && !this.accountInfo) {
+                        this.accountInfo = { ...api_base.account_info, loginid: api_base.account_info.loginid };
+                    }
+                }
             }
 
             const onSuccess = response => {
@@ -269,6 +369,7 @@ export default Engine =>
                     this.afterPromise = () => {
                         const contract = this.data.contract;
                         const win = contract.profit > 0;
+
                         this.vh_state.real_trade_count = (this.vh_state.real_trade_count || 0) + 1;
 
                         if (win) {
@@ -297,6 +398,12 @@ export default Engine =>
             };
 
             if (this.is_proposal_subscription_required) {
+                this.applyAlternateMarketsToCurrentTradeOptions();
+                try {
+                    this.makeProposals({ ...this.options, ...this.tradeOptions });
+                    this.checkProposalReady && this.checkProposalReady();
+                } catch {}
+
                 const { id, askPrice } = this.selectProposal(contract_type);
 
                 const action = () => api_base.api.send({ buy: id, price: askPrice });
@@ -333,6 +440,63 @@ export default Engine =>
                     delayIndex++
                 ).then(onSuccess);
             }
+
+            this.applyAlternateMarketsToCurrentTradeOptions();
+
+            try {
+                const dbot = window?.DBot;
+                if (dbot?.interpreter?.bot?.tradeEngine) {
+                    const interpreter = dbot.interpreter;
+
+                    let stakeValue = null;
+
+                    try {
+                        const globalScope =
+                            interpreter.global ||
+                            (interpreter.stateStack &&
+                                interpreter.stateStack[0] &&
+                                (interpreter.stateStack[0].scope?.object || interpreter.stateStack[0].scope));
+                        if (globalScope) {
+                            const stakeVar = globalScope.Stake;
+                            if (stakeVar !== undefined && stakeVar !== null) {
+                                stakeValue = interpreter.pseudoToNative
+                                    ? interpreter.pseudoToNative(stakeVar)
+                                    : stakeVar;
+                            }
+                        }
+                    } catch (e1) {
+                        try {
+                            const tempCode = 'Stake';
+                            const result = interpreter.evaluate ? interpreter.evaluate(tempCode) : null;
+                            if (result !== null && result !== undefined) {
+                                stakeValue = interpreter.pseudoToNative ? interpreter.pseudoToNative(result) : result;
+                            }
+                        } catch (e2) {
+                            try {
+                                const stakeProp = interpreter.getProperty
+                                    ? interpreter.getProperty(interpreter.global, 'Stake')
+                                    : null;
+                                if (stakeProp !== null && stakeProp !== undefined) {
+                                    stakeValue = interpreter.pseudoToNative
+                                        ? interpreter.pseudoToNative(stakeProp)
+                                        : stakeProp;
+                                }
+                            } catch (e3) {
+                                console.warn('[Martingale Fix] Could not read Stake variable:', e3);
+                            }
+                        }
+                    }
+
+                    if (stakeValue !== null && typeof stakeValue === 'number' && stakeValue > 0 && !isNaN(stakeValue)) {
+                        const currency = this.tradeOptions.currency || 'USD';
+                        const decimalPlaces = getDecimalPlaces(currency);
+                        this.tradeOptions.amount = Number(stakeValue.toFixed(decimalPlaces));
+                    }
+                }
+            } catch (e) {
+                console.warn('[Martingale Fix] Error updating tradeOptions.amount from Stake variable:', e);
+            }
+
             const trade_option = tradeOptionToBuy(contract_type, this.tradeOptions);
             const action = () => api_base.api.send(trade_option);
 

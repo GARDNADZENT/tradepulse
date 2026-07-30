@@ -21,8 +21,8 @@ interface LogEntry {
 }
 
 /* ── Constants ─────────────────────────────────────────────────────────────── */
-const MAX_TICKS              = 1000;
-const MIN_TICKS_BEFORE_TRADE = 30;
+const MAX_TICKS              = 500;
+const MIN_TICKS_BEFORE_TRADE = 15;
 const CONFIDENCE_THRESHOLD   = 71;
 const CONTRACT_FAMILIES: { label: string; types: ContractType[] }[] = [
     { label: 'Rise/Fall', types: ['CALL', 'PUT'] },
@@ -654,7 +654,9 @@ export const MarketKiller: React.FC = () => {
                         setActiveContracts(0);
                         return;
                     }
+                    if (!data.buy) { globalLock.current = false; activeContractsRef.current = 0; setActiveContracts(0); return; }
                     const cid = String(data.buy.contract_id);
+                    if (!cid || cid === 'undefined') { globalLock.current = false; activeContractsRef.current = 0; setActiveContracts(0); return; }
                     contractMapRef.current.set(cid, { symbol: sym, stake: globalStakeRef.current, strategyNames: ['ensemble'] });
                     addLog(`Contract ${cid} open on ${SYMBOL_LABELS[sym]}`, 'info');
                     break;
@@ -741,7 +743,7 @@ export const MarketKiller: React.FC = () => {
                     mws.send({ proposal_open_contract: 1, subscribe: 1 });
                 }
                 ALL_SYMBOLS.forEach(sym => {
-                    mws.send({ ticks_history: sym, count: 1000, end: 'latest', style: 'ticks', subscribe: 1 });
+                    mws.send({ ticks_history: sym, count: 200, end: 'latest', style: 'ticks', subscribe: 1 });
                 });
             },
             () => {

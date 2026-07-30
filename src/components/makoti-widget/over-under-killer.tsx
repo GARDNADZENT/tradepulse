@@ -596,7 +596,9 @@ export const OverUnderKiller: React.FC = () => {
                         setActiveContracts(0);
                         return;
                     }
+                    if (!data.buy) { globalLock.current = false; activeContractsRef.current = 0; setActiveContracts(0); return; }
                     const cid = String(data.buy.contract_id);
+                    if (!cid || cid === 'undefined') { globalLock.current = false; activeContractsRef.current = 0; setActiveContracts(0); return; }
                     contractMapRef.current.set(cid, { symbol: sym, stake: globalStakeRef.current, strategyNames: ['ensemble'], duration: 1 });
                     addLog(`Contract ${cid} open on ${SYMBOL_LABELS[sym]}`, 'info');
                     break;
