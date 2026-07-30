@@ -79,12 +79,17 @@ export default Engine =>
             return new Promise((resolve, reject) => {
                 this.vh_state.virtual_resolve = resolve;
                 this.vh_state.virtual_reject = reject;
-                this.vh_state.virtual_timeout = setTimeout(() => {
+                const vtTimeout = () => {
                     if (this.vh_state.virtual_trade_active) {
+                        if (this.$scope?.paused_) {
+                            this.vh_state.virtual_timeout = setTimeout(vtTimeout, 1000);
+                            return;
+                        }
                         this.resetVirtualTrade();
                         reject(new Error('Virtual trade timed out'));
                     }
-                }, 8000);
+                };
+                this.vh_state.virtual_timeout = setTimeout(vtTimeout, 8000);
             });
         }
 
