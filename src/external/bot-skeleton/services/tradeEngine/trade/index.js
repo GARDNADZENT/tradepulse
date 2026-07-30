@@ -154,7 +154,9 @@ export default class TradeEngine extends Balance(Purchase(Sell(OpenContract(Prop
             // event, wait a couple seconds for the API to give us the correct "proposal_open_contract"
             // response, if there's none after x seconds. Send an explicit request, which _should_
             // solve the issue. This is a backup!
-            const subscription = api_base.api.onMessage().subscribe(({ data }) => {
+            const subscription = api_base.api.onMessage().subscribe(msg => {
+                const data = msg?.data;
+                if (!data) return;
                 if (data.msg_type === 'transaction' && data.transaction.action === 'sell') {
                     this.transaction_recovery_timeout = setTimeout(() => {
                         const { contract } = this.data;

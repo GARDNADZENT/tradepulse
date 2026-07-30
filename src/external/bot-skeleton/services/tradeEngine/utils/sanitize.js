@@ -13,6 +13,9 @@ export const expectPositiveInteger = (num, msg) => {
 };
 
 const expectOptions = options => {
+    if (!options) {
+        throw createError('OptionError', localize('Options are required'));
+    }
     const { symbol, contractTypes } = options;
 
     if (!symbol) {

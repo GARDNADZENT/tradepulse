@@ -113,7 +113,7 @@ export default Engine =>
         observeProposals() {
             if (!api_base.api) return;
             const subscription = api_base.api.onMessage().subscribe(response => {
-                if (response.data.msg_type === 'proposal') {
+                if (response?.data?.msg_type === 'proposal') {
                     const { passthrough, proposal, error } = response.data;
 
                     // Handle proposal errors with localized messages

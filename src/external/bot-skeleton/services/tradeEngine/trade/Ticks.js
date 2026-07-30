@@ -27,6 +27,7 @@ export default Engine =>
                         this.checkProposalReady();
                     }
                     const lastTick = ticks.slice(-1)[0];
+                    if (!lastTick) return;
                     const { epoch } = lastTick;
                     this.store.dispatch({ type: constants.NEW_TICK, payload: epoch });
                 };
@@ -152,7 +153,9 @@ export default Engine =>
         async handleOnMessageForAccumulators() {
             let ticks_stayed_in_list = [];
             return new Promise(resolve => {
-                const subscription = api_base.api.onMessage().subscribe(({ data }) => {
+                const subscription = api_base.api.onMessage().subscribe(msg => {
+                    const data = msg?.data;
+                    if (!data) return;
                     if (data.msg_type === 'proposal') {
                         try {
                             this.subscription_id_for_accumulators = data.subscription.id;

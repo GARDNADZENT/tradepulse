@@ -63,7 +63,7 @@ export default Engine =>
             this.store.dispatch(openContractReceived());
 
             this.vh_state.virtual_tick_subscription = api_base.api.onMessage().subscribe(({ data }) => {
-                if (data.msg_type === 'tick' && data.tick.symbol === symbol) {
+                if (data?.msg_type === 'tick' && data?.tick?.symbol === symbol) {
                     this.processVirtualTick({
                         quote: data.tick.quote,
                         symbol: data.tick.symbol,
@@ -97,8 +97,8 @@ export default Engine =>
             if (!this.vh_state.virtual_trade_active) return;
             if (this.$scope?.paused_) return;
 
-            const { symbol } = this.tradeOptions;
-            if (tick_data.symbol !== symbol) return;
+            const symbol = this.tradeOptions?.symbol;
+            if (!symbol || tick_data.symbol !== symbol) return;
 
             const tick_epoch = tick_data.epoch;
             if (tick_epoch && tick_epoch === this.vh_state.last_tick_epoch) return;

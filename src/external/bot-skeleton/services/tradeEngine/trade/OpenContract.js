@@ -7,7 +7,9 @@ export default Engine =>
     class OpenContract extends Engine {
         observeOpenContract() {
             if (!api_base.api) return;
-            const subscription = api_base.api.onMessage().subscribe(({ data }) => {
+            const subscription = api_base.api.onMessage().subscribe(msg => {
+                const data = msg?.data;
+                if (!data) return;
                 if (data.msg_type === 'proposal_open_contract') {
                     const contract = data.proposal_open_contract;
 

@@ -629,6 +629,7 @@ export const MarketKiller: React.FC = () => {
 
                 case 'tick': {
                     const tick     = data.tick;
+                    if (!tick) return;
                     const sym: string = tick.symbol;
                     if (!sym || !symbolDataRef.current[sym]) return;
                     const sd  = symbolDataRef.current[sym];
