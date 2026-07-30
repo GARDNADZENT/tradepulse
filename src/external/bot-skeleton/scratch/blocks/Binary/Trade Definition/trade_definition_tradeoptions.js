@@ -22,6 +22,18 @@ window.Blockly.Blocks.trade_definition_tradeoptions = {
 
         this.setNextStatement(false);
     },
+    mutationToDom() {
+        const container = document.createElement('mutation');
+        const vh_enabled = this.getFieldValue('VIRTUAL_HOOK_ENABLED') === 'TRUE';
+        container.setAttribute('vh_enabled', vh_enabled);
+        return container;
+    },
+    domToMutation(xmlElement) {
+        const vh_enabled = xmlElement.getAttribute('vh_enabled') === 'true';
+        if (vh_enabled) {
+            this.updateVirtualHookThresholdInput(true);
+        }
+    },
     updateVirtualHookThresholdInput(is_enabled) {
         runIrreversibleEvents(() => {
             if (is_enabled) {
@@ -49,7 +61,6 @@ window.Blockly.Blocks.trade_definition_tradeoptions = {
             }),
             message1: `${is_stake ? localize('Stake') : localize('Payout')}: %1 %2 %3`,
             message2: localize('Virtual Hook: %1'),
-            message3: localize('Loss Threshold: %1'),
             args0: [
                 {
                     type: 'field_dropdown',
@@ -84,13 +95,6 @@ window.Blockly.Blocks.trade_definition_tradeoptions = {
                     type: 'field_checkbox',
                     name: 'VIRTUAL_HOOK_ENABLED',
                     checked: false,
-                },
-            ],
-            args3: [
-                {
-                    type: 'input_value',
-                    name: 'VIRTUAL_HOOK_THRESHOLD',
-                    check: 'Number',
                 },
             ],
             colour: window.Blockly.Colours.Special1.colour,
