@@ -96,6 +96,39 @@ export const getDebugServiceWorker = () => {
     return false;
 };
 
+const REFERRAL_CACHE_KEY = 'resolved_referral_cache';
+
+interface ResolvedReferral {
+    affiliateToken: string;
+    affiliateTokenParam: 't' | 'affiliate_token' | 'sidi' | 'ca';
+    utmCampaign: string;
+    utmSource?: string;
+    utmMedium?: string;
+}
+
+/**
+ * Read the cached Scaleo referral resolution. The per-click token is minted by
+ * Scaleo's 302 redirect and resolved via the BFF proxy; once resolved it is
+ * cached so repeat login/sign-up clicks never block on the proxy again.
+ */
+const getCachedReferral = (): ResolvedReferral | null => {
+    try {
+        const raw = window.localStorage.getItem(REFERRAL_CACHE_KEY);
+        if (!raw) return null;
+        return JSON.parse(raw) as ResolvedReferral;
+    } catch {
+        return null;
+    }
+};
+
+const cacheReferral = (referral: ResolvedReferral): void => {
+    try {
+        window.localStorage.setItem(REFERRAL_CACHE_KEY, JSON.stringify(referral));
+    } catch {
+        // Non-fatal: caching is an optimization, ignore storage failures
+    }
+};
+
 /**
  * Generates the OAuth login or sign-up URL using vendored deriv-core
  *
@@ -143,10 +176,12 @@ export const generateOAuthURL = async (prompt?: string): Promise<string> => {
         }
 
         // If we still have no token and the referral link is a Scaleo click link,
-        // resolve a fresh per-user token via the BFF proxy (non-blocking).
+        // resolve a fresh per-user token via the BFF proxy. Cache the result so
+        // repeat login/sign-up clicks don't block on the proxy every time.
         if (!config.affiliateToken && referralLink) {
-            const resolved = await resolveReferralViaProxy(referralLink);
+            const resolved = getCachedReferral() ?? (await resolveReferralViaProxy(referralLink));
             if (resolved) {
+                cacheReferral(resolved);
                 config.affiliateToken = resolved.affiliateToken;
                 config.affiliateTokenParam = resolved.affiliateTokenParam;
                 if (resolved.utmSource) config.utmSource = resolved.utmSource;

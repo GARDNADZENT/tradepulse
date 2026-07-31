@@ -19,22 +19,43 @@ const WHITELABEL_STATS = [
     { value: '0-Risk', label: 'Virtual' },
 ];
 
-const isUserLoggedIn = () => {
-    const activeLoginId = localStorage.getItem('active_loginid');
-    if (activeLoginId) return true;
-    const accountsList = JSON.parse(localStorage.getItem('accountsList') ?? '{}');
-    return Object.keys(accountsList).length > 0;
+const safeParse = (raw: string | null): unknown => {
+    if (!raw) return null;
+    try {
+        return JSON.parse(raw);
+    } catch {
+        return null;
+    }
 };
 
-const isCallbackOrEndpoint = () => {
+const isUserLoggedIn = () => {
+    if (localStorage.getItem('active_loginid')) return true;
+    const accountsList = safeParse(localStorage.getItem('accountsList'));
+    if (accountsList && typeof accountsList === 'object' && Object.keys(accountsList as Record<string, unknown>).length > 0) {
+        return true;
+    }
+    // Treat a valid OAuth token as logged-in so the screen hides as soon as the
+    // token exchange completes, even if the async accounts fetch is still running.
+    const authInfo = safeParse(localStorage.getItem('auth_info'));
+    if (authInfo && typeof authInfo === 'object') {
+        const info = authInfo as { access_token?: string; expires_at?: number };
+        if (info.access_token && (!info.expires_at || Date.now() < info.expires_at * 1000)) return true;
+    }
+    return false;
+};
+
+const isOAuthCallbackInProgress = () => {
     const path = window.location.pathname;
-    return path.includes('/callback') || path.includes('/endpoint');
+    if (path.includes('/callback') || path.includes('/endpoint')) return true;
+    const params = new URLSearchParams(window.location.search);
+    return params.has('code') || params.has('state') || params.has('error');
 };
 
 const StandaloneLoginScreen: React.FC = () => {
-    const [show, setShow] = useState(!isUserLoggedIn() && !isCallbackOrEndpoint());
+    const [show, setShow] = useState(() => !isUserLoggedIn() && !isOAuthCallbackInProgress());
     const [visible, setVisible] = useState(false);
     const [isNewLoginLoading, setIsNewLoginLoading] = useState(false);
+    const [isNewSignupLoading, setIsNewSignupLoading] = useState(false);
     const [newLoginError, setNewLoginError] = useState('');
 
     useEffect(() => {
@@ -45,7 +66,9 @@ const StandaloneLoginScreen: React.FC = () => {
 
     useEffect(() => {
         const check = () => {
-            if (isUserLoggedIn()) setShow(false);
+            // Re-evaluate on every poll: hide when logged in, and show again
+            // after logout or when the OAuth callback is not in progress.
+            setShow(!isUserLoggedIn() && !isOAuthCallbackInProgress());
         };
         const interval = setInterval(check, 800);
         window.addEventListener('storage', check);
@@ -62,14 +85,39 @@ const StandaloneLoginScreen: React.FC = () => {
         setNewLoginError('');
         try {
             const url = await generateOAuthURL();
-            if (url) window.location.href = url;
-            else setIsNewLoginLoading(false);
+            if (url) {
+                // Replace so the OAuth URL doesn't linger in history
+                window.location.replace(url);
+            } else {
+                setIsNewLoginLoading(false);
+                setNewLoginError('Login failed to start. Please try again.');
+            }
         } catch (error) {
             console.error('[Login]', error);
             setIsNewLoginLoading(false);
             setNewLoginError('Login failed to start. Please try again.');
         }
     }, [isNewLoginLoading]);
+
+    const handleNewAccountsSignup = useCallback(async (e: React.MouseEvent) => {
+        e.preventDefault();
+        if (isNewSignupLoading) return;
+        setIsNewSignupLoading(true);
+        setNewLoginError('');
+        try {
+            const url = await generateOAuthURL('registration');
+            if (url) {
+                window.location.replace(url);
+            } else {
+                setIsNewSignupLoading(false);
+                setNewLoginError('Sign up failed to start. Please try again.');
+            }
+        } catch (error) {
+            console.error('[Signup]', error);
+            setIsNewSignupLoading(false);
+            setNewLoginError('Sign up failed to start. Please try again.');
+        }
+    }, [isNewSignupLoading]);
 
     if (!show) return null;
 
@@ -159,13 +207,11 @@ const StandaloneLoginScreen: React.FC = () => {
                         <div className='login-screen__divider'><span>New here?</span></div>
 
                         <button
-                            className='login-screen__btn login-screen__btn--create'
-                            onClick={async () => {
-                                const url = await generateOAuthURL('registration');
-                                if (url) window.location.href = url;
-                            }}
+                            className={`login-screen__btn login-screen__btn--create${isNewSignupLoading ? ' login-screen__btn--loading' : ''}`}
+                            onClick={handleNewAccountsSignup}
+                            disabled={isNewSignupLoading}
                         >
-                            <span className='login-screen__btn-text'>Create Free Account</span>
+                            <span className='login-screen__btn-text'>{isNewSignupLoading ? 'Redirecting...' : 'Create Free Account'}</span>
                         </button>
 
                         <a href='https://whatsapp.com/channel/0029VbBmfLc3LdQbqcezuz0d'
