@@ -38,8 +38,7 @@ window.Blockly.Blocks.trade_definition_tradeoptions = {
         runIrreversibleEvents(() => {
             if (is_enabled) {
                 if (!this.getInput('VIRTUAL_HOOK_THRESHOLD')) {
-                    this.appendValueInput('VIRTUAL_HOOK_THRESHOLD')
-                        .appendField(localize('Loss Threshold:'));
+                    this.appendValueInput('VIRTUAL_HOOK_THRESHOLD').appendField(localize('Loss Threshold:'));
                     const shadow_block = this.workspace.newBlock('math_number');
                     shadow_block.setShadow(true);
                     shadow_block.setFieldValue('1', 'NUM');
@@ -60,7 +59,7 @@ window.Blockly.Blocks.trade_definition_tradeoptions = {
                 duration_value: '%2',
             }),
             message1: `${is_stake ? localize('Stake') : localize('Payout')}: %1 %2 %3`,
-            message2: localize('Virtual Hook: %1'),
+            message2: '%1',
             args0: [
                 {
                     type: 'field_dropdown',
@@ -91,6 +90,11 @@ window.Blockly.Blocks.trade_definition_tradeoptions = {
                 },
             ],
             args2: [
+                {
+                    type: 'field_label',
+                    text: localize('Virtual Hook'),
+                    class: 'blocklyTextVirtualHook',
+                },
                 {
                     type: 'field_checkbox',
                     name: 'VIRTUAL_HOOK_ENABLED',
