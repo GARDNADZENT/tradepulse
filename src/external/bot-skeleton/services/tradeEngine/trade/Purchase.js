@@ -14,6 +14,39 @@ import { getDecimalPlaces } from '@/components/shared';
 let delayIndex = 0;
 let purchase_reference;
 
+const getStakeVariableName = () => {
+    try {
+        const workspace = window?.Blockly?.derivWorkspace || window?.Blockly?.getMainWorkspace?.();
+        if (!workspace) return null;
+        const blocks = workspace.getAllBlocks?.(false) || [];
+        const trade_options_block = blocks.find(block =>
+            ['trade_definition_tradeoptions', 'trade_definition_tradeoptions_payout', 'trade_definition_multiplier', 'trade_definition_accumulator'].includes(block.type)
+        );
+        if (!trade_options_block) return null;
+        const amount_input = trade_options_block.getInput?.('AMOUNT');
+        const target_block = amount_input?.connection?.targetBlock?.();
+        if (!target_block || target_block.type !== 'variables_get') return null;
+        const var_name = target_block.getFieldValue?.('VAR');
+        if (!var_name) return null;
+        const generated_name = window.Blockly?.JavaScript?.variableDB_?.getName?.(
+            var_name,
+            window.Blockly.Variables?.CATEGORY_NAME
+        );
+        return generated_name || var_name;
+    } catch (e) {
+        return null;
+    }
+};
+
+const getStakeVariableCandidates = () => {
+    const derived = getStakeVariableName();
+    if (!derived) return [];
+    const candidates = [derived];
+    if (!candidates.includes('Stake')) candidates.push('Stake');
+    if (!candidates.includes('stake')) candidates.push('stake');
+    return candidates;
+};
+
 export default Engine =>
     class Purchase extends Engine {
         async purchase(contract_type) {
@@ -344,13 +377,19 @@ export default Engine =>
                                         const val = dbot.interpreter.nativeToPseudo
                                             ? dbot.interpreter.nativeToPseudo(this.vh_state.initial_stake || 1)
                                             : this.vh_state.initial_stake || 1;
-                                        dbot.interpreter.setProperty
-                                            ? dbot.interpreter.setProperty(gs, 'Stake', val)
-                                            : (gs.Stake = val);
+                                        getStakeVariableCandidates().forEach(name => {
+                                            try {
+                                                dbot.interpreter.setProperty
+                                                    ? dbot.interpreter.setProperty(gs, name, val)
+                                                    : (gs[name] = val);
+                                            } catch (e) {
+                                                // noop
+                                            }
+                                        });
                                     }
                                 }
                             } catch (e) {
-                                console.warn('[Virtual Hook] Could not reset Stake after real trade:', e);
+                                console.warn('[Virtual Hook] Could not reset stake after real trade:', e);
                             }
                         }
 
@@ -442,43 +481,48 @@ export default Engine =>
                         const interpreter = dbot.interpreter;
 
                         let stakeValue = null;
+                        const stakeCandidates = getStakeVariableCandidates();
 
-                        try {
-                            const globalScope =
-                                interpreter.global ||
-                                (interpreter.stateStack &&
-                                    interpreter.stateStack[0] &&
-                                    (interpreter.stateStack[0].scope?.object || interpreter.stateStack[0].scope));
-                            if (globalScope) {
-                                const stakeVar = globalScope.Stake;
-                                if (stakeVar !== undefined && stakeVar !== null) {
-                                    stakeValue = interpreter.pseudoToNative
-                                        ? interpreter.pseudoToNative(stakeVar)
-                                        : stakeVar;
-                                }
-                            }
-                        } catch (e1) {
+                        for (const candidate of stakeCandidates) {
+                            if (stakeValue !== null) break;
+
                             try {
-                                const tempCode = 'Stake';
-                                const result = interpreter.evaluate ? interpreter.evaluate(tempCode) : null;
+                                const globalScope =
+                                    interpreter.global ||
+                                    (interpreter.stateStack &&
+                                        interpreter.stateStack[0] &&
+                                        (interpreter.stateStack[0].scope?.object || interpreter.stateStack[0].scope));
+                                if (globalScope) {
+                                    const stakeVar = interpreter.getProperty
+                                        ? interpreter.getProperty(globalScope, candidate)
+                                        : globalScope[candidate];
+                                    if (stakeVar !== undefined && stakeVar !== null) {
+                                        const converted = interpreter.pseudoToNative
+                                            ? interpreter.pseudoToNative(stakeVar)
+                                            : stakeVar;
+                                        if (converted !== null && converted !== undefined) {
+                                            stakeValue = converted;
+                                            break;
+                                        }
+                                    }
+                                }
+                            } catch (e1) {
+                                // noop
+                            }
+
+                            try {
+                                const result = interpreter.evaluate ? interpreter.evaluate(candidate) : null;
                                 if (result !== null && result !== undefined) {
-                                    stakeValue = interpreter.pseudoToNative
+                                    const converted = interpreter.pseudoToNative
                                         ? interpreter.pseudoToNative(result)
                                         : result;
+                                    if (converted !== null && converted !== undefined) {
+                                        stakeValue = converted;
+                                        break;
+                                    }
                                 }
                             } catch (e2) {
-                                try {
-                                    const stakeProp = interpreter.getProperty
-                                        ? interpreter.getProperty(interpreter.global, 'Stake')
-                                        : null;
-                                    if (stakeProp !== null && stakeProp !== undefined) {
-                                        stakeValue = interpreter.pseudoToNative
-                                            ? interpreter.pseudoToNative(stakeProp)
-                                            : stakeProp;
-                                    }
-                                } catch (e3) {
-                                    console.warn('[Martingale Fix] Could not read Stake variable:', e3);
-                                }
+                                // noop
                             }
                         }
 
