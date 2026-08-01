@@ -1,4 +1,3 @@
-
 import { localize } from '@deriv-com/translations';
 import { LogTypes } from '../../../constants/messages';
 import { api_base } from '../../api/api-base';
@@ -10,7 +9,6 @@ import { BEFORE_PURCHASE } from './state/constants';
 import { observer as globalObserver } from '../../../utils/observer';
 import { getDecimalPlaces } from '@/components/shared';
 
-
 let delayIndex = 0;
 let purchase_reference;
 
@@ -20,7 +18,12 @@ const getStakeVariableName = () => {
         if (!workspace) return null;
         const blocks = workspace.getAllBlocks?.(false) || [];
         const trade_options_block = blocks.find(block =>
-            ['trade_definition_tradeoptions', 'trade_definition_tradeoptions_payout', 'trade_definition_multiplier', 'trade_definition_accumulator'].includes(block.type)
+            [
+                'trade_definition_tradeoptions',
+                'trade_definition_tradeoptions_payout',
+                'trade_definition_multiplier',
+                'trade_definition_accumulator',
+            ].includes(block.type)
         );
         if (!trade_options_block) return null;
         const amount_input = trade_options_block.getInput?.('AMOUNT');
@@ -268,6 +271,7 @@ export default Engine =>
                 if (this.vh_state.threshold > 0 && this.vh_state.loss_count >= this.vh_state.threshold) {
                     this.vh_state.is_virtual = false;
                     this.vh_state.needs_stake_reset = true;
+                    this.resetStakeVariableForRealTrading();
                 }
             }
 
@@ -304,6 +308,38 @@ export default Engine =>
             };
 
             globalObserver.emit('bot.contract', { ...virtual_contract, is_sold: true });
+        }
+
+        resetStakeVariableForRealTrading() {
+            try {
+                const dbot = window?.DBot;
+                if (!dbot?.interpreter) return;
+
+                const initialStake = this.vh_state.initial_stake || 1;
+                const globalScope =
+                    dbot.interpreter.global ||
+                    dbot.interpreter.stateStack?.[0]?.scope?.object ||
+                    dbot.interpreter.stateStack?.[0]?.scope;
+
+                if (globalScope) {
+                    const val = dbot.interpreter.nativeToPseudo
+                        ? dbot.interpreter.nativeToPseudo(initialStake)
+                        : initialStake;
+                    getStakeVariableCandidates().forEach(name => {
+                        try {
+                            if (dbot.interpreter.setProperty) {
+                                dbot.interpreter.setProperty(globalScope, name, val);
+                            } else {
+                                globalScope[name] = val;
+                            }
+                        } catch (e) {
+                            // noop
+                        }
+                    });
+                }
+            } catch (e) {
+                // noop
+            }
         }
 
         applyAlternateMarketsToCurrentTradeOptions() {
@@ -371,8 +407,10 @@ export default Engine =>
                             try {
                                 const dbot = window?.DBot;
                                 if (dbot?.interpreter) {
-                                    const gs = dbot.interpreter.global ||
-                                        (dbot.interpreter.stateStack?.[0]?.scope?.object || dbot.interpreter.stateStack?.[0]?.scope);
+                                    const gs =
+                                        dbot.interpreter.global ||
+                                        dbot.interpreter.stateStack?.[0]?.scope?.object ||
+                                        dbot.interpreter.stateStack?.[0]?.scope;
                                     if (gs) {
                                         const val = dbot.interpreter.nativeToPseudo
                                             ? dbot.interpreter.nativeToPseudo(this.vh_state.initial_stake || 1)
@@ -526,7 +564,12 @@ export default Engine =>
                             }
                         }
 
-                        if (stakeValue !== null && typeof stakeValue === 'number' && stakeValue > 0 && !isNaN(stakeValue)) {
+                        if (
+                            stakeValue !== null &&
+                            typeof stakeValue === 'number' &&
+                            stakeValue > 0 &&
+                            !isNaN(stakeValue)
+                        ) {
                             const currency = this.tradeOptions.currency || 'USD';
                             const decimalPlaces = getDecimalPlaces(currency);
                             this.tradeOptions.amount = Number(stakeValue.toFixed(decimalPlaces));
