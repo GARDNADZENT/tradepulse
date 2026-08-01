@@ -233,10 +233,15 @@ export default Engine =>
                 this.resetVirtualTrade();
                 if (resolve) resolve();
 
-                if (this.afterPromise) {
-                    const currentAfterPromise = this.afterPromise;
-                    this.afterPromise = null;
-                    currentAfterPromise();
+                // For virtual trades, do NOT run the bot's after_purchase blocks
+                // (e.g. martingale logic) — virtual results should not affect
+                // real trading stake calculations.
+                try {
+                    if (typeof console !== 'undefined') {
+                        console.debug('[Virtual Hook] Skipping afterPromise for virtual trade');
+                    }
+                } catch (e) {
+                    /* noop */
                 }
 
                 setTimeout(() => {
