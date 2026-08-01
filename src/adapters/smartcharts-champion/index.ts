@@ -130,11 +130,11 @@ const transformations = {
             symbols.push({
                 display_name: symbol.display_name || symbolCode,
                 market: symbol.market,
-                market_display_name: symbol.market_display_name,
+                market_display_name: symbol.market_display_name || symbol.market || '',
                 subgroup: symbol.subgroup, // Map submarket to subgroup
-                subgroup_display_name: symbol.subgroup_display_name, // Map submarket_display_name to subgroup_display_name
+                subgroup_display_name: symbol.subgroup_display_name || '',
                 submarket: symbol.submarket,
-                submarket_display_name: symbol.submarket_display_name,
+                submarket_display_name: symbol.submarket_display_name || symbol.submarket || '',
                 symbol: symbolCode,
                 symbol_type: symbol.symbol_type || '',
                 pip: symbol.pip || symbol.pip_size || 0.01,
