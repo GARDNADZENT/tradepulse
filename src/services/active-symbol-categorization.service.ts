@@ -350,9 +350,9 @@ export class ActiveSymbolCategorizationService {
                 const submarkets = categorizedSymbols[market].subgroups[subgroup].submarkets;
                 const sortedSubmarkets = Object.entries(submarkets)
                     .sort(([, a], [, b]) =>
-                        (a as SubmarketGroup).submarket_display_name.localeCompare(
-                            (b as SubmarketGroup).submarket_display_name
-                        )
+                        (a as SubmarketGroup).submarket_display_name?.localeCompare(
+                            (b as SubmarketGroup).submarket_display_name ?? ''
+                        ) ?? 0
                     )
                     .reduce(
                         (sortedAcc, [key, value]) => {

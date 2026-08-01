@@ -45,7 +45,9 @@ const sortSymbols = (symbolsList: ActiveSymbols) => {
         if (marketOrderA !== marketOrderB) {
             return marketOrderA - marketOrderB;
         }
-        return getSubmarketDisplayName(a.submarket).localeCompare(getSubmarketDisplayName(b.submarket));
+        const submarketDisplayNameA = getSubmarketDisplayName(a.submarket) ?? '';
+        const submarketDisplayNameB = getSubmarketDisplayName(b.submarket) ?? '';
+        return submarketDisplayNameA.localeCompare(submarketDisplayNameB);
     });
 };
 
