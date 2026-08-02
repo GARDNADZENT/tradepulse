@@ -28,6 +28,8 @@ class DBot {
         await loadBlockly(is_dark_mode);
         const recent_files = await getSavedWorkspaces();
         this.interpreter = Interpreter();
+        window.DBot = window.DBot || {};
+        Object.assign(window.DBot, this);
 
         // eslint-disable-next-line @typescript-eslint/no-this-alias
         var that = this;

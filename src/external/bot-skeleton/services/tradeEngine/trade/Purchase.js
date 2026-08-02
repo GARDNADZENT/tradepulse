@@ -318,30 +318,30 @@ export default Engine =>
         resetStakeVariableForRealTrading() {
             try {
                 const dbot = window?.DBot;
-                if (!dbot?.interpreter) return;
+                if (!dbot?.interpreter?.bot?.tradeEngine) return;
+
+                const interpreter = dbot.interpreter.getInterpreter?.() || {};
+                if (!interpreter || typeof interpreter.setProperty !== 'function') return;
 
                 const initialStake = this.vh_state.initial_stake || 1;
-                const globalScope =
-                    dbot.interpreter.global ||
-                    dbot.interpreter.stateStack?.[0]?.scope?.object ||
-                    dbot.interpreter.stateStack?.[0]?.scope;
 
-                if (globalScope) {
-                    const val = dbot.interpreter.nativeToPseudo
-                        ? dbot.interpreter.nativeToPseudo(initialStake)
-                        : initialStake;
-                    getStakeVariableCandidates().forEach(name => {
-                        try {
-                            if (dbot.interpreter.setProperty) {
-                                dbot.interpreter.setProperty(globalScope, name, val);
-                            } else {
-                                globalScope[name] = val;
-                            }
-                        } catch (e) {
-                            // noop
-                        }
-                    });
-                }
+                // The JSInterpreter's global scope holds the bot's variables.
+                // We need to find the global scope object to reset the Stake variable.
+                const globalScope =
+                    (interpreter.global) ||
+                    (interpreter.stateStack && interpreter.stateStack[0] && interpreter.stateStack[0].scope);
+                if (!globalScope) return;
+
+                const val = interpreter.nativeToPseudo
+                    ? interpreter.nativeToPseudo(initialStake)
+                    : initialStake;
+                getStakeVariableCandidates().forEach(name => {
+                    try {
+                        interpreter.setProperty(globalScope, name, val);
+                    } catch (e) {
+                        // noop
+                    }
+                });
             } catch (e) {
                 // noop
             }
@@ -411,25 +411,24 @@ export default Engine =>
                             this.vh_state.needs_stake_reset = false;
                             try {
                                 const dbot = window?.DBot;
-                                if (dbot?.interpreter) {
-                                    const gs =
-                                        dbot.interpreter.global ||
-                                        dbot.interpreter.stateStack?.[0]?.scope?.object ||
-                                        dbot.interpreter.stateStack?.[0]?.scope;
-                                    if (gs) {
-                                        const val = dbot.interpreter.nativeToPseudo
-                                            ? dbot.interpreter.nativeToPseudo(this.vh_state.initial_stake || 1)
-                                            : this.vh_state.initial_stake || 1;
-                                        getStakeVariableCandidates().forEach(name => {
-                                            try {
-                                                dbot.interpreter.setProperty
-                                                    ? dbot.interpreter.setProperty(gs, name, val)
-                                                    : (gs[name] = val);
-                                            } catch (e) {
-                                                // noop
-                                            }
-                                        });
-                                    }
+                                const interpreter = dbot?.interpreter?.getInterpreter?.() || {};
+                                const globalScope =
+                                    interpreter.global ||
+                                    (interpreter.stateStack &&
+                                        interpreter.stateStack[0] &&
+                                        (interpreter.stateStack[0].scope?.object ||
+                                            interpreter.stateStack[0].scope));
+                                if (globalScope && typeof interpreter.setProperty === 'function') {
+                                    const val = interpreter.nativeToPseudo
+                                        ? interpreter.nativeToPseudo(this.vh_state.initial_stake || 1)
+                                        : this.vh_state.initial_stake || 1;
+                                    getStakeVariableCandidates().forEach(name => {
+                                        try {
+                                            interpreter.setProperty(globalScope, name, val);
+                                        } catch (e) {
+                                            // noop
+                                        }
+                                    });
                                 }
                             } catch (e) {
                                 console.warn('[Virtual Hook] Could not reset stake after real trade:', e);
@@ -520,8 +519,8 @@ export default Engine =>
             } else {
                 try {
                     const dbot = window?.DBot;
-                    if (dbot?.interpreter?.bot?.tradeEngine) {
-                        const interpreter = dbot.interpreter;
+                    if (dbot?.interpreter?.bot?.tradeEngine?.tradeOptions) {
+                        const interpreter = dbot.interpreter.getInterpreter?.() || {};
 
                         let stakeValue = null;
                         const stakeCandidates = getStakeVariableCandidates();

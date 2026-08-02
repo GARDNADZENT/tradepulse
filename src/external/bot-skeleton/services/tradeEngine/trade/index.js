@@ -117,6 +117,11 @@ export default class TradeEngine extends Balance(Purchase(Sell(OpenContract(Prop
             this.vh_state.threshold = Number(options.virtualHook.threshold);
             this.vh_state.is_virtual = this.vh_state.enabled;
             this.vh_state.loss_count = 0;
+            this.vh_state.initial_stake = 0;
+            this.vh_state.current_stake = 0;
+            this.vh_state.needs_stake_reset = false;
+            this.vh_state.step_count = 0;
+            this.vh_state.real_trade_count = 0;
         }
         this.startPromise = this.loginAndGetBalance(token);
 
@@ -129,6 +134,28 @@ export default class TradeEngine extends Balance(Purchase(Sell(OpenContract(Prop
         }
 
         globalObserver.emit('bot.running');
+
+        // Reset virtual hook state to prevent stale values from previous runs
+        // causing unexpected stake amounts when the bot is restarted.
+        if (this.vh_state?.enabled) {
+            this.vh_state = {
+                ...this.vh_state,
+                loss_count: 0,
+                is_virtual: this.vh_state.enabled,
+                needs_stake_reset: false,
+                current_stake: 0,
+                initial_stake: 0,
+                step_count: 0,
+                real_trade_count: 0,
+            };
+            // Clear trade options amount to prevent stale inflated stakes from
+            // previous runs (e.g., martingale after losses) when restarting.
+            // The bot's trade options block will set the Stake variable, and
+            // realPurchase() will read it fresh.
+            if (tradeOptions?.amount !== undefined) {
+                tradeOptions = { ...tradeOptions, amount: undefined };
+            }
+        }
 
         const validated_trade_options = this.validateTradeOptions(tradeOptions);
 

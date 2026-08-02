@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { ALL_SYMBOLS, SYMBOL_LABELS, PIP_SIZES, openMakotiWS, MakotiWS } from './makoti-ws';
 import { onNewSystemMessage } from '@/auth/NewDerivAuth';
+import DBotStore from '@/external/bot-skeleton/scratch/dbot-store';
 
 type BotId = 'pvty_kill' | 'rf_v4';
 
@@ -182,11 +183,12 @@ export const Scanner: React.FC = () => {
     const applySwitch = useCallback((sym: string) => {
         currentBestRef.current = sym;
         clearPending();
-        // 1. Runtime override
+        // 1. Runtime override — used by Purchase.js applyAlternateMarketsToCurrentTradeOptions
         try { window.DBot = window.DBot || {}; (window.DBot as any).__force_symbol = sym; } catch (_) {}
-        // 2. QuickStrategy store
+        // 2. QuickStrategy store — may or may not exist depending on the active tab
         try { const rs = (window as any).__store_instance; if (rs?.quick_strategy) rs.quick_strategy.setValue('symbol', sym); } catch (_) {}
-        // 3. Blockly workspace
+        // 3. Blockly workspace — updates the trade_definition_market SYMBOL_LIST field.
+        //    The block's onchange handler will call DBotStore.instance.dashboard.setBotBuilderSymbol automatically.
         try {
             const ws = (window as any).Blockly?.derivWorkspace;
             if (ws) {
@@ -194,8 +196,11 @@ export const Scanner: React.FC = () => {
                 if (b) b.setFieldValue('SYMBOL_LIST', sym);
             }
         } catch (_) {}
-        // 4. Dashboard store (chart)
-        try { const rs = (window as any).__store_instance; if (rs?.dashboard?.setBotBuilderSymbol) rs.dashboard.setBotBuilderSymbol(sym); } catch (_) {}
+        // 4. Dashboard store — update directly via DBotStore.instance (the canonical access pattern).
+        try {
+            const store = DBotStore.instance;
+            if (store?.dashboard?.setBotBuilderSymbol) store.dashboard.setBotBuilderSymbol(sym);
+        } catch (_) {}
         (window as any).__makoti_lastContractSettled = false;
         showNotify(`Volatility Updated: ${SYMBOL_LABELS[sym]}`, 'success');
     }, [showNotify, clearPending]);

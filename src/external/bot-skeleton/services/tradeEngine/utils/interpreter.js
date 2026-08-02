@@ -303,7 +303,7 @@ const Interpreter = () => {
         }
     }
 
-    return { stop, run, terminateSession, bot, unsubscribeFromTicksService, pause, resume };
+    return { stop, run, terminateSession, bot, unsubscribeFromTicksService, pause, resume, getInterpreter: () => interpreter };
 };
 export default Interpreter;
 

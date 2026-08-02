@@ -56,6 +56,10 @@ export default class RootStore {
     constructor(dbot: unknown) {
         this.dbot = dbot;
 
+        // Expose the RootStore on window.__store_instance so external widgets
+        // (e.g., Makoti scanner) can access quick_strategy, dashboard, etc.
+        try { (window as any).__store_instance = this; } catch (_) {}
+
         // Need to fix later without using this.core
         this.ui = new UiStore();
         this.client = new ClientStore();
