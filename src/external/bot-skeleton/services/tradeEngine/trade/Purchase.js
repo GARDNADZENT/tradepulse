@@ -7,7 +7,6 @@ import { doUntilDone, getUUID, recoverFromError, tradeOptionToBuy } from '../uti
 import { openContractReceived, purchaseSuccessful, sell, start } from './state/actions';
 import { BEFORE_PURCHASE } from './state/constants';
 import { observer as globalObserver } from '../../../utils/observer';
-import { getDecimalPlaces } from '@/components/shared';
 
 let delayIndex = 0;
 let purchase_reference;
@@ -347,6 +346,26 @@ export default Engine =>
             }
         }
 
+        onRealContractSettled(contract) {
+            if (!this.vh_state?.enabled || this.vh_state?.is_virtual) return;
+
+            const win = contract?.profit > 0;
+
+            if (this.vh_state.needs_stake_reset) {
+                this.vh_state.needs_stake_reset = false;
+                this.resetStakeVariableForRealTrading();
+            }
+
+            this.vh_state.real_trade_count = (this.vh_state.real_trade_count || 0) + 1;
+
+            if (win) {
+                this.vh_state.is_virtual = true;
+                this.vh_state.loss_count = 0;
+                this.vh_state.step_count = 0;
+                this.vh_state.current_stake = this.vh_state.initial_stake;
+            }
+        }
+
         applyAlternateMarketsToCurrentTradeOptions() {
             try {
                 const force_symbol = window?.DBot?.__force_symbol;
@@ -397,55 +416,6 @@ export default Engine =>
 
                 this.contractId = buy.contract_id;
                 this.store.dispatch(purchaseSuccessful());
-
-                if (this.vh_state.enabled && !this.vh_state.is_virtual) {
-                    const originalAfterPromise = this.afterPromise;
-                    this.afterPromise = () => {
-                        const contract = this.data.contract;
-                        const win = contract.profit > 0;
-
-                        // If this was the first real trade after virtual transition,
-                        // reset interpreter's Stake so bot's martingale logic starts from
-                        // initial_stake instead of compounding on the virtual-inflated value.
-                        if (this.vh_state.needs_stake_reset) {
-                            this.vh_state.needs_stake_reset = false;
-                            try {
-                                const dbot = window?.DBot;
-                                const interpreter = dbot?.interpreter?.getInterpreter?.() || {};
-                                const globalScope =
-                                    interpreter.global ||
-                                    (interpreter.stateStack &&
-                                        interpreter.stateStack[0] &&
-                                        (interpreter.stateStack[0].scope?.object ||
-                                            interpreter.stateStack[0].scope));
-                                if (globalScope && typeof interpreter.setProperty === 'function') {
-                                    const val = interpreter.nativeToPseudo
-                                        ? interpreter.nativeToPseudo(this.vh_state.initial_stake || 1)
-                                        : this.vh_state.initial_stake || 1;
-                                    getStakeVariableCandidates().forEach(name => {
-                                        try {
-                                            interpreter.setProperty(globalScope, name, val);
-                                        } catch (e) {
-                                            // noop
-                                        }
-                                    });
-                                }
-                            } catch (e) {
-                                console.warn('[Virtual Hook] Could not reset stake after real trade:', e);
-                            }
-                        }
-
-                        this.vh_state.real_trade_count = (this.vh_state.real_trade_count || 0) + 1;
-
-                        if (win) {
-                            this.vh_state.is_virtual = true;
-                            this.vh_state.loss_count = 0;
-                            this.vh_state.step_count = 0;
-                            this.vh_state.current_stake = this.vh_state.initial_stake;
-                        }
-                        if (originalAfterPromise) originalAfterPromise();
-                    };
-                }
 
                 if (this.is_proposal_subscription_required) {
                     this.renewProposalsOnPurchase();
@@ -510,78 +480,11 @@ export default Engine =>
 
             // If this is the first real trade after switching from virtual, use initial_stake.
             // The bot's martingale logic inflated the Stake variable during virtual losses,
-            // reading it would give an absurdly high amount.
-            // NOTE: do NOT clear needs_stake_reset here — it's cleared in afterPromise after
-            // the contract settles, so the interpreter's Stake variable gets reset before
-            // the bot's martingale logic runs.
+            // so the Stake variable in the interpreter was already reset to initial_stake
+            // by resetStakeVariableForRealTrading(). Bot.start() will pass the reset
+            // Stake value, and tradeOptions.amount will be correct.
             if (this.vh_state.needs_stake_reset) {
                 this.tradeOptions.amount = this.vh_state.initial_stake || this.tradeOptions.amount || 1;
-            } else {
-                try {
-                    const dbot = window?.DBot;
-                    if (dbot?.interpreter?.bot?.tradeEngine?.tradeOptions) {
-                        const interpreter = dbot.interpreter.getInterpreter?.() || {};
-
-                        let stakeValue = null;
-                        const stakeCandidates = getStakeVariableCandidates();
-
-                        for (const candidate of stakeCandidates) {
-                            if (stakeValue !== null) break;
-
-                            try {
-                                const globalScope =
-                                    interpreter.global ||
-                                    (interpreter.stateStack &&
-                                        interpreter.stateStack[0] &&
-                                        (interpreter.stateStack[0].scope?.object || interpreter.stateStack[0].scope));
-                                if (globalScope) {
-                                    const stakeVar = interpreter.getProperty
-                                        ? interpreter.getProperty(globalScope, candidate)
-                                        : globalScope[candidate];
-                                    if (stakeVar !== undefined && stakeVar !== null) {
-                                        const converted = interpreter.pseudoToNative
-                                            ? interpreter.pseudoToNative(stakeVar)
-                                            : stakeVar;
-                                        if (converted !== null && converted !== undefined) {
-                                            stakeValue = converted;
-                                            break;
-                                        }
-                                    }
-                                }
-                            } catch (e1) {
-                                // noop
-                            }
-
-                            try {
-                                const result = interpreter.evaluate ? interpreter.evaluate(candidate) : null;
-                                if (result !== null && result !== undefined) {
-                                    const converted = interpreter.pseudoToNative
-                                        ? interpreter.pseudoToNative(result)
-                                        : result;
-                                    if (converted !== null && converted !== undefined) {
-                                        stakeValue = converted;
-                                        break;
-                                    }
-                                }
-                            } catch (e2) {
-                                // noop
-                            }
-                        }
-
-                        if (
-                            stakeValue !== null &&
-                            typeof stakeValue === 'number' &&
-                            stakeValue > 0 &&
-                            !isNaN(stakeValue)
-                        ) {
-                            const currency = this.tradeOptions.currency || 'USD';
-                            const decimalPlaces = getDecimalPlaces(currency);
-                            this.tradeOptions.amount = Number(stakeValue.toFixed(decimalPlaces));
-                        }
-                    }
-                } catch (e) {
-                    console.warn('[Martingale Fix] Error updating tradeOptions.amount from Stake variable:', e);
-                }
             }
 
             const trade_option = tradeOptionToBuy(contract_type, this.tradeOptions);

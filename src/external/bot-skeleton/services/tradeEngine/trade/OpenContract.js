@@ -37,6 +37,8 @@ export default Engine =>
                             this.afterPromise();
                         }
 
+                        this.onRealContractSettled?.(contract);
+
                         this.store.dispatch(sell());
                     } else {
                         this.store.dispatch(openContractReceived());
