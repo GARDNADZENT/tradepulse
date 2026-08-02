@@ -94,6 +94,8 @@ export default Engine =>
             this.vh_state.entry_spot_captured = false;
             this.vh_state.last_tick_epoch = null;
 
+            this.setInterpreterVariable('BinaryBotPrivateLastTradeVirtual', true);
+
             this.store.dispatch(purchaseSuccessful());
             this.store.dispatch(openContractReceived());
 
@@ -314,7 +316,7 @@ export default Engine =>
             globalObserver.emit('bot.contract', { ...virtual_contract, is_sold: true });
         }
 
-        resetStakeVariableForRealTrading() {
+        setInterpreterVariable(name, value) {
             try {
                 const dbot = window?.DBot;
                 if (!dbot?.interpreter?.bot?.tradeEngine) return;
@@ -322,28 +324,38 @@ export default Engine =>
                 const interpreter = dbot.interpreter.getInterpreter?.() || {};
                 if (!interpreter || typeof interpreter.setProperty !== 'function') return;
 
-                const initialStake = this.vh_state.initial_stake || 1;
+                const val = interpreter.nativeToPseudo ? interpreter.nativeToPseudo(value) : value;
 
-                // The JSInterpreter's global scope holds the bot's variables.
-                // We need to find the global scope object to reset the Stake variable.
-                const globalScope =
-                    (interpreter.global) ||
-                    (interpreter.stateStack && interpreter.stateStack[0] && interpreter.stateStack[0].scope);
-                if (!globalScope) return;
+                // JSInterpreter globals live on the global pseudo-object (Interpreter.Object).
+                // `interpreter.globalObject` is the canonical one; the others are fallbacks for
+                // the restoreStateSnapshot path where `interpreter.global` is re-assigned.
+                const scopeCandidates = [
+                    interpreter.globalObject,
+                    interpreter.globalScope && interpreter.globalScope.object,
+                    interpreter.global,
+                    interpreter.stateStack &&
+                        interpreter.stateStack[0] &&
+                        interpreter.stateStack[0].scope &&
+                        interpreter.stateStack[0].scope.object,
+                ];
 
-                const val = interpreter.nativeToPseudo
-                    ? interpreter.nativeToPseudo(initialStake)
-                    : initialStake;
-                getStakeVariableCandidates().forEach(name => {
+                for (const candidate of scopeCandidates) {
+                    if (!candidate || typeof candidate !== 'object') continue;
                     try {
-                        interpreter.setProperty(globalScope, name, val);
+                        interpreter.setProperty(candidate, name, val);
+                        return;
                     } catch (e) {
-                        // noop
+                        // not the right scope, try the next candidate
                     }
-                });
+                }
             } catch (e) {
                 // noop
             }
+        }
+
+        resetStakeVariableForRealTrading() {
+            const initialStake = this.vh_state.initial_stake || 1;
+            getStakeVariableCandidates().forEach(name => this.setInterpreterVariable(name, initialStake));
         }
 
         onRealContractSettled(contract) {
@@ -401,6 +413,8 @@ export default Engine =>
         }
 
         async realPurchase(contract_type) {
+            this.setInterpreterVariable('BinaryBotPrivateLastTradeVirtual', false);
+
             if (this.store.getState().scope !== BEFORE_PURCHASE) {
                 return Promise.resolve();
             }
@@ -479,10 +493,10 @@ export default Engine =>
             this.applyAlternateMarketsToCurrentTradeOptions();
 
             // If this is the first real trade after switching from virtual, use initial_stake.
-            // The bot's martingale logic inflated the Stake variable during virtual losses,
-            // so the Stake variable in the interpreter was already reset to initial_stake
-            // by resetStakeVariableForRealTrading(). Bot.start() will pass the reset
-            // Stake value, and tradeOptions.amount will be correct.
+            // The interpreter Stake variable was reset to initial_stake by
+            // resetStakeVariableForRealTrading(), and after_purchase blocks are skipped
+            // during virtual trades, so the first real martingale step starts from a
+            // clean base (previous real stake × factor) instead of an inflated value.
             if (this.vh_state.needs_stake_reset) {
                 this.tradeOptions.amount = this.vh_state.initial_stake || this.tradeOptions.amount || 1;
             }

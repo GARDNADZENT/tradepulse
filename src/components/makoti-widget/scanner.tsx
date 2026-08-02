@@ -113,9 +113,10 @@ function calcMicroChoppiness(prices: number[]): SymbolDirectionResult {
 }
 
 // ─── Global POC listener (survives WS reconnect via onNewSystemMessage) ──
-// Flags when any contract settles (win or loss), so auto-switcher can update
-// volatility on the next scan cycle.
-(window as any).__makoti_lastContractSettled = true;
+// Flags ONLY when a real (non-virtual) contract settles as a WIN, so the
+// auto-switcher only changes volatility after a real-trade win — never on
+// losses and never on virtual-hook wins/losses.
+(window as any).__makoti_lastContractSettled = false;
 
 let _pocUnsub: (() => void) | null = null;
 
@@ -124,7 +125,8 @@ function startPocListener() {
     _pocUnsub = onNewSystemMessage((event: MessageEvent) => {
         try {
             const d = JSON.parse(event.data);
-            if (d.msg_type === 'proposal_open_contract' && d.proposal_open_contract?.is_sold) {
+            const c = d?.proposal_open_contract;
+            if (d?.msg_type === 'proposal_open_contract' && c?.is_sold && !c.is_virtual && Number(c.profit) > 0) {
                 (window as any).__makoti_lastContractSettled = true;
             }
         } catch (_) {}

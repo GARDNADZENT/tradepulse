@@ -309,6 +309,7 @@ class DBot {
             var BinaryBotPrivateLastTickTime;
             var BinaryBotPrivateTickAnalysisList = [];
             var BinaryBotPrivateHasCalledTradeOptions = false;
+            var BinaryBotPrivateLastTradeVirtual = false;
 
            
             function recursiveList(list, final_list){
@@ -362,7 +363,9 @@ class DBot {
                     BinaryBotPrivateRun(BinaryBotPrivateDuringPurchase);
                 }
                 BinaryBotPrivateTickAnalysis();
-                if (!BinaryBotPrivateRun(BinaryBotPrivateAfterPurchase)) {
+                if (BinaryBotPrivateLastTradeVirtual) {
+                    BinaryBotPrivateLastTradeVirtual = false;
+                } else if (!BinaryBotPrivateRun(BinaryBotPrivateAfterPurchase)) {
                     break;
                 }
             }
