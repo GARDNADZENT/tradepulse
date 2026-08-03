@@ -33,6 +33,9 @@ export interface MarketScore {
     trendM1: 'bullish' | 'bearish' | 'neutral';
     trendM5: 'bullish' | 'bearish' | 'neutral';
     trendM15: 'bullish' | 'bearish' | 'neutral';
+    flatTickRate: number;
+    momentumStrength: number;
+    noiseLevel: number;
 }
 
 export interface TradeRecord {
@@ -303,7 +306,81 @@ function getTrend(closes: number[], ema20: number, ema50: number, ema100: number
     return 'neutral';
 }
 
-/* ── Last 70 ticks analysis — sniper-grade direction ────────────────────────── */
+/* ── Flat-tick detection (the #1 killer of Only Ups/Only Downs) ────────────── */
+
+function calcFlatTickRate(ticks: number[], lookback: number = 20): number {
+    if (ticks.length < 2) return 0;
+    const recent = ticks.slice(-lookback);
+    let flats = 0;
+    for (let i = 1; i < recent.length; i++) {
+        if (recent[i] === recent[i - 1]) flats++;
+    }
+    return flats / (recent.length - 1);
+}
+
+function calcMicroFluctuation(prices: number[], lookback: number = 20): number {
+    if (prices.length < 2) return 0;
+    const recent = prices.slice(-lookback);
+    let reversals = 0;
+    for (let i = 2; i < recent.length; i++) {
+        const dir1 = recent[i - 1] - recent[i - 2];
+        const dir2 = recent[i] - recent[i - 1];
+        if (dir1 * dir2 < 0) reversals++;
+    }
+    return reversals / (recent.length - 2);
+}
+
+/* ── Pure momentum strength (independent of slope) ──────────────────────────── */
+
+function calcMomentumStrength(prices: number[], lookback: number = 30): { strength: number; direction: 'up' | 'down' | 'neutral' } {
+    if (prices.length < 5) return { strength: 0, direction: 'neutral' };
+    const recent = prices.slice(-lookback);
+    const n = recent.length;
+
+    /* consecutive direction count */
+    let consecUp = 0, consecDown = 0;
+    for (let i = n - 1; i > 0; i--) {
+        if (recent[i] > recent[i - 1]) { consecUp++; consecDown = 0; }
+        else if (recent[i] < recent[i - 1]) { consecDown++; consecUp = 0; }
+        else break;
+    }
+
+    /* recent move magnitude vs volatility */
+    const range = Math.max(...recent) - Math.min(...recent);
+    const avgPrice = recent.reduce((a, b) => a + b, 0) / n;
+    const normalizedRange = range / avgPrice;
+
+    /* how often price moved in the same direction in last 10 */
+    const last10 = recent.slice(-10);
+    let sameDir = 0;
+    for (let i = 1; i < last10.length; i++) {
+        if (last10[i] > last10[i - 1]) sameDir++;
+    }
+    const upRatio = sameDir / (last10.length - 1);
+
+    const upStrength = (consecUp / Math.min(n, 10)) * 40 + (normalizedRange * 1000) * 30 + (upRatio) * 30;
+    const downStrength = ((last10.length - 1 - sameDir) / (last10.length - 1)) * 40 + (normalizedRange * 1000) * 30 + ((1 - upRatio)) * 30;
+
+    const strength = Math.min(100, Math.max(upStrength, downStrength));
+    const direction = upStrength > downStrength ? 'up' : downStrength > upStrength ? 'down' : 'neutral';
+
+    return { strength, direction };
+}
+
+/* ── Stochastic oscillator ──────────────────────────────────────────────────── */
+
+function stochastic(candles: Candle[], kPeriod: number = 14, dPeriod: number = 3): { k: number; d: number } {
+    if (candles.length < kPeriod) return { k: 50, d: 50 };
+    const recent = candles.slice(-kPeriod);
+    const highest = Math.max(...recent.map(c => c.high));
+    const lowest = Math.min(...recent.map(c => c.low));
+    const currentClose = candles[candles.length - 1].close;
+    const k = highest === lowest ? 50 : ((currentClose - lowest) / (highest - lowest)) * 100;
+    const d = k; // simplified: %D = SMA of %K, but with single candle we approximate
+    return { k, d };
+}
+
+/* ── Last N ticks analysis — multi-factor direction scoring ─────────────────── */
 
 function analyzeLast70(prices: number[]): {
     slope: number;
@@ -323,15 +400,19 @@ function analyzeLast70(prices: number[]): {
     velocity: number;
     slopeAccel: number;
     momentumConviction: number;
+    flatTickRate: number;
+    microFluctuation: number;
 } {
     const empty = {
         slope: 0, direction: 'neutral' as const, strength: 0,
         ema5: 0, ema13: 0, ema5Above13: false,
         lastPeakPrice: 0, lastDipPrice: 0,
-        peaks: [], dips: [],
+        peaks: [] as { price: number; idx: number }[],
+        dips: [] as { price: number; idx: number }[],
         consecUp: 0, consecDown: 0,
         pullbackFromPeak: 0, bounceFromDip: 0,
         velocity: 0, slopeAccel: 0, momentumConviction: 0,
+        flatTickRate: 0, microFluctuation: 0,
     };
 
     if (prices.length < 10) return empty;
@@ -429,6 +510,10 @@ function analyzeLast70(prices: number[]): {
     const veloPrior = vPrior.length > 1 ? Math.abs(vPrior[vPrior.length - 1] - vPrior[0]) / vPrior.length : 0;
     const velocity = Math.max(velo10, veloPrior);
 
+    /* ── Flat-tick detection ── */
+    const flatTickRate = calcFlatTickRate(data);
+    const microFluctuation = calcMicroFluctuation(data);
+
     return {
         slope, direction, strength,
         ema5, ema13, ema5Above13,
@@ -437,10 +522,11 @@ function analyzeLast70(prices: number[]): {
         consecUp, consecDown,
         pullbackFromPeak, bounceFromDip,
         velocity, slopeAccel, momentumConviction,
+        flatTickRate, microFluctuation,
     };
 }
 
-/* ── Sniper entry check ─────────────────────────────────────────────────────── */
+/* ── Sniper entry check — improved for Only Ups/Only Downs ──────────────────── */
 
 export function checkSniperEntry(
     direction: 'RUNHIGH' | 'RUNLOW',
@@ -456,35 +542,92 @@ export function checkSniperEntry(
     const thirdLast = prices.length > 2 ? prices[prices.length - 3] : prev;
 
     if (direction === 'RUNHIGH') {
+        /* ── Flat-tick filter: flat ticks kill RUNHIGH instantly ── */
+        if (l70.flatTickRate > 0.15) return { ...notrigger, reason: `High noise ${(l70.flatTickRate * 100).toFixed(0)}%` };
+
+        /* ── Micro-fluctuation filter: too many reversals = choppy ── */
+        if (l70.microFluctuation > 0.4) return { ...notrigger, reason: `Choppy ${(l70.microFluctuation * 100).toFixed(0)}%` };
+
+        /* ── Trend strength requirement ── */
         if (l70.direction !== 'up' || l70.strength < 15) return { ...notrigger, reason: `Weak uptrend (${l70.strength})` };
         if (l70.momentumConviction < -0.3) return { ...notrigger, reason: `Negative conviction ${l70.momentumConviction.toFixed(2)}` };
 
+        /* ── Entry timing: want a micro-dip then resumption ── */
         const lastTickDown = currentPrice < prev;
-        if (!lastTickDown) return { ...notrigger, reason: 'Last not down (want dip)' };
+        const secondLastDown = prev < thirdLast;
 
-        return { trigger: true, reason: `Dip in uptrend`, entryPrice: currentPrice };
+        if (lastTickDown) {
+            /* Dip on last tick: good entry if momentum still strong */
+            if (l70.consecUp >= 2 || l70.velocity > 0.003) {
+                return { trigger: true, reason: `Dip in strong uptrend (v=${l70.velocity.toFixed(4)})`, entryPrice: currentPrice };
+            }
+            return { ...notrigger, reason: `Dip but weak momentum (up=${l70.consecUp})` };
+        }
+
+        /* Two consecutive down ticks: too deep, skip */
+        if (secondLastDown && lastTickDown) return { ...notrigger, reason: 'Two consecutive dips' };
+
+        /* Fresh impulse: 2+ consecutive up ticks with good velocity */
+        if (l70.consecUp >= 2 && l70.velocity > 0.005 && l70.momentumConviction > 0.2) {
+            return { trigger: true, reason: `Fresh impulse (up=${l70.consecUp}, v=${l70.velocity.toFixed(4)})`, entryPrice: currentPrice };
+        }
+
+        return { ...notrigger, reason: `No clear entry (up=${l70.consecUp}, v=${l70.velocity.toFixed(4)})` };
     }
 
     if (direction === 'RUNLOW') {
+        /* ── Flat-tick filter ── */
+        if (l70.flatTickRate > 0.15) return { ...notrigger, reason: `High noise ${(l70.flatTickRate * 100).toFixed(0)}%` };
+
+        /* ── Micro-fluctuation filter ── */
+        if (l70.microFluctuation > 0.4) return { ...notrigger, reason: `Choppy ${(l70.microFluctuation * 100).toFixed(0)}%` };
+
+        /* ── Trend strength requirement ── */
         if (l70.direction !== 'down' || l70.strength < 15) return { ...notrigger, reason: `Weak downtrend (${l70.strength})` };
         if (l70.momentumConviction > 0.3) return { ...notrigger, reason: `Positive conviction ${l70.momentumConviction.toFixed(2)}` };
 
+        /* ── Entry timing ── */
         const lastTickUp = currentPrice > prev;
-        if (!lastTickUp) return { ...notrigger, reason: 'Last not up (want peak)' };
+        const secondLastUp = prev > thirdLast;
 
-        return { trigger: true, reason: `Peak in downtrend`, entryPrice: currentPrice };
+        if (lastTickUp) {
+            if (l70.consecDown >= 2 || l70.velocity > 0.003) {
+                return { trigger: true, reason: `Peak in strong downtrend (v=${l70.velocity.toFixed(4)})`, entryPrice: currentPrice };
+            }
+            return { ...notrigger, reason: `Peak but weak momentum (dn=${l70.consecDown})` };
+        }
+
+        if (secondLastUp && lastTickUp) return { ...notrigger, reason: 'Two consecutive peaks' };
+
+        if (l70.consecDown >= 2 && l70.velocity > 0.005 && l70.momentumConviction < -0.2) {
+            return { trigger: true, reason: `Fresh impulse (dn=${l70.consecDown}, v=${l70.velocity.toFixed(4)})`, entryPrice: currentPrice };
+        }
+
+        return { ...notrigger, reason: `No clear entry (dn=${l70.consecDown}, v=${l70.velocity.toFixed(4)})` };
     }
 
     return notrigger;
 }
 
-/* ── Duration calculation ───────────────────────────────────────────────────── */
+/* ── Duration calculation — adaptive based on volatility/momentum ───────────── */
 
 export function calcDuration(atr: number, price: number, velocity?: number, slopeAccel?: number): number {
+    /* Only Ups/Only Downs win rate drops fast with duration.
+     * The sweet spot is 2 ticks (community standard + research).
+     * For extremely strong momentum, we might use 3.
+     * For weak/uncertain, stay at 2 (minimum for profit). */
+
+    const v = velocity || 0;
+    const a = slopeAccel || 0;
+
+    /* Very strong momentum + acceleration: allow 3 ticks */
+    if (v > 0.008 && a > 0.0001) return 3;
+
+    /* Default: 2 ticks (the proven sweet spot) */
     return 2;
 }
 
-/* ── Market analysis ────────────────────────────────────────────────────────── */
+/* ── Market analysis — multi-factor confidence ──────────────────────────────── */
 
 export function analyzeMarket(
     symbol: string,
@@ -497,63 +640,120 @@ export function analyzeMarket(
 
     const l70 = analyzeLast70(prices);
 
-    /* ── Reject choppy/noise markets early ── */
-    const consecTotal = l70.consecUp + l70.consecDown;
-    if (consecTotal > 0 && Math.abs(l70.consecUp - l70.consecDown) / consecTotal < 0.15) {
-        return { symbol, direction: null, confidence: 0, reasons: ['Choppy'], indicators: defaultIndicators(), trendM1: 'neutral', trendM5: 'neutral', trendM15: 'neutral' };
+    /* ── Reject noisy/choppy markets early ── */
+    if (l70.flatTickRate > 0.2) {
+        return { symbol, direction: null, confidence: 0, reasons: ['High flat-tick rate'], indicators: defaultIndicators(), trendM1: 'neutral', trendM5: 'neutral', trendM15: 'neutral', flatTickRate: l70.flatTickRate, momentumStrength: 0, noiseLevel: l70.flatTickRate };
     }
-    if (l70.strength < 15) {
-        return { symbol, direction: null, confidence: 0, reasons: ['Weak'], indicators: defaultIndicators(), trendM1: 'neutral', trendM5: 'neutral', trendM15: 'neutral' };
+    if (l70.microFluctuation > 0.45) {
+        return { symbol, direction: null, confidence: 0, reasons: ['Too choppy'], indicators: defaultIndicators(), trendM1: 'neutral', trendM5: 'neutral', trendM15: 'neutral', flatTickRate: l70.flatTickRate, momentumStrength: 0, noiseLevel: l70.microFluctuation };
     }
 
+    /* ── Reject weak trends ── */
+    if (l70.strength < 15) {
+        return { symbol, direction: null, confidence: 0, reasons: ['Weak'], indicators: defaultIndicators(), trendM1: 'neutral', trendM5: 'neutral', trendM15: 'neutral', flatTickRate: l70.flatTickRate, momentumStrength: 0, noiseLevel: l70.microFluctuation };
+    }
+
+    const consecTotal = l70.consecUp + l70.consecDown;
+    if (consecTotal > 0 && Math.abs(l70.consecUp - l70.consecDown) / consecTotal < 0.15) {
+        return { symbol, direction: null, confidence: 0, reasons: ['Choppy'], indicators: defaultIndicators(), trendM1: 'neutral', trendM5: 'neutral', trendM15: 'neutral', flatTickRate: l70.flatTickRate, momentumStrength: 0, noiseLevel: l70.microFluctuation };
+    }
+
+    /* ── Factor 1: Slope strength (0-30 points) ── */
     if (l70.direction === 'up' && l70.strength >= 40) { confidence += 30; reasons.push(`Strong +${l70.strength}`); }
     else if (l70.direction === 'down' && l70.strength >= 40) { confidence += 30; reasons.push(`Strong -${l70.strength}`); }
     else if (l70.direction === 'up' && l70.strength >= 25) { confidence += 20; reasons.push(`Trend +${l70.strength}`); }
     else if (l70.direction === 'down' && l70.strength >= 25) { confidence += 20; reasons.push(`Trend -${l70.strength}`); }
 
-    if (l70.slopeAccel > 0.00008 && l70.direction === 'up') { confidence += 15; reasons.push('Accel up'); }
-    else if (l70.slopeAccel < -0.00008 && l70.direction === 'down') { confidence += 15; reasons.push('Accel down'); }
+    /* ── Factor 2: Momentum conviction (0-15 points) ── */
+    if (Math.abs(l70.momentumConviction) > 0.3) { confidence += 15; reasons.push('Conviction'); }
+    else if (Math.abs(l70.momentumConviction) > 0.15) { confidence += 8; reasons.push('Weak conviction'); }
 
-    if (l70.momentumConviction > 0.3) { confidence += 15; reasons.push('Conviction'); }
-    else if (l70.momentumConviction < -0.3) { confidence += 15; reasons.push('Conviction'); }
+    /* ── Factor 3: Velocity (0-15 points) ── */
+    if (l70.velocity > 0.008) { confidence += 15; reasons.push('Fast'); }
+    else if (l70.velocity > 0.005) { confidence += 10; reasons.push('Moving'); }
+    else if (l70.velocity > 0.003) { confidence += 5; reasons.push('Slow'); }
 
+    /* ── Factor 4: Consecutive direction (0-10 points) ── */
     if (l70.consecUp > 2 && l70.consecUp >= l70.consecDown * 3) { confidence += 10; reasons.push(`${l70.consecUp} cons up`); }
     else if (l70.consecDown > 2 && l70.consecDown >= l70.consecUp * 3) { confidence += 10; reasons.push(`${l70.consecDown} cons down`); }
 
-    if (l70.velocity > 0.005) { confidence += 10; reasons.push('Fast'); }
-    else if (l70.velocity > 0.003) { confidence += 5; reasons.push('Moving'); }
+    /* ── Factor 5: Slope acceleration (0-10 points) ── */
+    if (Math.abs(l70.slopeAccel) > 0.00008) { confidence += 10; reasons.push('Accel'); }
 
+    /* ── Factor 6: EMA agreement (0-10 points) ── */
     if (l70.ema5 > l70.ema13 && l70.strength > 20) { confidence += 10; reasons.push('EMA bull'); }
     else if (l70.ema5 < l70.ema13 && l70.strength > 20) { confidence += 10; reasons.push('EMA bear'); }
 
+    /* ── Factor 7: Flat-tick bonus/penalty ── */
+    if (l70.flatTickRate < 0.05) { confidence += 5; reasons.push('Clean ticks'); }
+    else if (l70.flatTickRate > 0.12) { confidence -= 10; reasons.push('Noisy ticks'); }
+
+    /* ── Factor 8: Micro-fluctuation penalty ── */
+    if (l70.microFluctuation > 0.35) { confidence -= 10; reasons.push('Reversals'); }
+
+    /* ── Direction assignment ── */
     const isBullish = l70.direction === 'up' && l70.strength >= 25 && l70.momentumConviction > 0;
     const isBearish = l70.direction === 'down' && l70.strength >= 25 && l70.momentumConviction < 0;
 
-    const minDC = 70;
+    const minDC = 65;
     if (isBullish && confidence >= minDC) direction = 'RUNHIGH';
     else if (isBearish && confidence >= minDC) direction = 'RUNLOW';
 
     confidence = Math.min(100, Math.max(0, confidence));
 
+    /* ── Build M1 candle indicators (if available) ── */
+    let trendM1: 'bullish' | 'bearish' | 'neutral' = 'neutral';
+    let trendM5: 'bullish' | 'bearish' | 'neutral' = 'neutral';
+    let trendM15: 'bullish' | 'bearish' | 'neutral' = 'neutral';
+
+    if (_candlesM1.length >= 20) {
+        const closes = _candlesM1.map(c => c.close);
+        const ema20Arr = ema(closes, 20);
+        const ema50Arr = ema(closes, Math.min(50, closes.length));
+        const ema100Arr = ema(closes, Math.min(100, closes.length));
+        const e20 = ema20Arr[ema20Arr.length - 1] || 0;
+        const e50 = ema50Arr[ema50Arr.length - 1] || 0;
+        const e100 = ema100Arr[ema100Arr.length - 1] || 0;
+        trendM1 = getTrend(closes, e20, e50, e100);
+    }
+
+    /* ── Compute additional indicators for display ── */
+    const candlesM1 = _candlesM1;
+    const closesM1 = candlesM1.map(c => c.close);
+    const rsiValues = rsi(closesM1, 14);
+    const rsiVal = rsiValues.length > 0 ? rsiValues[rsiValues.length - 1] : 50;
+    const macdValues = macd(closesM1);
+    const macdHist = macdValues.histogram.length > 0 ? macdValues.histogram[macdValues.histogram.length - 1] : 0;
+    const macdLine = macdValues.macd.length > 0 ? macdValues.macd[macdValues.macd.length - 1] : 0;
+    const macdSig = macdValues.signal.length > 0 ? macdValues.signal[macdValues.signal.length - 1] : 0;
+    const adxVal = adx(candlesM1, 14);
+    const bb = bollinger(closesM1, 20, 2);
+    const atrVal = calcATR(candlesM1, 14);
+    const cciVal = cci(closesM1, 20);
+    const sr = findSR(closesM1);
+
     return {
         symbol, direction, confidence, reasons,
         indicators: {
             ema20: 0, ema50: 0, ema100: 0,
-            rsi: 50,
-            macd: 0, macdSignal: 0, macdHistogram: 0,
-            adx: 0,
-            bbUpper: 0, bbMiddle: 0, bbLower: 0,
-            atr: 0,
-            support: 0, resistance: 0,
+            rsi: rsiVal,
+            macd: macdLine, macdSignal: macdSig, macdHistogram: macdHist,
+            adx: adxVal,
+            bbUpper: bb.upper, bbMiddle: bb.middle, bbLower: bb.lower,
+            atr: atrVal,
+            support: sr.support, resistance: sr.resistance,
             last70Slope: l70.slope,
             last70Strength: l70.strength,
             consecUp: l70.consecUp,
             consecDown: l70.consecDown,
-            cci: 0,
+            cci: cciVal,
             slopeAccel: l70.slopeAccel,
             momentumConviction: l70.momentumConviction,
         },
-        trendM1: 'neutral', trendM5: 'neutral', trendM15: 'neutral',
+        trendM1, trendM5, trendM15,
+        flatTickRate: l70.flatTickRate,
+        momentumStrength: calcMomentumStrength(prices).strength,
+        noiseLevel: l70.microFluctuation,
     };
 }
 

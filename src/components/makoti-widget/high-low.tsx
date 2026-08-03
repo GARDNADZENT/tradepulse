@@ -40,6 +40,9 @@ export const HighLow: React.FC = () => {
     const [consecutiveLosses, setConsecutiveLosses] = useState(0);
     const [sniperPhase, setSniperPhase] = useState<SniperPhase>('idle');
     const [sniperReason, setSniperReason] = useState('');
+    const [currentFlatTickRate, setCurrentFlatTickRate] = useState(0);
+    const [currentMomentumStrength, setCurrentMomentumStrength] = useState(0);
+    const [currentNoiseLevel, setCurrentNoiseLevel] = useState(0);
     const [logs, setLogs] = useState<{ time: string; msg: string; type: string }[]>([]);
 
     const wsRef = useRef<MakotiWS | null>(null);
@@ -95,6 +98,9 @@ export const HighLow: React.FC = () => {
         setCurrentSymbol('');
         setCurrentConfidence(0);
         setCurrentDirection(null);
+        setCurrentFlatTickRate(0);
+        setCurrentMomentumStrength(0);
+        setCurrentNoiseLevel(0);
         setSniperPhase('idle');
         setSniperReason('');
         setStatus('Stopped');
@@ -184,8 +190,11 @@ export const HighLow: React.FC = () => {
             setCurrentSymbol(selected.symbol);
             setCurrentConfidence(selected.confidence);
             setCurrentDirection(selected.direction);
+            setCurrentFlatTickRate(selected.flatTickRate);
+            setCurrentMomentumStrength(selected.momentumStrength);
+            setCurrentNoiseLevel(selected.noiseLevel);
             setStatus(`Locked ${SYMBOL_LABELS[selected.symbol] || selected.symbol} ${selected.direction === 'RUNHIGH' ? 'ONLY UPS' : 'ONLY DOWNS'} @ ${selected.confidence}%`);
-            addLog(`Locked ${SYMBOL_LABELS[selected.symbol] || selected.symbol} ${selected.direction === 'RUNHIGH' ? 'ONLY UPS' : 'ONLY DOWNS'} (${selected.confidence}%)`, 'trade');
+            addLog(`Locked ${SYMBOL_LABELS[selected.symbol] || selected.symbol} ${selected.direction === 'RUNHIGH' ? 'ONLY UPS' : 'ONLY DOWNS'} (${selected.confidence}%) | Flat: ${(selected.flatTickRate * 100).toFixed(0)}% | Mom: ${(selected.momentumStrength * 100).toFixed(0)}%`, 'trade');
 
             aimingRef.current = selected;
             aimingStartRef.current = Date.now();
@@ -504,6 +513,11 @@ export const HighLow: React.FC = () => {
                                     {sniperReason}
                                 </div>
                             )}
+                            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4, display: 'flex', gap: 12 }}>
+                                <span>Flat: <span style={{ color: currentFlatTickRate > 0.2 ? '#ef4444' : '#22c55e' }}>{(currentFlatTickRate * 100).toFixed(0)}%</span></span>
+                                <span>Mom: <span style={{ color: currentMomentumStrength >= 0.5 ? '#22c55e' : '#f97316' }}>{(currentMomentumStrength * 100).toFixed(0)}%</span></span>
+                                <span>Noise: <span style={{ color: currentNoiseLevel > 0.4 ? '#ef4444' : '#22c55e' }}>{(currentNoiseLevel * 100).toFixed(0)}%</span></span>
+                            </div>
                             {inTrade && <span className='mw-killer__active-dot'> LIVE</span>}
                             {consecutiveLosses > 0 && <span style={{ color: '#ef4444', marginLeft: 8 }}>x{consecutiveLosses} losses</span>}
                         </div>
