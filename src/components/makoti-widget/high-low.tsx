@@ -5,7 +5,7 @@ import { sendViaNewSystemWithPromise, onNewSystemMessage } from '@/auth/NewDeriv
 import {
     HL_SYMBOLS, DEFAULT_CONFIG, HighLowConfig, MarketScore, TradeRecord, SymbolData,
     runMarketScan, executeHighLowTrade, calcDuration, buildCandles,
-    SCAN_INTERVAL_MS, checkSniperEntry,
+    SCAN_INTERVAL_MS, checkSniperEntry, detectFastSignal,
 } from './high-low-engine';
 
 const LS_CONFIG_KEY = 'mw_hl_config';
@@ -255,6 +255,34 @@ export const HighLow: React.FC = () => {
                 sd.prices = [...sd.prices.slice(-(MAX_TICKS - 1)), price];
                 sd.times = [...sd.times.slice(-(MAX_TICKS - 1)), epoch];
                 sd.ready = sd.ticks.length >= MIN_TICKS;
+
+                /* ── FAST ENTRY: check signal on EVERY tick for ALL symbols ── */
+                if (!inTradeRef.current && !aimingRef.current && sd.prices.length >= 15) {
+                    const sig = detectFastSignal(sd.prices);
+                    if (sig.action !== 'skip' && sig.confidence >= cfgRef.current.minConfidence) {
+                        lastEntryAttemptRef.current = Date.now();
+                        addLog(`FAST: ${SYMBOL_LABELS[sym] || sym} ${sig.reason}`, 'trade');
+                        let stake = cfgRef.current.stake;
+                        if (cfgRef.current.martingaleEnabled && consecutiveLossesRef.current > 0) {
+                            stake = Math.min(stake * Math.pow(cfgRef.current.martingale, consecutiveLossesRef.current), 100);
+                        }
+                        if (cfgRef.current.useCompounding && tradesRef.current.length > 0 && pnlRef.current > 0) {
+                            stake = Math.max(0.35, Number((pnlRef.current * 0.02).toFixed(2)));
+                        }
+                        executeTrade({
+                            symbol: sym, direction: sig.action, confidence: sig.confidence,
+                            reasons: [sig.reason], indicators: {
+                                ema9: 0, ema21: 0, ema50: 0, rsi: 50,
+                                macd: 0, macdSignal: 0, macdHistogram: 0, adx: 0,
+                                bbUpper: 0, bbMiddle: 0, bbLower: 0, atr: 0,
+                                support: 0, resistance: 0, consecUp: 0, consecDown: 0,
+                                momentumStrength: 0, chopLevel: 0,
+                            },
+                            trendM1: 'neutral', trendM5: 'neutral', trendM15: 'neutral',
+                            flatTickRate: sig.flatTickRate, momentumStrength: sig.confidence / 100, noiseLevel: sig.flatTickRate,
+                        }, Math.max(0.35, stake), 2);
+                    }
+                }
 
                 if (aimingRef.current && !inTradeRef.current) {
                     checkEntryOnTick();
