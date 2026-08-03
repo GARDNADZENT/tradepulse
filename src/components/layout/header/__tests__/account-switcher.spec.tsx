@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AccountSwitcher from '../account-switcher';
 
 const mockCheckAndRegenerateWebSocket = jest.fn();
@@ -42,6 +42,20 @@ jest.mock('@/components/shared', () => ({
 
 jest.mock('@/utils/account-helpers', () => ({
     isDemoAccount: (loginid: string) => loginid.startsWith('VR'),
+    getAccountId: jest.fn(() => 'VRTC456'),
+}));
+
+jest.mock('@/auth/NewDerivAuth', () => ({
+    sendViaNewSystemWithPromise: jest.fn(),
+    sendViaNewSystem: jest.fn(),
+}));
+
+jest.mock('@/external/deriv-core', () => ({
+    getAuthInfo: jest.fn(() => ({ access_token: 'mock-token' })),
+}));
+
+jest.mock('@/services/derivws-accounts.service', () => ({
+    DerivWSAccountsService: { resetDemoBalance: jest.fn().mockResolvedValue(undefined) },
 }));
 
 jest.mock('@/components/shared_ui/text', () => ({
@@ -62,6 +76,17 @@ const mockActiveAccount = {
     balance: '100.00',
     isVirtual: false,
     is_virtual: 0,
+    isActive: true,
+    currencyLabel: 'USD',
+    icon: null,
+};
+
+const mockDemoActiveAccount = {
+    loginid: 'VRTC456',
+    currency: 'USD',
+    balance: '0.00',
+    isVirtual: true,
+    is_virtual: 1,
     isActive: true,
     currencyLabel: 'USD',
     icon: null,
@@ -187,5 +212,39 @@ describe('AccountSwitcher', () => {
         expect(trigger).toHaveAttribute('aria-haspopup', 'listbox');
         fireEvent.click(trigger);
         expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('renders the reset button for demo accounts', () => {
+        render(<AccountSwitcher activeAccount={mockDemoActiveAccount} />);
+        expect(screen.getByLabelText('Reset demo balance')).toBeInTheDocument();
+    });
+
+    it('does not render the reset button for real accounts', () => {
+        render(<AccountSwitcher activeAccount={mockActiveAccount} />);
+        expect(screen.queryByLabelText('Reset demo balance')).not.toBeInTheDocument();
+    });
+
+    it('resets the demo balance via the REST endpoint and refreshes balance', async () => {
+        const { DerivWSAccountsService } = require('@/services/derivws-accounts.service');
+        const { sendViaNewSystemWithPromise } = require('@/auth/NewDerivAuth');
+        render(<AccountSwitcher activeAccount={mockDemoActiveAccount} />);
+        fireEvent.click(screen.getByLabelText('Reset demo balance'));
+        await waitFor(() => {
+            expect(DerivWSAccountsService.resetDemoBalance).toHaveBeenCalledWith('mock-token', 'VRTC456');
+            expect(sendViaNewSystemWithPromise).toHaveBeenCalledWith({ balance: 1 });
+            expect(sendViaNewSystemWithPromise).not.toHaveBeenCalledWith({ topup_virtual: 1 });
+        });
+    });
+
+    it('falls back to topup_virtual when the REST reset fails', async () => {
+        const { DerivWSAccountsService } = require('@/services/derivws-accounts.service');
+        const { sendViaNewSystemWithPromise } = require('@/auth/NewDerivAuth');
+        DerivWSAccountsService.resetDemoBalance.mockRejectedValueOnce(new Error('400 not a demo account'));
+        render(<AccountSwitcher activeAccount={mockDemoActiveAccount} />);
+        fireEvent.click(screen.getByLabelText('Reset demo balance'));
+        await waitFor(() => {
+            expect(sendViaNewSystemWithPromise).toHaveBeenCalledWith({ topup_virtual: 1 });
+            expect(sendViaNewSystemWithPromise).toHaveBeenCalledWith({ balance: 1 });
+        });
     });
 });

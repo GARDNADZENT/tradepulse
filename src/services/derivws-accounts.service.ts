@@ -233,6 +233,40 @@ export class DerivWSAccountsService {
     }
 
     /**
+     * Resets a demo account's balance to the default amount via the REST endpoint
+     * POST /trading/v1/options/accounts/{account_id}/reset-demo-balance
+     *
+     * Unlike topup_virtual (which only tops up to the current virtual credit limit),
+     * this endpoint performs a true reset to the default $10,000 demo balance.
+     *
+     * @param accessToken Bearer token from OAuth authentication (scope: trade)
+     * @param accountId Account ID to reset (must be a demo account)
+     * @throws Error with status code if the reset fails (e.g. 400 = not a demo account)
+     */
+    static async resetDemoBalance(accessToken: string, accountId: string): Promise<void> {
+        const baseURL = this.getDerivWSBaseURL();
+        const optionsDir = brandConfig.platform.derivws.directories.options;
+        const endpoint = `${baseURL}${optionsDir}accounts/${accountId}/reset-demo-balance`;
+
+        const headers: Record<string, string> = {
+            Authorization: `Bearer ${accessToken}`,
+        };
+        const appId = process.env.NEXT_PUBLIC_DERIV_APP_ID || '33UD5Xga7WHSzXFtBYdmr';
+        if (appId) headers['Deriv-App-ID'] = appId;
+
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers,
+        });
+
+        // 200 OK - Demo balance successfully reset to default amount (no body).
+        // 400 Bad request - Invalid account ID or not a demo account.
+        if (!response.ok) {
+            throw new Error(`Failed to reset demo balance: ${response.status} ${response.statusText}`);
+        }
+    }
+
+    /**
      * Complete flow to get authenticated WebSocket URL with optimized caching
      * 1. Check if accounts are already in sessionStorage (skip fetch on refresh)
      * 2. If not in storage, fetch accounts list

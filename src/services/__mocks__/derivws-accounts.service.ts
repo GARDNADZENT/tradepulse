@@ -7,4 +7,5 @@ export const DerivWSAccountsService = {
     clearCache: jest.fn(),
     fetchOTPWebSocketURL: jest.fn(),
     getAuthenticatedWebSocketURL: jest.fn(),
+    resetDemoBalance: jest.fn(),
 };

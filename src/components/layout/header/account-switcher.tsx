@@ -5,9 +5,11 @@ import { addComma, getCurrencyDisplayCode, getDecimalPlaces } from '@/components
 import Text from '@/components/shared_ui/text';
 import { api_base } from '@/external/bot-skeleton/services/api/api-base';
 import { sendViaNewSystemWithPromise } from '@/auth/NewDerivAuth';
+import { getAuthInfo } from '@/external/deriv-core';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useStore } from '@/hooks/useStore';
-import { isDemoAccount } from '@/utils/account-helpers';
+import { DerivWSAccountsService } from '@/services/derivws-accounts.service';
+import { getAccountId, isDemoAccount } from '@/utils/account-helpers';
 import { isCustomDemoIconActive } from '@/utils/custom-demo-icon-utils';
 import { Localize } from '@deriv-com/translations';
 import { TAccountSwitcher } from './common/types';
@@ -77,9 +79,23 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
             if (resetBusy) return;
             setResetBusy(true);
             try {
-                // topup_virtual tops a demo account up to the maximum virtual credit,
-                // effectively resetting the demo balance.
-                await sendViaNewSystemWithPromise({ topup_virtual: 1 });
+                // Prefer the REST reset endpoint: topup_virtual only tops up to the
+                // current virtual credit limit and does NOT restore a blown balance.
+                const authInfo = getAuthInfo();
+                const accessToken = authInfo?.access_token || localStorage.getItem('authToken');
+                const accountId = getAccountId() || activeLoginid;
+                let reset = false;
+                if (accountId && accessToken) {
+                    try {
+                        await DerivWSAccountsService.resetDemoBalance(accessToken, accountId);
+                        reset = true;
+                    } catch (err) {
+                        console.warn('[ResetBalance] REST reset failed, falling back to topup_virtual:', err);
+                    }
+                }
+                if (!reset) {
+                    await sendViaNewSystemWithPromise({ topup_virtual: 1 });
+                }
                 // Force an immediate balance refresh (the balance stream also pushes on its own).
                 await sendViaNewSystemWithPromise({ balance: 1 });
             } catch (err) {
@@ -88,7 +104,7 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
                 setResetBusy(false);
             }
         },
-        [resetBusy]
+        [resetBusy, activeLoginid]
     );
 
     const handleAccountSelect = useCallback(
