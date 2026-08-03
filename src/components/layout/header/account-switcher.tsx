@@ -4,6 +4,7 @@ import { observer } from 'mobx-react-lite';
 import { addComma, getCurrencyDisplayCode, getDecimalPlaces } from '@/components/shared';
 import Text from '@/components/shared_ui/text';
 import { api_base } from '@/external/bot-skeleton/services/api/api-base';
+import { sendViaNewSystemWithPromise } from '@/auth/NewDerivAuth';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useStore } from '@/hooks/useStore';
 import { isDemoAccount } from '@/utils/account-helpers';
@@ -16,6 +17,10 @@ import './account-switcher.scss';
 const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
     const [isOpen, setIsOpen] = useState(false);
     const [showAsReal, setShowAsReal] = useState(false);
+    const [trippleTrickActive, setTrippleTrickActive] = useState(
+        () => localStorage.getItem('tripple_trick_active') === 'true'
+    );
+    const [resetBusy, setResetBusy] = useState(false);
     const wrapperRef = useRef<HTMLDivElement>(null);
     const { accountList, activeLoginid } = useApiBase();
     const { client, run_panel } = useStore() ?? {};
@@ -27,6 +32,17 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
         window.addEventListener('custom_demo_icon_changed', handleIconChange);
         handleIconChange();
         return () => window.removeEventListener('custom_demo_icon_changed', handleIconChange);
+    }, []);
+
+    useEffect(() => {
+        const checkTrippleTrick = () =>
+            setTrippleTrickActive(localStorage.getItem('tripple_trick_active') === 'true');
+        const interval = setInterval(checkTrippleTrick, 1000);
+        window.addEventListener('storage', checkTrippleTrick);
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('storage', checkTrippleTrick);
+        };
     }, []);
 
     const is_bot_running = run_panel?.is_running || api_base.is_running;
@@ -53,6 +69,27 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
         if (is_bot_running || isSingleAccount) return;
         setIsOpen(prev => !prev);
     }, [is_bot_running, isSingleAccount]);
+
+    const handleResetBalance = useCallback(
+        async (e: React.MouseEvent) => {
+            e.stopPropagation();
+            e.preventDefault();
+            if (resetBusy) return;
+            setResetBusy(true);
+            try {
+                // topup_virtual tops a demo account up to the maximum virtual credit,
+                // effectively resetting the demo balance.
+                await sendViaNewSystemWithPromise({ topup_virtual: 1 });
+                // Force an immediate balance refresh (the balance stream also pushes on its own).
+                await sendViaNewSystemWithPromise({ balance: 1 });
+            } catch (err) {
+                console.error('[ResetBalance] Failed to reset demo balance:', err);
+            } finally {
+                setResetBusy(false);
+            }
+        },
+        [resetBusy]
+    );
 
     const handleAccountSelect = useCallback(
         (loginid: string) => {
@@ -180,6 +217,46 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
                                         `${balance} ${getCurrencyDisplayCode(currency)}`
                                     )}
                                 </p>
+                                {isVirtual && !showAsReal && !trippleTrickActive && (
+                                    <button
+                                        type='button'
+                                        className={`acc-info__reset-balance${resetBusy ? ' acc-info__reset-balance--busy' : ''}`}
+                                        title='Reset demo balance'
+                                        aria-label='Reset demo balance'
+                                        onClick={handleResetBalance}
+                                    >
+                                        <svg width='12' height='12' viewBox='0 0 24 24' fill='none'>
+                                            <path
+                                                d='M4 4v6h6'
+                                                stroke='currentColor'
+                                                strokeWidth='2'
+                                                strokeLinecap='round'
+                                                strokeLinejoin='round'
+                                            />
+                                            <path
+                                                d='M20 20v-6h-6'
+                                                stroke='currentColor'
+                                                strokeWidth='2'
+                                                strokeLinecap='round'
+                                                strokeLinejoin='round'
+                                            />
+                                            <path
+                                                d='M4 10a8 8 0 0 1 14-3l2 3'
+                                                stroke='currentColor'
+                                                strokeWidth='2'
+                                                strokeLinecap='round'
+                                                strokeLinejoin='round'
+                                            />
+                                            <path
+                                                d='M20 14a8 8 0 0 1-14 3l-2-3'
+                                                stroke='currentColor'
+                                                strokeWidth='2'
+                                                strokeLinecap='round'
+                                                strokeLinejoin='round'
+                                            />
+                                        </svg>
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>

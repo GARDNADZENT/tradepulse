@@ -170,6 +170,39 @@
         }
     }
 
+    &__reset-balance {
+        align-items: center;
+        background: var(--general-section-1);
+        border: none;
+        border-radius: 50%;
+        color: var(--text-general);
+        cursor: pointer;
+        display: flex;
+        height: 1.8rem;
+        justify-content: center;
+        margin-left: 0.8rem;
+        padding: 0;
+        width: 1.8rem;
+
+        &:hover {
+            background: var(--state-hover);
+        }
+
+        &--busy svg {
+            animation: acc-info-reset-spin 1s linear infinite;
+        }
+    }
+
+    @keyframes acc-info-reset-spin {
+        from {
+            transform: rotate(0deg);
+        }
+
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
     &__id {
         pointer-events: none;
         display: flex;
