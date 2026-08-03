@@ -164,7 +164,7 @@ export const HighLow: React.FC = () => {
         if (result.trigger) {
             lastEntryAttemptRef.current = Date.now();
             addLog(`Sniper trigger: ${result.reason}`, 'trade');
-            const duration = calcDuration(aim.indicators.atr, result.entryPrice, aim.indicators.last70Slope, aim.indicators.slopeAccel);
+            const duration = calcDuration(aim.indicators.atr, result.entryPrice, aim.momentumStrength, 0);
             let stake = cfgRef.current.stake;
             if (cfgRef.current.martingaleEnabled && consecutiveLossesRef.current > 0) {
                 stake = Math.min(stake * Math.pow(cfgRef.current.martingale, consecutiveLossesRef.current), 100);
