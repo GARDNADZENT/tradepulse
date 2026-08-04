@@ -298,9 +298,15 @@ export const Scanner: React.FC = () => {
                         detail: qualifies ? '✅ 7,8,9 below 10%' : `7:${pcts[7].toFixed(1)}% 8:${pcts[8].toFixed(1)}% 9:${pcts[9].toFixed(1)}%`,
                     });
                 });
-                scanResults.sort((a, b) => (a.pcts[7] + a.pcts[8] + a.pcts[9]) - (b.pcts[7] + b.pcts[8] + b.pcts[9]));
+                scanResults.sort((a, b) => {
+                    /* First: qualifying volatilities (all three below 10%) come first */
+                    if (a.qualifies && !b.qualifies) return -1;
+                    if (!a.qualifies && b.qualifies) return 1;
+                    /* Then: lowest sum of 7+8+9 wins */
+                    return (a.pcts[7] + a.pcts[8] + a.pcts[9]) - (b.pcts[7] + b.pcts[8] + b.pcts[9]);
+                });
                 best = scanResults.map(r => r.symbol);
-                bestScore = Math.round((scanResults[0]?.pcts[7] + scanResults[0]?.pcts[8] + scanResults[0]?.pcts[9]) ?? 0);
+                bestScore = Math.round(Math.max(scanResults[0]?.pcts[7] ?? 0, scanResults[0]?.pcts[8] ?? 0, scanResults[0]?.pcts[9] ?? 0));
                 setResults(scanResults);
                 setBestSymbols(best.slice(0, 3));
             } else {
@@ -348,7 +354,7 @@ export const Scanner: React.FC = () => {
                     cleanup();
                 }
             } else {
-                setProgress(`Top: ${bestLabel} (7+8+9: ${bestScore}%)`);
+                setProgress(`Top: ${bestLabel} (max 7/8/9: ${bestScore}%)`);
                 cleanup();
             }
         };
