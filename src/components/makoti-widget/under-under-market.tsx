@@ -171,19 +171,25 @@ export const UnderUnderMarket: React.FC = () => {
                 const side = recovRef.current ? cfgRef.current.rs : cfgRef.current.ps;
                 const digit_ = recovRef.current ? cfgRef.current.rd : cfgRef.current.pd;
 
-                // Dominance check — the group (0-4 or 5-9) must dominate last 15 ticks
-                if (!hotDigitDominates(buf, side)) return;
+                // Step 1: Check pattern (last 4 digits)
+                if (buf.length < 4 || !checkPattern(buf, side)) return;
 
-                if (buf.length >= 4 && checkPattern(buf, side)) {
-                    const last25 = buf.slice(-25);
-                    const low = last25.filter(d => d <= 4).length;
-                    const high = last25.filter(d => d >= 5).length;
-                    addLog(`PATTERN ${SYMBOL_LABELS[sym]}: [${buf.slice(-4).join(',')}] | Low:${low} High:${high}`, 'pattern');
-                    lockRef.current = true;
-                    const amt = recovRef.current ? Number((cfgRef.current.s * cfgRef.current.m).toFixed(2)) : cfgRef.current.s;
-                    buy(sym, side, digit_, amt, recovRef.current ? 'r' : 'p');
+                // Step 2: Check dominance (last 25 ticks) — if fails, skip trade
+                if (!hotDigitDominates(buf, side)) {
+                    addLog(`PATTERN BLOCKED ${SYMBOL_LABELS[sym]}: dominance failed | [${buf.slice(-4).join(',')}]`, 'loss');
                     bufRef.current[sym] = [];
+                    return;
                 }
+
+                // Both conditions met — execute
+                const last25 = buf.slice(-25);
+                const low = last25.filter(d => d <= 4).length;
+                const high = last25.filter(d => d >= 5).length;
+                addLog(`PATTERN ${SYMBOL_LABELS[sym]}: [${buf.slice(-4).join(',')}] | Low:${low} High:${high}`, 'pattern');
+                lockRef.current = true;
+                const amt = recovRef.current ? Number((cfgRef.current.s * cfgRef.current.m).toFixed(2)) : cfgRef.current.s;
+                buy(sym, side, digit_, amt, recovRef.current ? 'r' : 'p');
+                bufRef.current[sym] = [];
             } catch {}
         });
         return () => { unsub(); };
