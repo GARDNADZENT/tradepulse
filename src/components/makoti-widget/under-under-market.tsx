@@ -26,6 +26,22 @@ function checkPattern(d: number[], side: ContractSide): boolean {
     return side === 'DIGITUNDER' ? (a < 4 && b < 4 && c > 5 && e < 4) : (a > 5 && b > 5 && c < 4 && e > 5);
 }
 
+// Hot digit filter: most appearing digit must match contract side
+function getHotDigit(ticks: number[]): number {
+    if (ticks.length === 0) return -1;
+    const counts = new Array(10).fill(0);
+    const window = ticks.slice(-50);
+    window.forEach(d => { if (d >= 0 && d <= 9) counts[d]++; });
+    let maxIdx = 0;
+    for (let i = 1; i < 10; i++) { if (counts[i] > counts[maxIdx]) maxIdx = i; }
+    return maxIdx;
+}
+
+function hotDigitPasses(hotDigit: number, side: ContractSide): boolean {
+    if (hotDigit < 0) return false;
+    return side === 'DIGITUNDER' ? hotDigit <= 4 : hotDigit >= 5;
+}
+
 export const UnderUnderMarket: React.FC = () => {
     const { transactions } = useStore();
     const cfg = loadCfg();
@@ -85,15 +101,11 @@ export const UnderUnderMarket: React.FC = () => {
             recovRef.current = false; lockRef.current = false;
         } else {
             addLog(`LOST -$${Math.abs(profit).toFixed(2)} on ${SYMBOL_LABELS[sym]} | P&L: $${pnlRef.current.toFixed(2)}`, 'loss');
-            if (phase === 'p') {
-                recovRef.current = true;
-                const next = Number((amt * cfgRef.current.m).toFixed(2));
-                addLog(`RECOVERY: ${cfgRef.current.rs === 'DIGITOVER' ? 'OVER' : 'UNDER'} ${cfgRef.current.rd} @ $${next.toFixed(2)}`, 'info');
-                setTimeout(() => { buy(sym, cfgRef.current.rs, cfgRef.current.rd, next, 'r'); }, 0);
-            } else {
-                addLog('Recovery lost. Resetting.', 'loss');
-                recovRef.current = false; lockRef.current = false;
-            }
+            // Keep looping recovery until win — multiply stake each time
+            recovRef.current = true;
+            const next = Number((amt * cfgRef.current.m).toFixed(2));
+            addLog(`RECOVERY LOOP: ${cfgRef.current.rs === 'DIGITOVER' ? 'OVER' : 'UNDER'} ${cfgRef.current.rd} @ $${next.toFixed(2)}`, 'info');
+            setTimeout(() => { buy(sym, cfgRef.current.rs, cfgRef.current.rd, next, 'r'); }, 0);
         }
         setSymProg(p => ({ ...p, [sym]: { ...p[sym], status: won ? 'won' : 'lost' } }));
     }, [addLog, buy]);
@@ -132,7 +144,7 @@ export const UnderUnderMarket: React.FC = () => {
                 if (isNaN(digit)) return;
                 if (!bufRef.current[sym]) bufRef.current[sym] = [];
                 bufRef.current[sym].push(digit);
-                if (bufRef.current[sym].length > 10) bufRef.current[sym] = bufRef.current[sym].slice(-10);
+                if (bufRef.current[sym].length > 60) bufRef.current[sym] = bufRef.current[sym].slice(-60);
                 const buf = bufRef.current[sym];
 
                 setSymProg(p => ({ ...p, [sym]: { symbol: sym, ticks: (p[sym]?.ticks || 0) + 1, lastDigits: buf.slice(-4), status: lockRef.current ? 'trading' : 'scanning' } }));
@@ -141,8 +153,12 @@ export const UnderUnderMarket: React.FC = () => {
                 const side = recovRef.current ? cfgRef.current.rs : cfgRef.current.ps;
                 const digit_ = recovRef.current ? cfgRef.current.rd : cfgRef.current.pd;
 
+                // Hot digit check — most appearing digit must match contract side
+                const hotDigit = getHotDigit(buf);
+                if (!hotDigitPasses(hotDigit, side)) return;
+
                 if (buf.length >= 4 && checkPattern(buf, side)) {
-                    addLog(`PATTERN ${SYMBOL_LABELS[sym]}: [${buf.slice(-4).join(',')}]`, 'pattern');
+                    addLog(`PATTERN ${SYMBOL_LABELS[sym]}: [${buf.slice(-4).join(',')}] | Hot: ${hotDigit}`, 'pattern');
                     lockRef.current = true;
                     const amt = recovRef.current ? Number((cfgRef.current.s * cfgRef.current.m).toFixed(2)) : cfgRef.current.s;
                     buy(sym, side, digit_, amt, recovRef.current ? 'r' : 'p');
