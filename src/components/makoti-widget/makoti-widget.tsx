@@ -4,10 +4,12 @@ import { MarketKiller } from './market-killer';
 import { OverUnderKiller } from './over-under-killer';
 import { HighLow } from './high-low';
 import { UnderUnderMarket } from './under-under-market';
+import { ALL_SYMBOLS } from './makoti-ws';
 import './makoti-widget.scss';
 
 type Tab = 'scanner' | 'market_killer' | 'over_under' | 'high_low' | 'under_under_market';
 const PAD = 8;
+const TRADING_TABS: Tab[] = ['market_killer', 'over_under', 'high_low', 'under_under_market'];
 
 function isLoggedIn(): boolean {
     try {
@@ -23,6 +25,8 @@ export const MakotiWidget: React.FC = () => {
     const [tab, setTab]           = useState<Tab>(() => (localStorage.getItem('mw_tab') as Tab) || 'scanner');
     const [minimized, setMinimized] = useState(false);
     const [loggedIn, setLoggedIn] = useState(isLoggedIn());
+    const [wsReady, setWsReady]   = useState(false);
+    const subscribedRef = useRef(false);
 
     useEffect(() => {
         const check = () => setLoggedIn(isLoggedIn());
@@ -48,6 +52,30 @@ export const MakotiWidget: React.FC = () => {
         window.DBot.__switchToTab = switchToTab;
         return () => { if (window.DBot) delete window.DBot.__switchToTab; };
     }, [switchToTab]);
+
+    /* ── Monitor WS + auto-subscribe on trading tab select ── */
+    useEffect(() => {
+        const check = () => {
+            const ready = window._newSystemWS?.readyState === WebSocket.OPEN;
+            setWsReady(ready);
+        };
+        check();
+        const i = setInterval(check, 1000);
+        window.addEventListener('storage', check);
+        return () => { clearInterval(i); window.removeEventListener('storage', check); };
+    }, []);
+
+    useEffect(() => {
+        if (TRADING_TABS.includes(tab) && window._newSystemWS?.readyState === WebSocket.OPEN && !subscribedRef.current) {
+            subscribedRef.current = true;
+            ALL_SYMBOLS.forEach(sym => {
+                window._newSystemWS.send(JSON.stringify({ ticks_history: sym, style: 'ticks', count: 1, end: 'latest', subscribe: 1 }));
+            });
+        }
+        if (tab === 'scanner') {
+            subscribedRef.current = false;
+        }
+    }, [tab]);
 
     /* ── Persist open / tab state to localStorage ─────────── */
     useEffect(() => { localStorage.setItem('mw_open', String(open)); }, [open]);
@@ -258,6 +286,10 @@ export const MakotiWidget: React.FC = () => {
                     <div className='mw-win-title'>
                         <span className='mw-win-logo'>⚔</span>
                         <span>MAKOTI</span>
+                        {tab !== 'scanner' && (
+                            <span className={`mw-ws-dot ${wsReady ? 'mw-ws-dot--ok' : 'mw-ws-dot--off'}`}
+                                title={wsReady ? 'WebSocket connected' : 'WebSocket disconnected'} />
+                        )}
                     </div>
                     <div className='mw-win-actions'>
                         <button
@@ -292,6 +324,13 @@ export const MakotiWidget: React.FC = () => {
                 </div>
 
                 <div className='mw-win-body'>
+                    {tab !== 'scanner' && (
+                        <div className={`mw-preconnect ${wsReady ? 'mw-preconnect--ok' : ''}`}>
+                            {wsReady
+                                ? '● Connected — tick data streaming'
+                                : '○ Connecting to Deriv API…'}
+                        </div>
+                    )}
                     {tab === 'scanner' && <Scanner />}
                     {tab === 'market_killer' && <MarketKiller />}
                     {tab === 'over_under' && <OverUnderKiller />}

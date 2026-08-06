@@ -159,6 +159,44 @@ $mw-radius:   10px;
 
 .mw-win-logo { font-size: 16px; }
 
+.mw-ws-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-left: 4px;
+    vertical-align: middle;
+    transition: background 0.3s;
+
+    &--ok {
+        background: #22c55e;
+        box-shadow: 0 0 6px rgba(34,197,94,0.6);
+    }
+    &--off {
+        background: #ef4444;
+        box-shadow: 0 0 6px rgba(239,68,68,0.5);
+        animation: mw-blink 1s ease-in-out infinite alternate;
+    }
+}
+
+.mw-preconnect {
+    padding: 6px 12px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-align: center;
+    color: #ef4444;
+    background: rgba(239,68,68,0.08);
+    border-bottom: 1px solid rgba(239,68,68,0.15);
+    transition: color 0.3s, background 0.3s, border-color 0.3s;
+
+    &--ok {
+        color: #22c55e;
+        background: rgba(34,197,94,0.06);
+        border-bottom-color: rgba(34,197,94,0.15);
+    }
+}
+
 .mw-win-actions {
     display: flex;
     align-items: center;
