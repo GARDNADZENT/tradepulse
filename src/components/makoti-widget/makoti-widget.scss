@@ -195,10 +195,11 @@ $mw-radius:   10px;
 
 .mw-tab {
     flex: 1;
-    padding: 9px 0;
-    font-size: 11px;
+    min-width: 0;
+    padding: 9px 2px;
+    font-size: 9px;
     font-weight: 700;
-    letter-spacing: 1px;
+    letter-spacing: 0.5px;
     text-transform: uppercase;
     color: $mw-muted;
     background: transparent;
@@ -206,6 +207,23 @@ $mw-radius:   10px;
     cursor: pointer;
     border-bottom: 2px solid transparent;
     transition: all 0.15s;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+    position: relative;
+
+    &::after {
+        content: '';
+        position: absolute;
+        right: 0;
+        top: 25%;
+        height: 50%;
+        width: 1px;
+        background: rgba(255,255,255,0.08);
+    }
+
+    &:last-child::after { display: none; }
 
     &:hover { color: $mw-text; }
     &--active {
