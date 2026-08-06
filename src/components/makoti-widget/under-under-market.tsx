@@ -135,6 +135,24 @@ export const UnderUnderMarket: React.FC = () => {
             if (!runRef.current) return;
             try {
                 const d = JSON.parse(ev.data);
+
+                // Handle bulk history response (fetched ticks on subscribe)
+                if (d.msg_type === 'history' && d.history) {
+                    const sym = d.echo_req?.ticks_history;
+                    if (!sym) return;
+                    const prices = d.history.prices;
+                    if (!Array.isArray(prices)) return;
+                    if (!bufRef.current[sym]) bufRef.current[sym] = [];
+                    prices.forEach((p: any) => {
+                        const digit = parseInt(String(p).slice(-1), 10);
+                        if (!isNaN(digit)) bufRef.current[sym].push(digit);
+                    });
+                    if (bufRef.current[sym].length > 60) bufRef.current[sym] = bufRef.current[sym].slice(-60);
+                    setSymProg(p => ({ ...p, [sym]: { symbol: sym, ticks: bufRef.current[sym].length, lastDigits: bufRef.current[sym].slice(-4), status: 'scanning' } }));
+                    return;
+                }
+
+                // Handle live tick
                 if (d.msg_type !== 'tick' || !d.tick) return;
                 const sym = d.tick.symbol;
                 const q = d.tick.quote;
@@ -199,11 +217,15 @@ export const UnderUnderMarket: React.FC = () => {
     const subscribeAll = useCallback(() => {
         if (window._newSystemWS?.readyState !== WebSocket.OPEN) return;
         ALL_SYMBOLS.forEach(sym => {
-            bufRef.current[sym] = [];
-            setSymProg(p => ({ ...p, [sym]: { symbol: sym, ticks: 0, lastDigits: [], status: 'scanning' } }));
-            window._newSystemWS.send(JSON.stringify({ ticks_history: sym, style: 'ticks', count: 1, end: 'latest', subscribe: 1 }));
+            // Don't clear buffer if already has data from previous subscription
+            if (!bufRef.current[sym] || bufRef.current[sym].length === 0) {
+                bufRef.current[sym] = [];
+            }
+            setSymProg(p => ({ ...p, [sym]: { symbol: sym, ticks: p[sym]?.ticks || 0, lastDigits: p[sym]?.lastDigits || [], status: 'scanning' } }));
+            // Fetch last 50 ticks upfront so we can trade immediately
+            window._newSystemWS.send(JSON.stringify({ ticks_history: sym, style: 'ticks', count: 50, end: 'latest', subscribe: 1 }));
         });
-        addLog(`Subscribed to ${ALL_SYMBOLS.length} volatilities`, 'info');
+        addLog(`Subscribed to ${ALL_SYMBOLS.length} volatilities — loading 50 ticks each`, 'info');
     }, [addLog]);
 
     const unsubscribeAll = useCallback(() => {
