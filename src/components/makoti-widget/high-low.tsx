@@ -319,10 +319,14 @@ export const HighLow: React.FC = () => {
         const gen = generationRef.current;
         clearAiming();
 
-        sdRef.current = {};
-        HL_SYMBOLS.forEach(sym => {
-            sdRef.current[sym] = { ticks: [], prices: [], times: [], candles: [], ready: false };
-        });
+        // Don't reset symbol data if already populated from auto-subscription
+        const hasData = Object.values(sdRef.current).some(sd => sd.prices.length > 0);
+        if (!hasData) {
+            sdRef.current = {};
+            HL_SYMBOLS.forEach(sym => {
+                sdRef.current[sym] = { ticks: [], prices: [], times: [], candles: [], ready: false };
+            });
+        }
 
         runningRef.current = true;
         firstScanRef.current = false;
@@ -334,7 +338,7 @@ export const HighLow: React.FC = () => {
         setCurrentDirection(null);
         setSniperPhase('idle');
         setSniperReason('');
-        setStatus('Connecting...');
+        setStatus('Connected — using live tick stream');
         setConsecutiveLosses(0);
 
         addLog(`HIGH/LOW — ${HL_SYMBOLS.length} volatilities | stake $${stake} | min ${cfg.minConfidence}%`, 'info');
@@ -346,28 +350,32 @@ export const HighLow: React.FC = () => {
             (data) => { tickRef.current(data); },
             () => {
                 try {
-                    addLog('Connected', 'info');
-                    mws.send({ forget_all: 'ticks' });
-                    setTimeout(() => {
-                        if (!runningRef.current) return;
-                        HL_SYMBOLS.forEach(sym => {
-                            mws.send({ ticks_history: sym, count: SCAN_HISTORY, end: 'latest', style: 'ticks', subscribe: 1 });
-                        });
-                    }, 300);
-                    setStatus(`Loading ${HL_SYMBOLS.length} markets...`);
-                    const pollReady = () => {
-                        if (!runningRef.current || gen !== generationRef.current) return;
-                        for (const s of HL_SYMBOLS) {
-                            const sd = sdRef.current[s];
-                            if (sd && sd.ready && sd.prices.length >= MIN_TICKS) {
-                                firstScanRef.current = true;
-                                if (runningRef.current) runScanCycle();
-                                return;
+                    addLog('Live tick stream active — trading immediately', 'info');
+                    // Skip ticks_history — live ticks already flowing from auto-subscription
+                    // If data already accumulated, start scanning immediately
+                    const readyNow = HL_SYMBOLS.some(s => {
+                        const sd = sdRef.current[s];
+                        return sd && sd.ready && sd.prices.length >= MIN_TICKS;
+                    });
+                    if (readyNow) {
+                        firstScanRef.current = true;
+                        runScanCycle();
+                    } else {
+                        // Poll until live ticks accumulate enough
+                        const pollReady = () => {
+                            if (!runningRef.current || gen !== generationRef.current) return;
+                            for (const s of HL_SYMBOLS) {
+                                const sd = sdRef.current[s];
+                                if (sd && sd.ready && sd.prices.length >= MIN_TICKS) {
+                                    firstScanRef.current = true;
+                                    if (runningRef.current) runScanCycle();
+                                    return;
+                                }
                             }
-                        }
+                            pollReadyTimerRef.current = setTimeout(pollReady, 200);
+                        };
                         pollReadyTimerRef.current = setTimeout(pollReady, 200);
-                    };
-                    pollReadyTimerRef.current = setTimeout(pollReady, 200);
+                    }
                 } catch (e) {
                     addLog(`Connection error: ${e}`, 'info');
                     stopEngine();

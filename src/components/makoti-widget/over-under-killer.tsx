@@ -522,13 +522,17 @@ export const OverUnderKiller: React.FC = () => {
         setDigitAnalysis(null);
         contractMapRef.current = new Map();
 
-        symbolDataRef.current = {};
-        ALL_SYMBOLS.forEach(sym => {
-            symbolDataRef.current[sym] = {
-                ticks: [], prices: [], lastSignal: '—',
-                wins: 0, losses: 0, ready: false,
-            };
-        });
+        // Don't reset symbol data if already populated from auto-subscription
+        const hasData = Object.values(symbolDataRef.current).some(sd => sd.ticks.length > 0);
+        if (!hasData) {
+            symbolDataRef.current = {};
+            ALL_SYMBOLS.forEach(sym => {
+                symbolDataRef.current[sym] = {
+                    ticks: [], prices: [], lastSignal: '—',
+                    wins: 0, losses: 0, ready: false,
+                };
+            });
+        }
 
         runningRef.current = true;
         setRunning(true);
@@ -541,7 +545,7 @@ export const OverUnderKiller: React.FC = () => {
         if (manualRecovery) {
             addLog(`🔄 MANUAL RECOVERY ON — 2 losses → switch to ${recoverySide === 'DIGITOVER' ? 'OVER' : 'UNDER'} ${recoveryDigitRef.current}`, 'info');
         }
-        addLog('Connecting to Deriv API…', 'info');
+        addLog('Connected — using live tick stream', 'info');
 
         if (wsRef.current) { try { wsRef.current.close(); } catch (_) {} wsRef.current = null; }
 
@@ -672,13 +676,11 @@ export const OverUnderKiller: React.FC = () => {
         const mws = openMakotiWS(
             handleMsg,
             () => {
-                addLog('Connected ✓ Subscribing to all 10 volatilities…', 'info');
+                addLog('Live tick stream active — trading immediately', 'info');
                 if (!window._newSystemWS) {
                     mws.send({ proposal_open_contract: 1, subscribe: 1 });
                 }
-                ALL_SYMBOLS.forEach(sym => {
-                    mws.send({ ticks_history: sym, count: 1000, end: 'latest', style: 'ticks', subscribe: 1 });
-                });
+                // Skip ticks_history — live ticks already flowing from auto-subscription
             },
             () => {
                 if (runningRef.current) {
