@@ -31,7 +31,8 @@ function checkPattern(d: number[], side: ContractSide): boolean {
 // OVER  → digits 5-9 must appear MORE than 0-4
 function hotDigitDominates(ticks: number[], side: ContractSide): boolean {
     const last25 = ticks.slice(-25);
-    if (last25.length === 0) return false;
+    // Need at least 4 ticks for dominance to be meaningful
+    if (last25.length < 4) return false;
     let low = 0;  // 0-4
     let high = 0; // 5-9
     last25.forEach(d => {
