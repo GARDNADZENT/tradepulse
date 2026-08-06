@@ -1034,3 +1034,122 @@ $mw-radius:   10px;
     max-height: 150px;
     overflow-y: auto;
 }
+
+// ─── UNDER/UNDER MARKET ────────────────────────────────────────────────────
+
+.mw-uum {
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.mw-uum__controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.mw-uum__section {
+    background: $mw-bg2;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.mw-uum__section-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: $mw-accent;
+}
+
+.mw-uum__stats {
+    background: $mw-bg2;
+    border: 1px solid $mw-border;
+    border-radius: 8px;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: $mw-muted;
+}
+
+.mw-uum__progress {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.mw-uum__progress-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: $mw-muted;
+    margin-bottom: 4px;
+}
+
+.mw-uum__prog-row {
+    display: grid;
+    grid-template-columns: 60px 1fr 30px 50px;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: $mw-bg2;
+    border-radius: 5px;
+    font-size: 10px;
+    border: 1px solid transparent;
+    transition: border-color 0.15s;
+
+    &--active { border-color: rgba(249,115,22,0.4); background: rgba(249,115,22,0.06); }
+    &--won { border-color: rgba(34,197,94,0.4); background: rgba(34,197,94,0.06); }
+    &--lost { border-color: rgba(239,68,68,0.4); background: rgba(239,68,68,0.06); }
+}
+
+.mw-uum__prog-sym {
+    font-weight: 700;
+    color: $mw-text;
+}
+
+.mw-uum__prog-digits {
+    font-family: monospace;
+    color: #60a5fa;
+    text-align: center;
+    letter-spacing: 1px;
+}
+
+.mw-uum__prog-ticks {
+    color: $mw-muted;
+    text-align: right;
+}
+
+.mw-uum__prog-status {
+    font-size: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-align: right;
+
+    &--scanning { color: #60a5fa; }
+    &--trading { color: $mw-accent; }
+    &--won { color: $mw-win; }
+    &--lost { color: $mw-loss; }
+    &--idle { color: $mw-muted; }
+}
+
+.mw-uum__logs {
+    max-height: 160px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.1) transparent;
+}

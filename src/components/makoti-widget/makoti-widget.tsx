@@ -3,9 +3,10 @@ import { Scanner } from './scanner';
 import { MarketKiller } from './market-killer';
 import { OverUnderKiller } from './over-under-killer';
 import { HighLow } from './high-low';
+import { UnderUnderMarket } from './under-under-market';
 import './makoti-widget.scss';
 
-type Tab = 'scanner' | 'market_killer' | 'over_under' | 'high_low';
+type Tab = 'scanner' | 'market_killer' | 'over_under' | 'high_low' | 'under_under_market';
 const PAD = 8;
 
 function isLoggedIn(): boolean {
@@ -286,6 +287,7 @@ export const MakotiWidget: React.FC = () => {
                         <option value='market_killer'>Market Killer</option>
                         <option value='over_under'>O/U Killer</option>
                         <option value='high_low'>HIGH/LOW</option>
+                        <option value='under_under_market'>UNDER/UNDER MARKET</option>
                     </select>
                 </div>
 
@@ -294,6 +296,7 @@ export const MakotiWidget: React.FC = () => {
                     {tab === 'market_killer' && <MarketKiller />}
                     {tab === 'over_under' && <OverUnderKiller />}
                     {tab === 'high_low' && <HighLow />}
+                    {tab === 'under_under_market' && <UnderUnderMarket />}
                 </div>
             </div>
 
