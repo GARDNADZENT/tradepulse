@@ -277,30 +277,16 @@ export const MakotiWidget: React.FC = () => {
                 </div>
 
                 <div className='mw-tabs'>
-                    <button
-                        className={`mw-tab${tab === 'scanner' ? ' mw-tab--active' : ''}`}
-                        onClick={() => setTab('scanner')}
+                    <select
+                        className='mw-tab-select'
+                        value={tab}
+                        onChange={e => setTab(e.target.value as Tab)}
                     >
-                        Scanner
-                    </button>
-                    <button
-                        className={`mw-tab${tab === 'market_killer' ? ' mw-tab--active' : ''}`}
-                        onClick={() => setTab('market_killer')}
-                    >
-                        Market Killer
-                    </button>
-                    <button
-                        className={`mw-tab${tab === 'over_under' ? ' mw-tab--active' : ''}`}
-                        onClick={() => setTab('over_under')}
-                    >
-                        O/U Killer
-                    </button>
-                    <button
-                        className={`mw-tab${tab === 'high_low' ? ' mw-tab--active' : ''}`}
-                        onClick={() => setTab('high_low')}
-                    >
-                        HIGH/LOW
-                    </button>
+                        <option value='scanner'>Scanner</option>
+                        <option value='market_killer'>Market Killer</option>
+                        <option value='over_under'>O/U Killer</option>
+                        <option value='high_low'>HIGH/LOW</option>
+                    </select>
                 </div>
 
                 <div className='mw-win-body'>
