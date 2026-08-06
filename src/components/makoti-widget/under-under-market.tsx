@@ -26,20 +26,19 @@ function checkPattern(d: number[], side: ContractSide): boolean {
     return side === 'DIGITUNDER' ? (a < 4 && b < 4 && c > 5 && e < 4) : (a > 5 && b > 5 && c < 4 && e > 5);
 }
 
-// Hot digit filter: most appearing digit must match contract side
-function getHotDigit(ticks: number[]): number {
-    if (ticks.length === 0) return -1;
-    const counts = new Array(10).fill(0);
-    const window = ticks.slice(-50);
-    window.forEach(d => { if (d >= 0 && d <= 9) counts[d]++; });
-    let maxIdx = 0;
-    for (let i = 1; i < 10; i++) { if (counts[i] > counts[maxIdx]) maxIdx = i; }
-    return maxIdx;
-}
-
-function hotDigitPasses(hotDigit: number, side: ContractSide): boolean {
-    if (hotDigit < 0) return false;
-    return side === 'DIGITUNDER' ? hotDigit <= 4 : hotDigit >= 5;
+// Hot digit filter: the GROUP must dominate in last 15 ticks
+// UNDER → digits 0-4 must appear MORE than 5-9
+// OVER  → digits 5-9 must appear MORE than 0-4
+function hotDigitDominates(ticks: number[], side: ContractSide): boolean {
+    const last25 = ticks.slice(-25);
+    if (last25.length < 15) return false; // need enough data
+    let low = 0;  // 0-4
+    let high = 0; // 5-9
+    last25.forEach(d => {
+        if (d <= 4) low++;
+        else high++;
+    });
+    return side === 'DIGITUNDER' ? low > high : high > low;
 }
 
 export const UnderUnderMarket: React.FC = () => {
@@ -153,12 +152,14 @@ export const UnderUnderMarket: React.FC = () => {
                 const side = recovRef.current ? cfgRef.current.rs : cfgRef.current.ps;
                 const digit_ = recovRef.current ? cfgRef.current.rd : cfgRef.current.pd;
 
-                // Hot digit check — most appearing digit must match contract side
-                const hotDigit = getHotDigit(buf);
-                if (!hotDigitPasses(hotDigit, side)) return;
+                // Dominance check — the group (0-4 or 5-9) must dominate last 15 ticks
+                if (!hotDigitDominates(buf, side)) return;
 
                 if (buf.length >= 4 && checkPattern(buf, side)) {
-                    addLog(`PATTERN ${SYMBOL_LABELS[sym]}: [${buf.slice(-4).join(',')}] | Hot: ${hotDigit}`, 'pattern');
+                    const last25 = buf.slice(-25);
+                    const low = last25.filter(d => d <= 4).length;
+                    const high = last25.filter(d => d >= 5).length;
+                    addLog(`PATTERN ${SYMBOL_LABELS[sym]}: [${buf.slice(-4).join(',')}] | Low:${low} High:${high}`, 'pattern');
                     lockRef.current = true;
                     const amt = recovRef.current ? Number((cfgRef.current.s * cfgRef.current.m).toFixed(2)) : cfgRef.current.s;
                     buy(sym, side, digit_, amt, recovRef.current ? 'r' : 'p');
