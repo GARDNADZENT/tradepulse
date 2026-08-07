@@ -123,6 +123,8 @@ const StandaloneLoginScreen: React.FC = () => {
 
     return (
         <div className={`login-screen${visible ? ' login-screen--visible' : ''}`}>
+            <div className='login-screen__bg' />
+            <div className='login-screen__bg-overlay' />
             <div className='login-screen__particles'>
                 {[...Array(PARTICLES)].map((_, i) => (
                     <div key={i} className='login-screen__particle' style={{
