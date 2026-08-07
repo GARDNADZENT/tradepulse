@@ -23,6 +23,7 @@ export default function MakotiLoader({ message = 'Loading...' }: MakotiLoaderPro
     return (
         <div className='makoti-loader'>
             <div className='makoti-loader__bg' />
+            <div className='makoti-loader__bg-overlay' />
             <div className='makoti-loader__particles'>
                 {Array.from({ length: 20 }).map((_, i) => (
                     <div key={i} className='makoti-loader__particle' style={{

@@ -18,10 +18,18 @@ $ml-bg: #0a0a0f;
     &__bg {
         position: absolute;
         inset: 0;
+        background: url('/makoti-logo.jpg') center center / cover no-repeat;
+        opacity: 0;
+
+        animation: ml-bgFadeIn 1.5s ease-out 0.2s forwards;
+    }
+
+    &__bg-overlay {
+        position: absolute;
+        inset: 0;
         background:
-            radial-gradient(ellipse at 50% 30%, rgba(201,168,76,0.08) 0%, transparent 60%),
-            radial-gradient(ellipse at 80% 80%, rgba(201,168,76,0.04) 0%, transparent 40%),
-            radial-gradient(ellipse at 20% 70%, rgba(192,192,192,0.03) 0%, transparent 40%);
+            radial-gradient(ellipse at 50% 40%, transparent 30%, rgba(10,10,15,0.7) 100%),
+            linear-gradient(to bottom, rgba(10,10,15,0.3) 0%, rgba(10,10,15,0.6) 100%);
     }
 
     // ── Floating particles ──
@@ -226,5 +234,16 @@ $ml-bg: #0a0a0f;
     }
     50% {
         transform: translate(3px, -3px);
+    }
+}
+
+@keyframes ml-bgFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(1.05);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
     }
 }
