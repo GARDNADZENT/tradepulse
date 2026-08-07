@@ -6,6 +6,7 @@ import { botNotification } from '@/components/bot-notification/bot-notification'
 import useLiveChat from '@/components/chat/useLiveChat';
 import ChunkLoader from '@/components/loader/chunk-loader';
 import MakotiLoader from '@/components/loader/makoti-loader';
+import MakotiLoaderGate, { markLoaderDone } from '@/components/loader/makoti-loader-gate';
 import { getUrlBase } from '@/components/shared';
 import TransactionDetailsModal from '@/components/transaction-details';
 import { api_base, ApiHelpers, ServerTime } from '@/external/bot-skeleton';
@@ -145,6 +146,7 @@ const AppContent = observer(() => {
 
             active_symbols.retrieveActiveSymbols(true).then(() => {
                 setIsLoading(false);
+                markLoaderDone();
             });
         };
 
@@ -190,7 +192,7 @@ const AppContent = observer(() => {
                 </Suspense>
             )}
             {is_loading ? (
-                <MakotiLoader message='Initializing Deriv Bot account' />
+                <MakotiLoaderGate message='Initializing Deriv Bot account' />
             ) : (
                 <AuthLoadingWrapper>
                     <ThemeProvider theme={is_dark_mode_on ? 'dark' : 'light'}>
