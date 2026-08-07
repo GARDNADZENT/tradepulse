@@ -18,7 +18,7 @@ $ml-bg: #0a0a0f;
     &__bg {
         position: absolute;
         inset: 0;
-        background: url('../../assets/makoti-logo.jpg') center center / cover no-repeat;
+        background: url('../../assets/makoti-logo.png') center center / cover no-repeat;
         opacity: 0;
 
         animation: ml-bgFadeIn 1.5s ease-out 0.2s forwards;
