@@ -182,7 +182,8 @@ export const DiffersAuto: React.FC = () => {
                     setRecoveryDisplay({ phase: 'idle', loss: 0, virtualLosses: 0, recovered: 0 });
                     lockRef.current = false;
                 } else {
-                    // Continue virtual — keep lockRef false so direction monitor continues
+                    // Continue virtual — unlock so direction monitor continues
+                    lockRef.current = false;
                     setRecoveryDisplay(p => ({ ...p, recovered: recoveryPnlRef.current }));
                 }
             } else {
@@ -218,6 +219,7 @@ export const DiffersAuto: React.FC = () => {
                     addLog(`🔄 Back to VIRTUAL trades — still recovering`, 'recovery');
                     setRecoveryDisplay(p => ({ ...p, phase: 'virtual', recovered: recoveryPnlRef.current }));
                 }
+                lockRef.current = false;
                 lockRef.current = false;
             } else {
                 lossesRef.current++;
