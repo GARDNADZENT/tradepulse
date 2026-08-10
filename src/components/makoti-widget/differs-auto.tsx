@@ -133,13 +133,28 @@ export const DiffersAuto: React.FC = () => {
             lockRef.current = false;
             return;
         }
+
+        // Threshold 0 = skip virtual, go straight to real
+        if (cfgRef.current.threshold <= 0) {
+            recoveryPhaseRef.current = 'real';
+            recoveryLossRef.current = lostAmount;
+            virtualLossCountRef.current = 0;
+            recoveryStakeRef.current = Number((cfgRef.current.s * cfgRef.current.m).toFixed(2));
+            recoveryPnlRef.current = 0;
+            directionRef.current = {};
+            addLog(`🔴 RECOVERY START (threshold 0) — lost $${lostAmount.toFixed(2)} | Straight to REAL trades | Stake: $${recoveryStakeRef.current.toFixed(2)}`, 'recovery');
+            setRecoveryDisplay({ phase: 'real', loss: lostAmount, virtualLosses: 0, recovered: 0 });
+            lockRef.current = false;
+            return;
+        }
+
         recoveryPhaseRef.current = 'virtual';
         recoveryLossRef.current = lostAmount;
         virtualLossCountRef.current = 0;
         recoveryStakeRef.current = cfgRef.current.s;
         recoveryPnlRef.current = 0;
         directionRef.current = {};
-        addLog(`🔄 RECOVERY START — lost $${lostAmount.toFixed(2)} | Virtual trades with max ${cfgRef.current.threshold} losses before real`, 'recovery');
+        addLog(`🔄 RECOVERY START — lost $${lostAmount.toFixed(2)} | Virtual trades first | Max ${cfgRef.current.threshold} virtual losses before real`, 'recovery');
         setRecoveryDisplay({ phase: 'virtual', loss: lostAmount, virtualLosses: 0, recovered: 0 });
         lockRef.current = false;
     }, [addLog]);
@@ -165,9 +180,15 @@ export const DiffersAuto: React.FC = () => {
                 setLosses(lossesRef.current);
                 const nextStake = Number((amt * cfgRef.current.m).toFixed(2));
                 currentStakeRef.current = nextStake;
-                addLog(`❌ DIFFER LOST -$${Math.abs(profit).toFixed(2)} on ${SYMBOL_LABELS[sym]}`, 'loss');
-                // Enter recovery if enabled
-                enterRecovery(Math.abs(profit));
+                addLog(`❌ DIFFER LOST -$${Math.abs(profit).toFixed(2)} on ${SYMBOL_LABELS[sym]} | P&L: $${pnlRef.current.toFixed(2)}`, 'loss');
+                // Enter recovery if enabled, otherwise martingale on next differ
+                if (cfgRef.current.recov) {
+                    addLog(`Entering recovery mode... (recov=${cfgRef.current.recov}, threshold=${cfgRef.current.threshold})`, 'info');
+                    enterRecovery(Math.abs(profit));
+                } else {
+                    addLog(`No recovery — next differ stake: $${nextStake.toFixed(2)}`, 'info');
+                    lockRef.current = false;
+                }
             }
         } else if (phase === 'recov_virtual') {
             // Virtual recovery trade
@@ -219,7 +240,6 @@ export const DiffersAuto: React.FC = () => {
                     addLog(`🔄 Back to VIRTUAL trades — still recovering`, 'recovery');
                     setRecoveryDisplay(p => ({ ...p, phase: 'virtual', recovered: recoveryPnlRef.current }));
                 }
-                lockRef.current = false;
                 lockRef.current = false;
             } else {
                 lossesRef.current++;
