@@ -233,8 +233,8 @@ export const DiffersAuto: React.FC = () => {
             setRecoveryDisplay(p => ({ ...p, virtualLosses: virtualLossCountRef.current, recovered: recoveryPnlRef.current }));
             if (virtualLossCountRef.current >= cfgRef.current.threshold) {
                 recoveryPhaseRef.current = 'real';
-                recoveryStakeRef.current = Number((cfgRef.current.s * cfgRef.current.m).toFixed(2));
-                addLog(`🔴 THRESHOLD REACHED — switching to REAL trades | Stake: $${recoveryStakeRef.current.toFixed(2)}`, 'recovery');
+                recoveryStakeRef.current = cfgRef.current.s;
+                addLog(`🔴 THRESHOLD REACHED (${virtualLossCountRef.current} virtual losses) — switching to REAL trades | First real stake: $${recoveryStakeRef.current.toFixed(2)} (base)`, 'recovery');
                 setRecoveryDisplay(p => ({ ...p, phase: 'real' }));
             }
         }
@@ -331,8 +331,10 @@ export const DiffersAuto: React.FC = () => {
                             setRecoveryDisplay({ phase: 'idle', loss: 0, virtualLosses: 0, recovered: 0 });
                         } else {
                             recoveryPhaseRef.current = 'virtual';
-                            addLog(`🔄 Back to VIRTUAL trades — still recovering`, 'recovery');
-                            setRecoveryDisplay(p => ({ ...p, phase: 'virtual', recovered: recoveryPnlRef.current }));
+                            recoveryStakeRef.current = cfgRef.current.s;
+                            virtualLossCountRef.current = 0;
+                            addLog(`🔄 Back to VIRTUAL trades — still recovering | Virtual losses reset, stake: $${recoveryStakeRef.current.toFixed(2)} (base)`, 'recovery');
+                            setRecoveryDisplay(p => ({ ...p, phase: 'virtual', virtualLosses: 0, recovered: recoveryPnlRef.current }));
                         }
                         lockRef.current = false;
                     } else {
