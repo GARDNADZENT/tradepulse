@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ALL_SYMBOLS, SYMBOL_LABELS, PIP_SIZES, openMakotiWS, MakotiWS } from './makoti-ws';
-import { analyzeSignals, findBestDuration, recordOutcome, ContractType, TradeSignal } from './prediction-engine';
+import { findBestDuration, recordOutcome } from './prediction-engine';
 import { sendViaNewSystemWithPromise, onNewSystemMessage } from '@/auth/NewDerivAuth';
 import { useStore } from '@/hooks/useStore';
 
@@ -23,14 +23,9 @@ interface LogEntry {
 /* ── Constants ─────────────────────────────────────────────────────────────── */
 const MAX_TICKS              = 500;
 const MIN_TICKS_BEFORE_TRADE = 15;
-const CONFIDENCE_THRESHOLD   = 71;
-const CONTRACT_FAMILIES: { label: string; types: ContractType[] }[] = [
-    { label: 'Rise/Fall', types: ['CALL', 'PUT'] },
-];
-
 const LS_CONFIG_KEY          = 'mw_mk_config';
 
-const DEFAULT_CONFIG = { stake: '0.35', martingale: '2', takeProfit: '10', stopLoss: '5', vhEnabled: false, vhThreshold: '1', accurateMode: false };
+const DEFAULT_CONFIG = { stake: '0.35', martingale: '2', takeProfit: '10', stopLoss: '5', vhEnabled: false, vhThreshold: '1', accurateMode: false, maxDir: '3' };
 
 function loadConfig(): typeof DEFAULT_CONFIG {
     try {
@@ -61,6 +56,7 @@ export const MarketKiller: React.FC = () => {
     const [vhEnabled,    setVhEnabled]   = useState(initCfg.vhEnabled);
     const [vhThreshold,  setVhThreshold] = useState(initCfg.vhThreshold);
     const [accurateMode, setAccurateMode] = useState(initCfg.accurateMode);
+    const [maxDir,       setMaxDir]       = useState(initCfg.maxDir);
     const [running,     setRunning]     = useState(false);
     const [pnl,         setPnl]         = useState(0);
     const [logs,        setLogs]        = useState<LogEntry[]>([]);
@@ -94,6 +90,8 @@ export const MarketKiller: React.FC = () => {
     const recoveryRef = useRef<{ active: boolean; pending: number; stake: number; martingale: number } | null>(null);
     const recoveryPnlRef = useRef(0);
     const lastTickSymRef = useRef('');
+    const directionRef = useRef<Record<string, { dir: 'up' | 'down' | null; count: number }>>({});
+    const maxDirRef = useRef(3);
     const virtualTradeRef = useRef<{
         symbol: string;
         entryPrice: number;
@@ -106,7 +104,7 @@ export const MarketKiller: React.FC = () => {
     } | null>(null);
 
     /* ── Persist ──────────────────────────────────────────────────────────── */
-    useEffect(() => { saveConfig({ stake, martingale, takeProfit, stopLoss, vhEnabled, vhThreshold, accurateMode }); }, [stake, martingale, takeProfit, stopLoss, vhEnabled, vhThreshold, accurateMode]);
+    useEffect(() => { saveConfig({ stake, martingale, takeProfit, stopLoss, vhEnabled, vhThreshold, accurateMode, maxDir }); }, [stake, martingale, takeProfit, stopLoss, vhEnabled, vhThreshold, accurateMode, maxDir]);
 
     /* ── Recovery auto-start ─────────────────────────────────────────────── */
     useEffect(() => {
@@ -265,22 +263,25 @@ export const MarketKiller: React.FC = () => {
         return findBestDuration(prices, direction);
     }, []);
 
-    /* ── Dynamic confidence threshold for ACCURATE mode ─────────────────── */
-    const getConfidenceThreshold = useCallback(() => {
-        if (!accurateRef.current) return CONFIDENCE_THRESHOLD;
-        const losses = consecutiveLossesRef.current;
-        return Math.min(CONFIDENCE_THRESHOLD + losses, 80);
+    /* ── Track tick direction: consecutive up/down ───────────────────────── */
+    const updateDirection = useCallback((sym: string, prices: number[]) => {
+        if (prices.length < 2) return;
+        const last = prices[prices.length - 1];
+        const prev = prices[prices.length - 2];
+        const cur = directionRef.current[sym] || { dir: null, count: 0 };
+        if (last > prev) {
+            if (cur.dir === 'up') { cur.count++; } else { cur.dir = 'up'; cur.count = 1; }
+        } else if (last < prev) {
+            if (cur.dir === 'down') { cur.count++; } else { cur.dir = 'down'; cur.count = 1; }
+        } else {
+            cur.count = 0; cur.dir = null;
+        }
+        directionRef.current[sym] = cur;
     }, []);
 
     /* ── Execute ONE trade using the global stake ────────────────────────── */
-    const executeTrade = useCallback(async (sym: string, signal: TradeSignal) => {
+    const executeTrade = useCallback(async (sym: string, direction: 'CALL' | 'PUT') => {
         if (!runningRef.current) return;
-        if (!signal || signal.confidence < getConfidenceThreshold()) {
-            if (accurateRef.current && signal) {
-                addLog(`⏳ ACCURATE: ${signal.confidence.toFixed(0)}% < ${getConfidenceThreshold()}% threshold — waiting for higher confidence`, 'info');
-            }
-            return;
-        }
 
         const sd = symbolDataRef.current[sym];
         if (!sd) return;
@@ -290,14 +291,14 @@ export const MarketKiller: React.FC = () => {
             globalLock.current = true;
             activeContractsRef.current = 1;
             setActiveContracts(1);
-            const duration = getBestDuration(sd.prices, signal.contract_type);
+            const duration = getBestDuration(sd.prices, direction);
             const entryPrice = sd.prices[sd.prices.length - 1];
             const vhStake = globalStakeRef.current;
             const vhBuyId = `vh_${sym}_${Date.now()}`;
             virtualTradeRef.current = {
                 symbol: sym,
                 entryPrice,
-                direction: signal.contract_type,
+                direction,
                 duration,
                 ticksElapsed: 0,
                 stake: vhStake,
@@ -312,7 +313,7 @@ export const MarketKiller: React.FC = () => {
                     contract_id: vhBuyId,
                     buy_price: vhStake,
                     currency: 'USD',
-                    contract_type: signal.contract_type,
+                    contract_type: direction,
                     underlying: sym,
                     display_name: SYMBOL_LABELS[sym],
                     date_start: Math.floor(Date.now() / 1000),
@@ -326,13 +327,13 @@ export const MarketKiller: React.FC = () => {
         }
 
         // Micro-trend entry gate: don't trade against the trend
-        if (signal.contract_type === 'CALL' || signal.contract_type === 'PUT') {
+        if (direction === 'CALL' || direction === 'PUT') {
             const last3 = sd.prices.slice(-3);
             if (last3.length === 3) {
                 const rising = last3[0] < last3[1] && last3[1] < last3[2];
                 const falling = last3[0] > last3[1] && last3[1] > last3[2];
-                if (signal.contract_type === 'CALL' && falling) return;
-                if (signal.contract_type === 'PUT' && rising) return;
+                if (direction === 'CALL' && falling) return;
+                if (direction === 'PUT' && rising) return;
             }
         }
 
@@ -340,34 +341,25 @@ export const MarketKiller: React.FC = () => {
         activeContractsRef.current = 1;
         setActiveContracts(1);
 
-        const { contract_type, barrier, reason, confidence, details } = signal;
         const tradeStake = Number(globalStakeRef.current.toFixed(2));
-        const duration   = getBestDuration(sd.prices, contract_type);
+        const duration   = getBestDuration(sd.prices, direction);
+        const label = direction === 'CALL' ? 'RISE' : 'FALL';
         addLog(`Trade stake: $${tradeStake.toFixed(2)} (base: $${stakeParsed.current.toFixed(2)}, mg: ${martingaleParsed.current}x)`, 'trade');
-
-        // Extract strategy names from details for outcome tracking
-        const strategyMatch = details.match(/Strategies: (.+)/);
-        const strategyNames = strategyMatch
-            ? strategyMatch[1].split(',').map(s => s.trim().split('(')[0])
-            : ['ensemble'];
 
         const params: any = {
             amount: tradeStake, basis: 'stake', currency: 'USD',
             duration, duration_unit: 't',
-            symbol: sym, contract_type,
+            symbol: sym, contract_type: direction,
         };
-        if (barrier) params.barrier = barrier;
-
-        const label = contract_type === 'CALL' ? 'RISE' : 'FALL';
 
         if (window._newSystemWS?.readyState === WebSocket.OPEN) {
             try {
                 const response = await sendViaNewSystemWithPromise({ buy: 1, price: tradeStake, parameters: params });
                 const contractId = response?.buy?.contract_id ?? response?.contract_id;
                 if (contractId) {
-                    contractMapRef.current.set(String(contractId), { symbol: sym, stake: tradeStake, strategyNames, duration });
+                    contractMapRef.current.set(String(contractId), { symbol: sym, stake: tradeStake, strategyNames: ['tick_direction'], duration });
                     sd.lastSignal = label;
-                    addLog(`🎯 [${confidence.toFixed(0)}%] ${SYMBOL_LABELS[sym]}: ${label} D${duration} @ $${tradeStake} — ${reason}`, 'trade');
+                    addLog(`🎯 ${SYMBOL_LABELS[sym]}: ${label} D${duration} @ $${tradeStake} — tick direction trick`, 'trade');
                     addLog(`Contract ${contractId} open on ${SYMBOL_LABELS[sym]}`, 'info');
                     flushDisplay(sym);
                     try {
@@ -376,7 +368,7 @@ export const MarketKiller: React.FC = () => {
                             transaction_ids: { buy: response?.buy?.transaction_id },
                             buy_price: tradeStake,
                             currency: 'USD',
-                            contract_type,
+                            contract_type: direction,
                             underlying: sym,
                             display_name: SYMBOL_LABELS[sym],
                             date_start: Math.floor(Date.now() / 1000),
@@ -398,8 +390,8 @@ export const MarketKiller: React.FC = () => {
         } else if (wsRef.current?.isOpen()) {
             wsRef.current.send({ buy: 1, price: tradeStake, parameters: params });
             sd.lastSignal = label;
-            addLog(`🎯 [${confidence.toFixed(0)}%] ${SYMBOL_LABELS[sym]}: ${label} D${duration} @ $${tradeStake} — ${reason}`, 'trade');
-            contractMapRef.current.set(sym + Date.now(), { symbol: sym, stake: tradeStake, strategyNames, duration });
+            addLog(`🎯 ${SYMBOL_LABELS[sym]}: ${label} D${duration} @ $${tradeStake} — tick direction trick`, 'trade');
+            contractMapRef.current.set(sym + Date.now(), { symbol: sym, stake: tradeStake, strategyNames: ['tick_direction'], duration });
             flushDisplay(sym);
             try {
                 transactions.onBotContractEvent({
@@ -407,7 +399,7 @@ export const MarketKiller: React.FC = () => {
                     contract_id: sym + Date.now(),
                     buy_price: tradeStake,
                     currency: 'USD',
-                    contract_type,
+                    contract_type: direction,
                     underlying: sym,
                     display_name: SYMBOL_LABELS[sym],
                     date_start: Math.floor(Date.now() / 1000),
@@ -420,7 +412,7 @@ export const MarketKiller: React.FC = () => {
             activeContractsRef.current = 0;
             setActiveContracts(0);
         }
-    }, [addLog, flushDisplay, getConfidenceThreshold]);
+    }, [addLog, flushDisplay]);
 
     /* ── Handle every incoming tick ──────────────────────────────────────── */
     const onTickReceived = useCallback(() => {
@@ -491,36 +483,21 @@ export const MarketKiller: React.FC = () => {
         if (globalLock.current)  return;
         if (cooldownTicksRef.current > 0) { cooldownTicksRef.current--; return; }
 
-        let bestSym  = '';
-        let bestSig: TradeSignal | null = null;
-        let bestConf = CONFIDENCE_THRESHOLD - 1;
-
+        // ── Tick direction trick: trade opposite after N consecutive ticks ──
         ALL_SYMBOLS.forEach(s => {
             const sd = symbolDataRef.current[s];
             if (!sd || sd.ticks.length < MIN_TICKS_BEFORE_TRADE) return;
-            // Run each contract family separately so they compete fairly
-            for (const family of CONTRACT_FAMILIES) {
-                const sig = analyzeSignals(sd.ticks, sd.prices, family.types);
-                if (sig && sig.confidence > bestConf) {
-                    bestConf = sig.confidence;
-                    bestSym  = s;
-                    bestSig  = sig;
-                }
+            updateDirection(s, sd.prices);
+            const dirInfo = directionRef.current[s] || { dir: null, count: 0 };
+            if (dirInfo.count >= maxDirRef.current && dirInfo.dir) {
+                const direction = dirInfo.dir === 'up' ? 'PUT' : 'CALL';
+                const label = direction === 'CALL' ? 'RISE' : 'FALL';
+                addLog(`TRIGGER ${SYMBOL_LABELS[s]}: ${dirInfo.dir} ${dirInfo.count}x → ${label}`, 'trade');
+                directionRef.current[s] = { dir: null, count: 0 };
+                executeTrade(s, direction).catch(() => {});
             }
         });
-
-        if (bestSym && bestSig) {
-            // Signal confirmation: require same direction on 4 consecutive ticks
-            signalHistoryRef.current.push({ sym: bestSym, type: bestSig.contract_type, conf: bestSig.confidence });
-            if (signalHistoryRef.current.length > 4) signalHistoryRef.current.shift();
-            const last4 = signalHistoryRef.current;
-            const confirmed = last4.length === 4 && last4.every(s => s.sym === bestSym && s.type === bestSig.contract_type);
-            if (confirmed) {
-                signalHistoryRef.current = [];
-                executeTrade(bestSym, bestSig).catch(() => {});
-            }
-        }
-    }, [executeTrade]);
+    }, [executeTrade, addLog, updateDirection]);
 
     // Ref for onTickReceived to avoid stale closure in WS handler
     const onTickRef = useRef(onTickReceived);
@@ -544,6 +521,8 @@ export const MarketKiller: React.FC = () => {
         globalStakeRef.current   = stakeVal;
         consecutiveLossesRef.current = 0;
         cooldownTicksRef.current     = 0;
+        maxDirRef.current = Math.max(2, parseInt(maxDir) || 3);
+        directionRef.current = {};
 
         vhEnabledRef.current = vhEnabled;
         vhThresholdRef.current = Math.max(1, parseInt(vhThreshold) || 1);
@@ -556,9 +535,6 @@ export const MarketKiller: React.FC = () => {
         };
         if (vhEnabled) {
             addLog(`🤖 [VIRTUAL HOOK] Enabled — ${vhThresholdRef.current} virtual losses before real trades`, 'info');
-        }
-        if (accurateMode) {
-            addLog(`🎯 ACCURATE mode ON — confidence rises after each real loss (71➔72➔73…)`, 'info');
         }
 
         // ── Recovery mode override ──
@@ -757,7 +733,7 @@ export const MarketKiller: React.FC = () => {
             }
         );
         wsRef.current = mws;
-    }, [stake, martingale, takeProfit, stopLoss, vhEnabled, vhThreshold, addLog, flushDisplay, checkLimits, stopKiller, onTickReceived]);
+    }, [stake, martingale, takeProfit, stopLoss, vhEnabled, vhThreshold, maxDir, addLog, flushDisplay, checkLimits, stopKiller, onTickReceived]);
 
     /* ── Derived display values ──────────────────────────────────────────── */
     const totalWins   = Object.values(symbolDisplay).reduce((a, b) => a + b.wins,  0);
@@ -789,6 +765,11 @@ export const MarketKiller: React.FC = () => {
                     <input className='mw-input' type='number' min='0.5' step='0.5'
                         value={stopLoss} onChange={e => setStopLoss(e.target.value)} disabled={running} />
                 </div>
+                <div className='mw-field'>
+                    <label className='mw-label'>Max Tick Direction</label>
+                    <input className='mw-input' type='number' min='2' max='20' step='1'
+                        value={maxDir} onChange={e => setMaxDir(e.target.value)} disabled={running} />
+                </div>
             </div>
 
             {/* ── Virtual Hook toggle ── */}
@@ -807,15 +788,6 @@ export const MarketKiller: React.FC = () => {
                 )}
             </div>
 
-            {/* ── ACCURATE mode toggle ── */}
-            <div className='mw-killer__vh'>
-                <label className='mw-killer__vh-toggle'>
-                    <input type='checkbox' checked={accurateMode}
-                        onChange={e => setAccurateMode(e.target.checked)} disabled={running} />
-                    <span>ACCURATE <small style={{opacity:0.6,fontWeight:400}}>(raises confidence after each loss)</small></span>
-                </label>
-            </div>
-
             {/* ── Kill Market button ── */}
             <button
                 className={`mw-btn${running ? ' mw-btn--stop' : ' mw-btn--kill'}`}
@@ -829,7 +801,7 @@ export const MarketKiller: React.FC = () => {
             {/* ── Running notice ── */}
             {running && (
                 <div className='mw-killer__mode-note'>
-                    Auto (RF + OU + EO) — 47-strategy ensemble engine
+                    Tick Direction Rise/Fall — trade opposite after N consecutive ticks
                     {activeContracts > 0 && <span className='mw-killer__active-dot'> ● TRADE LIVE</span>}
                 </div>
             )}
