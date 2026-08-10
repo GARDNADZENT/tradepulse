@@ -463,18 +463,6 @@ $mw-radius:   10px;
         &:hover { background: rgba(249,115,22,0.12); }
     }
 }
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.mw-label {
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.8px;
-    text-transform: uppercase;
-    color: $mw-muted;
-}
 
 .mw-btn {
     display: flex;
