@@ -328,28 +328,6 @@ $mw-radius:   10px;
         }
     }
 }
-    cursor: pointer;
-    outline: none;
-    appearance: none;
-    -webkit-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23f97316' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 10px center;
-    transition: border-color 0.15s, box-shadow 0.15s;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04);
-
-    &:hover {
-        border-color: $mw-accent;
-        box-shadow: 0 2px 12px rgba(249,115,22,0.2), inset 0 1px 0 rgba(255,255,255,0.04);
-    }
-    &:focus { border-color: $mw-accent; }
-
-    option {
-        background: $mw-bg2;
-        color: $mw-text;
-        padding: 8px 10px;
-    }
-}
 
 // ─── BODY ─────────────────────────────────────────────────────────────────────
 
