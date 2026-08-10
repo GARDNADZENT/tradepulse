@@ -4,12 +4,13 @@ import { MarketKiller } from './market-killer';
 import { OverUnderKiller } from './over-under-killer';
 import { HighLow } from './high-low';
 import { UnderUnderMarket } from './under-under-market';
+import { DiffersAuto } from './differs-auto';
 import { ALL_SYMBOLS } from './makoti-ws';
 import './makoti-widget.scss';
 
-type Tab = 'scanner' | 'market_killer' | 'over_under' | 'high_low' | 'under_under_market';
+type Tab = 'scanner' | 'market_killer' | 'over_under' | 'high_low' | 'under_under_market' | 'differs_auto';
 const PAD = 8;
-const TRADING_TABS: Tab[] = ['market_killer', 'over_under', 'high_low', 'under_under_market'];
+const TRADING_TABS: Tab[] = ['market_killer', 'over_under', 'high_low', 'under_under_market', 'differs_auto'];
 
 const TAB_OPTIONS: { value: Tab; label: string }[] = [
     { value: 'scanner', label: 'Scanner' },
@@ -17,6 +18,7 @@ const TAB_OPTIONS: { value: Tab; label: string }[] = [
     { value: 'over_under', label: 'O/U Killer' },
     { value: 'high_low', label: 'HIGH/LOW' },
     { value: 'under_under_market', label: 'UNDER/UNDER MARKET' },
+    { value: 'differs_auto', label: 'DIFFERS AUTO' },
 ];
 
 function isLoggedIn(): boolean {
@@ -371,6 +373,7 @@ export const MakotiWidget: React.FC = () => {
                     {tab === 'over_under' && <OverUnderKiller />}
                     {tab === 'high_low' && <HighLow />}
                     {tab === 'under_under_market' && <UnderUnderMarket />}
+                    {tab === 'differs_auto' && <DiffersAuto />}
                 </div>
             </div>
 
