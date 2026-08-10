@@ -233,8 +233,19 @@ $mw-radius:   10px;
 }
 
 .mw-tab-select {
+    display: none;
+}
+
+// ─── CUSTOM TAB DROPDOWN ──────────────────────────────────────────────────────
+
+.mw-tab-dropdown {
+    position: relative;
     width: 100%;
-    padding: 9px 32px 9px 12px;
+}
+
+.mw-tab-dropdown__btn {
+    width: 100%;
+    padding: 9px 12px;
     font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.8px;
@@ -243,6 +254,80 @@ $mw-radius:   10px;
     background: $mw-bg2;
     border: 1px solid rgba(249,115,22,0.25);
     border-radius: 6px;
+    outline: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    transition: all 0.2s;
+
+    &:hover {
+        background: rgba(255,255,255,0.06);
+        border-color: rgba(249,115,22,0.5);
+    }
+}
+
+.mw-tab-dropdown__arrow {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    color: $mw-muted;
+    transition: transform 0.2s;
+
+    &--open {
+        transform: rotate(180deg);
+    }
+}
+
+.mw-tab-dropdown__list {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: #181a20;
+    border: 1px solid $mw-border;
+    border-radius: 6px;
+    z-index: 100001;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+    overflow: hidden;
+    animation: mw-drop-in 0.15s ease-out;
+}
+
+@keyframes mw-drop-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.mw-tab-dropdown__item {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: $mw-muted;
+    background: transparent;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.15s;
+
+    &:hover {
+        background: rgba(249,115,22,0.12);
+        color: $mw-text;
+    }
+
+    &--active {
+        color: #f97316;
+        background: rgba(249,115,22,0.08);
+
+        &:hover {
+            background: rgba(249,115,22,0.15);
+        }
+    }
+}
     cursor: pointer;
     outline: none;
     appearance: none;

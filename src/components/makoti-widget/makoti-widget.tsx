@@ -11,6 +11,14 @@ type Tab = 'scanner' | 'market_killer' | 'over_under' | 'high_low' | 'under_unde
 const PAD = 8;
 const TRADING_TABS: Tab[] = ['market_killer', 'over_under', 'high_low', 'under_under_market'];
 
+const TAB_OPTIONS: { value: Tab; label: string }[] = [
+    { value: 'scanner', label: 'Scanner' },
+    { value: 'market_killer', label: 'Market Killer' },
+    { value: 'over_under', label: 'O/U Killer' },
+    { value: 'high_low', label: 'HIGH/LOW' },
+    { value: 'under_under_market', label: 'UNDER/UNDER MARKET' },
+];
+
 function isLoggedIn(): boolean {
     try {
         const activeLoginId = localStorage.getItem('active_loginid');
@@ -27,6 +35,8 @@ export const MakotiWidget: React.FC = () => {
     const [loggedIn, setLoggedIn] = useState(isLoggedIn());
     const [wsReady, setWsReady]   = useState(false);
     const subscribedRef = useRef(false);
+    const [tabOpen, setTabOpen] = useState(false);
+    const tabDropRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const check = () => setLoggedIn(isLoggedIn());
@@ -76,6 +86,18 @@ export const MakotiWidget: React.FC = () => {
             subscribedRef.current = false;
         }
     }, [tab]);
+
+    /* ── Close tab dropdown on outside click ── */
+    useEffect(() => {
+        if (!tabOpen) return;
+        const handler = (e: MouseEvent) => {
+            if (tabDropRef.current && !tabDropRef.current.contains(e.target as Node)) {
+                setTabOpen(false);
+            }
+        };
+        document.addEventListener('pointerdown', handler);
+        return () => document.removeEventListener('pointerdown', handler);
+    }, [tabOpen]);
 
     /* ── Persist open / tab state to localStorage ─────────── */
     useEffect(() => { localStorage.setItem('mw_open', String(open)); }, [open]);
@@ -310,17 +332,30 @@ export const MakotiWidget: React.FC = () => {
                 </div>
 
                 <div className='mw-tabs'>
-                    <select
-                        className='mw-tab-select'
-                        value={tab}
-                        onChange={e => setTab(e.target.value as Tab)}
-                    >
-                        <option value='scanner'>Scanner</option>
-                        <option value='market_killer'>Market Killer</option>
-                        <option value='over_under'>O/U Killer</option>
-                        <option value='high_low'>HIGH/LOW</option>
-                        <option value='under_under_market'>UNDER/UNDER MARKET</option>
-                    </select>
+                    <div className='mw-tab-dropdown' ref={tabDropRef}>
+                        <button
+                            className='mw-tab-dropdown__btn'
+                            onClick={() => setTabOpen(o => !o)}
+                        >
+                            <span>{TAB_OPTIONS.find(o => o.value === tab)?.label}</span>
+                            <svg className={`mw-tab-dropdown__arrow ${tabOpen ? 'mw-tab-dropdown__arrow--open' : ''}`} viewBox='0 0 12 8' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'>
+                                <path d='M1 1l5 5 5-5' />
+                            </svg>
+                        </button>
+                        {tabOpen && (
+                            <div className='mw-tab-dropdown__list'>
+                                {TAB_OPTIONS.map(opt => (
+                                    <button
+                                        key={opt.value}
+                                        className={`mw-tab-dropdown__item ${tab === opt.value ? 'mw-tab-dropdown__item--active' : ''}`}
+                                        onClick={() => { setTab(opt.value as Tab); setTabOpen(false); }}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 <div className='mw-win-body'>
