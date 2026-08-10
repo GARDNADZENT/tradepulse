@@ -109,6 +109,8 @@ export const DiffersAuto: React.FC = () => {
     const buyRiseFall = useCallback(async (sym: string, direction: 'CALL' | 'PUT', amt: number, phase: 'recov_virtual' | 'recov_real'): Promise<boolean> => {
         if (window._newSystemWS?.readyState !== WebSocket.OPEN) return false;
         const label = direction === 'CALL' ? 'RISE' : 'FALL';
+        const prefix = phase === 'recov_virtual' ? '🤖 VIRTUAL' : '🔴 REAL';
+        addLog(`${prefix} BUYING ${label} ${SYMBOL_LABELS[sym]} @ $${amt.toFixed(2)} (phase=${phase})`, 'trade');
         try {
             const r = await sendViaNewSystemWithPromise({
                 buy: 1, price: amt,
@@ -117,8 +119,6 @@ export const DiffersAuto: React.FC = () => {
             const cid = r?.buy?.contract_id ?? r?.contract_id;
             if (cid) {
                 cmapRef.current.set(String(cid), { sym, amt, phase });
-                const prefix = phase === 'recov_virtual' ? '🤖 VIRTUAL' : '🔴 REAL';
-                addLog(`${prefix} ${label} ${SYMBOL_LABELS[sym]} @ $${amt.toFixed(2)}`, 'trade');
                 try { transactions.onBotContractEvent({ contract_id: cid, transaction_ids: { buy: r?.buy?.transaction_id }, buy_price: amt, currency: 'USD', contract_type: direction, underlying: sym, display_name: SYMBOL_LABELS[sym], date_start: Math.floor(Date.now() / 1000), status: 'open' } as any); } catch {}
                 return true;
             }
@@ -366,10 +366,10 @@ export const DiffersAuto: React.FC = () => {
                         // Pattern found — execute opposite direction
                         const direction = dirInfo.dir === 'up' ? 'PUT' : 'CALL';
                         const label = direction === 'CALL' ? 'FALL' : 'RISE';
-                        addLog(`RECOVERY TRIGGER ${SYMBOL_LABELS[sym]}: ${dirInfo.dir} ${dirInfo.count}x → ${label}`, 'trigger');
-                        lockRef.current = true;
                         const phase = recoveryPhaseRef.current === 'virtual' ? 'recov_virtual' : 'recov_real';
                         const amt = recoveryStakeRef.current;
+                        addLog(`RECOVERY TRIGGER ${SYMBOL_LABELS[sym]}: ${dirInfo.dir} ${dirInfo.count}x → ${label} | phase=${recoveryPhaseRef.current} → ${phase} | stake=$${amt.toFixed(2)}`, 'trigger');
+                        lockRef.current = true;
                         buyRiseFall(sym, direction, amt, phase);
                         // Reset direction
                         directionRef.current[sym] = { dir: null, count: 0 };
