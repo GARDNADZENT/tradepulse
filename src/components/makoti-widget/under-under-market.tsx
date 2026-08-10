@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ALL_SYMBOLS, SYMBOL_LABELS, openMakotiWS, MakotiWS } from './makoti-ws';
 import { sendViaNewSystemWithPromise, onNewSystemMessage } from '@/auth/NewDerivAuth';
 import { useStore } from '@/hooks/useStore';
+import { MwSelect } from './mw-select';
 
 type ContractSide = 'DIGITOVER' | 'DIGITUNDER';
 
@@ -260,16 +261,13 @@ export const UnderUnderMarket: React.FC = () => {
                 <div className='mw-uum__controls'>
                     <div className='mw-field'>
                         <label className='mw-label'>Contract Type</label>
-                        <select className='mw-select' value={pSide} onChange={e => setPSide(e.target.value as ContractSide)} disabled={running}>
-                            <option value='DIGITUNDER'>UNDER</option>
-                            <option value='DIGITOVER'>OVER</option>
-                        </select>
+                        <MwSelect value={pSide} options={[{ value: 'DIGITUNDER', label: 'UNDER' }, { value: 'DIGITOVER', label: 'OVER' }]}
+                            onChange={v => setPSide(v as ContractSide)} disabled={running} />
                     </div>
                     <div className='mw-field'>
                         <label className='mw-label'>Prediction Digit</label>
-                        <select className='mw-select' value={pDigit} onChange={e => setPDigit(e.target.value)} disabled={running}>
-                            {[0,1,2,3,4,5,6,7,8,9].map(d => <option key={d} value={d}>{d}</option>)}
-                        </select>
+                        <MwSelect value={pDigit} options={[0,1,2,3,4,5,6,7,8,9].map(d => ({ value: String(d), label: String(d) }))}
+                            onChange={v => setPDigit(v)} disabled={running} />
                     </div>
                 </div>
             </div>
@@ -279,16 +277,13 @@ export const UnderUnderMarket: React.FC = () => {
                 <div className='mw-uum__controls'>
                     <div className='mw-field'>
                         <label className='mw-label'>Contract Type</label>
-                        <select className='mw-select' value={rSide} onChange={e => setRSide(e.target.value as ContractSide)} disabled={running}>
-                            <option value='DIGITOVER'>OVER</option>
-                            <option value='DIGITUNDER'>UNDER</option>
-                        </select>
+                        <MwSelect value={rSide} options={[{ value: 'DIGITOVER', label: 'OVER' }, { value: 'DIGITUNDER', label: 'UNDER' }]}
+                            onChange={v => setRSide(v as ContractSide)} disabled={running} />
                     </div>
                     <div className='mw-field'>
                         <label className='mw-label'>Prediction Digit</label>
-                        <select className='mw-select' value={rDigit} onChange={e => setRDigit(e.target.value)} disabled={running}>
-                            {[0,1,2,3,4,5,6,7,8,9].map(d => <option key={d} value={d}>{d}</option>)}
-                        </select>
+                        <MwSelect value={rDigit} options={[0,1,2,3,4,5,6,7,8,9].map(d => ({ value: String(d), label: String(d) }))}
+                            onChange={v => setRDigit(v)} disabled={running} />
                     </div>
                 </div>
             </div>

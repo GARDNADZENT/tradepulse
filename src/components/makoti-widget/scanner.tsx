@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { ALL_SYMBOLS, SYMBOL_LABELS, PIP_SIZES, openMakotiWS, MakotiWS } from './makoti-ws';
 import { onNewSystemMessage } from '@/auth/NewDerivAuth';
+import { MwSelect } from './mw-select';
 import DBotStore from '@/external/bot-skeleton/scratch/dbot-store';
 
 type BotId = 'pvty_kill' | 'rf_v4';
@@ -428,10 +429,8 @@ export const Scanner: React.FC = () => {
             <div className='mw-scanner__controls'>
                 <div className='mw-field'>
                     <label className='mw-label'>Bot Selection</label>
-                    <select className='mw-select' value={bot} onChange={e => setBot(e.target.value as BotId)} disabled={scanning}>
-                        <option value='pvty_kill'>Poverty Killer</option>
-                        <option value='rf_v4'>Rise/Fall V4</option>
-                    </select>
+                    <MwSelect value={bot} options={[{ value: 'pvty_kill', label: 'Poverty Killer' }, { value: 'rf_v4', label: 'Rise/Fall V4' }]}
+                        onChange={v => setBot(v as BotId)} disabled={scanning} />
                 </div>
                 <div className='mw-scanner__desc'>
                     {bot === 'pvty_kill'

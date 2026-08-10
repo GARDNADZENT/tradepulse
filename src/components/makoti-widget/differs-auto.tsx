@@ -3,7 +3,7 @@ import { ALL_SYMBOLS, SYMBOL_LABELS, openMakotiWS, MakotiWS } from './makoti-ws'
 import { sendViaNewSystemWithPromise, onNewSystemMessage } from '@/auth/NewDerivAuth';
 import { useStore } from '@/hooks/useStore';
 
-interface LogEntry { time: string; msg: string; type: 'win' | 'loss' | 'info' | 'trade' | 'trigger'; }
+interface LogEntry { time: string; msg: string; type: 'win' | 'loss' | 'info' | 'trade' | 'trigger' | 'recovery'; }
 interface SymProgress {
     symbol: string;
     ticks: number;
@@ -13,9 +13,16 @@ interface SymProgress {
     status: string;
     wins: number;
     losses: number;
+    dirCount: number;
+    dirDir: string;
 }
 
-const DEFAULT_CFG = { stake: '0.35', martingale: '2', maxAppearance: '3' };
+type RecoveryPhase = 'idle' | 'virtual' | 'real';
+
+const DEFAULT_CFG = {
+    stake: '0.35', martingale: '2', maxAppearance: '3',
+    recoveryEnabled: 'false', lossThreshold: '3', maxTickDirection: '3',
+};
 const LS_KEY = 'mw_da_config';
 const MAX_TICKS = 200;
 
@@ -29,6 +36,9 @@ export const DiffersAuto: React.FC = () => {
     const [stake, setStake] = useState(cfg.stake);
     const [martingale, setMartingale] = useState(cfg.martingale);
     const [maxAppearance, setMaxAppearance] = useState(cfg.maxAppearance);
+    const [recoveryEnabled, setRecoveryEnabled] = useState(cfg.recoveryEnabled === 'true');
+    const [lossThreshold, setLossThreshold] = useState(cfg.lossThreshold);
+    const [maxTickDirection, setMaxTickDirection] = useState(cfg.maxTickDirection);
     const [running, setRunning] = useState(false);
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [pnl, setPnl] = useState(0);
@@ -37,6 +47,7 @@ export const DiffersAuto: React.FC = () => {
     const [losses, setLosses] = useState(0);
     const [conn, setConn] = useState(false);
     const [symProg, setSymProg] = useState<Record<string, SymProgress>>({});
+    const [recoveryDisplay, setRecoveryDisplay] = useState({ phase: 'idle' as RecoveryPhase, loss: 0, virtualLosses: 0, recovered: 0 });
 
     const wsRef = useRef<MakotiWS | null>(null);
     const runRef = useRef(false);
@@ -46,80 +57,183 @@ export const DiffersAuto: React.FC = () => {
     const winsRef = useRef(0);
     const lossesRef = useRef(0);
     const currentStakeRef = useRef(0.35);
-    const cfgRef = useRef({ s: 0.35, m: 2, max: 3 });
+    const cfgRef = useRef({ s: 0.35, m: 2, max: 3, recov: false, threshold: 3, maxDir: 3 });
     const bufRef = useRef<Record<string, number[]>>({});
+    const priceBufRef = useRef<Record<string, number[]>>({});
     const streakRef = useRef<Record<string, { digit: number; count: number }>>({});
-    const cmapRef = useRef<Map<string, { sym: string; amt: number }>>(new Map());
+    const cmapRef = useRef<Map<string, { sym: string; amt: number; phase: 'differs' | 'recov_virtual' | 'recov_real' }>>(new Map());
 
-    useEffect(() => { saveCfg({ stake, martingale, maxAppearance }); }, [stake, martingale, maxAppearance]);
-    useEffect(() => { cfgRef.current = { s: parseFloat(stake) || 0.35, m: parseFloat(martingale) || 2, max: parseInt(maxAppearance) || 3 }; }, [stake, martingale, maxAppearance]);
+    // Recovery state
+    const recoveryPhaseRef = useRef<RecoveryPhase>('idle');
+    const recoveryLossRef = useRef(0);
+    const virtualLossCountRef = useRef(0);
+    const recoveryStakeRef = useRef(0.35);
+    const recoveryPnlRef = useRef(0);
+    const directionRef = useRef<Record<string, { dir: 'up' | 'down' | null; count: number }>>({});
+
+    useEffect(() => {
+        saveCfg({ stake, martingale, maxAppearance, recoveryEnabled: String(recoveryEnabled), lossThreshold, maxTickDirection });
+    }, [stake, martingale, maxAppearance, recoveryEnabled, lossThreshold, maxTickDirection]);
+    useEffect(() => {
+        cfgRef.current = {
+            s: parseFloat(stake) || 0.35, m: parseFloat(martingale) || 2,
+            max: parseInt(maxAppearance) || 3, recov: recoveryEnabled,
+            threshold: parseInt(lossThreshold) || 3, maxDir: parseInt(maxTickDirection) || 3,
+        };
+    }, [stake, martingale, maxAppearance, recoveryEnabled, lossThreshold, maxTickDirection]);
 
     const addLog = useCallback((msg: string, type: LogEntry['type'] = 'info') => {
         setLogs(p => [...p.slice(-200), { time: ts(), msg, type }]);
     }, []);
 
+    /* ── Buy DIGITDIFF ── */
     const buyDiffers = useCallback(async (sym: string, digit: number, amt: number): Promise<boolean> => {
         if (window._newSystemWS?.readyState !== WebSocket.OPEN) return false;
         try {
             const r = await sendViaNewSystemWithPromise({
                 buy: 1, price: amt,
-                parameters: {
-                    amount: amt, basis: 'stake', currency: 'USD',
-                    duration: 1, duration_unit: 't',
-                    symbol: sym, contract_type: 'DIGITDIFF',
-                    barrier: String(digit),
-                },
+                parameters: { amount: amt, basis: 'stake', currency: 'USD', duration: 1, duration_unit: 't', symbol: sym, contract_type: 'DIGITDIFF', barrier: String(digit) },
             });
             const cid = r?.buy?.contract_id ?? r?.contract_id;
             if (cid) {
-                cmapRef.current.set(String(cid), { sym, amt });
-                addLog(`DIFFER ${SYMBOL_LABELS[sym]}: NOT ${digit} @ $${amt.toFixed(2)} — digit ${digit} appeared ${cfgRef.current.max}x in a row`, 'trade');
-                try {
-                    transactions.onBotContractEvent({
-                        contract_id: cid,
-                        transaction_ids: { buy: r?.buy?.transaction_id },
-                        buy_price: amt, currency: 'USD',
-                        contract_type: 'DIGITDIFF',
-                        underlying: sym,
-                        display_name: SYMBOL_LABELS[sym],
-                        date_start: Math.floor(Date.now() / 1000),
-                        status: 'open',
-                    } as any);
-                } catch {}
+                cmapRef.current.set(String(cid), { sym, amt, phase: 'differs' });
+                addLog(`DIFFER ${SYMBOL_LABELS[sym]}: NOT ${digit} @ $${amt.toFixed(2)}`, 'trade');
+                try { transactions.onBotContractEvent({ contract_id: cid, transaction_ids: { buy: r?.buy?.transaction_id }, buy_price: amt, currency: 'USD', contract_type: 'DIGITDIFF', underlying: sym, display_name: SYMBOL_LABELS[sym], date_start: Math.floor(Date.now() / 1000), status: 'open' } as any); } catch {}
                 return true;
             }
             return false;
-        } catch (e: any) {
-            addLog(`BUY ERROR ${SYMBOL_LABELS[sym]}: ${e?.error?.message || e?.message}`, 'loss');
-            return false;
-        }
+        } catch (e: any) { addLog(`BUY ERROR ${SYMBOL_LABELS[sym]}: ${e?.error?.message || e?.message}`, 'loss'); return false; }
     }, [addLog, transactions]);
 
-    const handleResult = useCallback((profit: number, sym: string, amt: number) => {
+    /* ── Buy Rise/Fall ── */
+    const buyRiseFall = useCallback(async (sym: string, direction: 'CALL' | 'PUT', amt: number, phase: 'recov_virtual' | 'recov_real'): Promise<boolean> => {
+        if (window._newSystemWS?.readyState !== WebSocket.OPEN) return false;
+        const label = direction === 'CALL' ? 'RISE' : 'FALL';
+        try {
+            const r = await sendViaNewSystemWithPromise({
+                buy: 1, price: amt,
+                parameters: { amount: amt, basis: 'stake', currency: 'USD', duration: 1, duration_unit: 't', symbol: sym, contract_type: direction },
+            });
+            const cid = r?.buy?.contract_id ?? r?.contract_id;
+            if (cid) {
+                cmapRef.current.set(String(cid), { sym, amt, phase });
+                const prefix = phase === 'recov_virtual' ? '🤖 VIRTUAL' : '🔴 REAL';
+                addLog(`${prefix} ${label} ${SYMBOL_LABELS[sym]} @ $${amt.toFixed(2)}`, 'trade');
+                try { transactions.onBotContractEvent({ contract_id: cid, transaction_ids: { buy: r?.buy?.transaction_id }, buy_price: amt, currency: 'USD', contract_type: direction, underlying: sym, display_name: SYMBOL_LABELS[sym], date_start: Math.floor(Date.now() / 1000), status: 'open' } as any); } catch {}
+                return true;
+            }
+            return false;
+        } catch (e: any) { addLog(`RECOVERY BUY ERROR ${SYMBOL_LABELS[sym]}: ${e?.error?.message || e?.message}`, 'loss'); return false; }
+    }, [addLog, transactions]);
+
+    /* ── Enter recovery mode after a DIFFER loss ── */
+    const enterRecovery = useCallback((lostAmount: number) => {
+        if (!cfgRef.current.recov) {
+            // No recovery — just martingale on next differ
+            lockRef.current = false;
+            return;
+        }
+        recoveryPhaseRef.current = 'virtual';
+        recoveryLossRef.current = lostAmount;
+        virtualLossCountRef.current = 0;
+        recoveryStakeRef.current = cfgRef.current.s;
+        recoveryPnlRef.current = 0;
+        directionRef.current = {};
+        addLog(`🔄 RECOVERY START — lost $${lostAmount.toFixed(2)} | Virtual trades with max ${cfgRef.current.threshold} losses before real`, 'recovery');
+        setRecoveryDisplay({ phase: 'virtual', loss: lostAmount, virtualLosses: 0, recovered: 0 });
+        lockRef.current = false;
+    }, [addLog]);
+
+    /* ── Handle contract result ── */
+    const handleResult = useCallback((profit: number, sym: string, amt: number, phase: 'differs' | 'recov_virtual' | 'recov_real') => {
         pnlRef.current += profit;
         cntRef.current++;
         setPnl(pnlRef.current);
         setTrades(cntRef.current);
-
         const won = profit >= 0;
-        if (won) {
-            winsRef.current++;
-            setWins(winsRef.current);
-            addLog(`WON +$${profit.toFixed(2)} on ${SYMBOL_LABELS[sym]} | Stake reset to $${cfgRef.current.s.toFixed(2)} | P&L: $${pnlRef.current.toFixed(2)}`, 'win');
-            currentStakeRef.current = cfgRef.current.s;
-            lockRef.current = false;
-        } else {
-            lossesRef.current++;
-            setLosses(lossesRef.current);
-            const nextStake = Number((amt * cfgRef.current.m).toFixed(2));
-            currentStakeRef.current = nextStake;
-            addLog(`LOST -$${Math.abs(profit).toFixed(2)} on ${SYMBOL_LABELS[sym]} | Next stake: $${nextStake.toFixed(2)} | P&L: $${pnlRef.current.toFixed(2)}`, 'loss');
-            // Recovery: continue with martingaled stake — lockRef stays true until next trigger
-            lockRef.current = false;
-        }
-    }, [addLog]);
 
-    // POC listener
+        if (phase === 'differs') {
+            // Original DIFFER trade result
+            if (won) {
+                winsRef.current++;
+                setWins(winsRef.current);
+                addLog(`✅ DIFFER WON +$${profit.toFixed(2)} on ${SYMBOL_LABELS[sym]} | P&L: $${pnlRef.current.toFixed(2)}`, 'win');
+                currentStakeRef.current = cfgRef.current.s;
+                lockRef.current = false;
+            } else {
+                lossesRef.current++;
+                setLosses(lossesRef.current);
+                const nextStake = Number((amt * cfgRef.current.m).toFixed(2));
+                currentStakeRef.current = nextStake;
+                addLog(`❌ DIFFER LOST -$${Math.abs(profit).toFixed(2)} on ${SYMBOL_LABELS[sym]}`, 'loss');
+                // Enter recovery if enabled
+                enterRecovery(Math.abs(profit));
+            }
+        } else if (phase === 'recov_virtual') {
+            // Virtual recovery trade
+            if (won) {
+                recoveryPnlRef.current += profit;
+                addLog(`🤖 VIRTUAL WIN +$${profit.toFixed(2)} on ${SYMBOL_LABELS[sym]} | Recovery: $${recoveryPnlRef.current.toFixed(2)} / $${recoveryLossRef.current.toFixed(2)}`, 'win');
+                // Check if recovery is complete
+                if (recoveryPnlRef.current >= recoveryLossRef.current) {
+                    addLog(`🎉 RECOVERY COMPLETE — profit covers loss! Back to DIFFERS`, 'recovery');
+                    recoveryPhaseRef.current = 'idle';
+                    currentStakeRef.current = cfgRef.current.s;
+                    setRecoveryDisplay({ phase: 'idle', loss: 0, virtualLosses: 0, recovered: 0 });
+                    lockRef.current = false;
+                } else {
+                    // Continue virtual — keep lockRef false so direction monitor continues
+                    setRecoveryDisplay(p => ({ ...p, recovered: recoveryPnlRef.current }));
+                }
+            } else {
+                virtualLossCountRef.current++;
+                recoveryPnlRef.current += profit;
+                addLog(`🤖 VIRTUAL LOSS -$${Math.abs(profit).toFixed(2)} on ${SYMBOL_LABELS[sym]} | Virtual losses: ${virtualLossCountRef.current}/${cfgRef.current.threshold}`, 'loss');
+                setRecoveryDisplay(p => ({ ...p, virtualLosses: virtualLossCountRef.current, recovered: recoveryPnlRef.current }));
+                if (virtualLossCountRef.current >= cfgRef.current.threshold) {
+                    // Switch to REAL trades
+                    recoveryPhaseRef.current = 'real';
+                    recoveryStakeRef.current = Number((cfgRef.current.s * cfgRef.current.m).toFixed(2));
+                    addLog(`🔴 THRESHOLD REACHED — switching to REAL trades | Stake: $${recoveryStakeRef.current.toFixed(2)}`, 'recovery');
+                    setRecoveryDisplay(p => ({ ...p, phase: 'real' }));
+                }
+                lockRef.current = false;
+            }
+        } else if (phase === 'recov_real') {
+            // Real recovery trade
+            if (won) {
+                recoveryPnlRef.current += profit;
+                winsRef.current++;
+                setWins(winsRef.current);
+                addLog(`🔴 REAL WIN +$${profit.toFixed(2)} on ${SYMBOL_LABELS[sym]} | Recovery: $${recoveryPnlRef.current.toFixed(2)} / $${recoveryLossRef.current.toFixed(2)}`, 'win');
+                // Check if recovery complete
+                if (recoveryPnlRef.current >= recoveryLossRef.current) {
+                    addLog(`🎉 RECOVERY COMPLETE — back to DIFFERS`, 'recovery');
+                    recoveryPhaseRef.current = 'idle';
+                    currentStakeRef.current = cfgRef.current.s;
+                    setRecoveryDisplay({ phase: 'idle', loss: 0, virtualLosses: 0, recovered: 0 });
+                } else {
+                    // Back to virtual mode
+                    recoveryPhaseRef.current = 'virtual';
+                    addLog(`🔄 Back to VIRTUAL trades — still recovering`, 'recovery');
+                    setRecoveryDisplay(p => ({ ...p, phase: 'virtual', recovered: recoveryPnlRef.current }));
+                }
+                lockRef.current = false;
+            } else {
+                lossesRef.current++;
+                setLosses(lossesRef.current);
+                recoveryPnlRef.current += profit;
+                // Martingale and keep executing real
+                const nextStake = Number((amt * cfgRef.current.m).toFixed(2));
+                recoveryStakeRef.current = nextStake;
+                addLog(`🔴 REAL LOSS -$${Math.abs(profit).toFixed(2)} on ${SYMBOL_LABELS[sym]} | Next real stake: $${nextStake.toFixed(2)} | Recovery: $${recoveryPnlRef.current.toFixed(2)}`, 'loss');
+                setRecoveryDisplay(p => ({ ...p, recovered: recoveryPnlRef.current }));
+                lockRef.current = false;
+            }
+        }
+    }, [addLog, enterRecovery]);
+
+    /* ── POC listener ── */
     useEffect(() => {
         if (!running) return;
         if (window._newSystemWS?.readyState === WebSocket.OPEN) {
@@ -134,13 +248,13 @@ export const DiffersAuto: React.FC = () => {
                 const e = cmapRef.current.get(String(c.contract_id));
                 if (!e) return;
                 cmapRef.current.delete(String(c.contract_id));
-                handleResult(Number(c.profit), e.sym, e.amt);
+                handleResult(Number(c.profit), e.sym, e.amt, e.phase);
             } catch {}
         });
         return () => { unsub(); };
     }, [running, handleResult]);
 
-    // Tick handler — core logic
+    /* ── Tick handler ── */
     useEffect(() => {
         if (!running) return;
         const unsub = onNewSystemMessage((ev: MessageEvent) => {
@@ -148,62 +262,55 @@ export const DiffersAuto: React.FC = () => {
             try {
                 const d = JSON.parse(ev.data);
 
-                // Handle bulk history response
+                // History response
                 if (d.msg_type === 'history' && d.history) {
                     const sym = d.echo_req?.ticks_history;
                     if (!sym) return;
                     const prices = d.history.prices;
                     if (!Array.isArray(prices)) return;
                     if (!bufRef.current[sym]) bufRef.current[sym] = [];
+                    if (!priceBufRef.current[sym]) priceBufRef.current[sym] = [];
                     prices.forEach((p: any) => {
+                        const num = Number(p);
                         const digit = parseInt(String(p).slice(-1), 10);
                         if (!isNaN(digit)) bufRef.current[sym].push(digit);
+                        if (!isNaN(num)) priceBufRef.current[sym].push(num);
                     });
                     if (bufRef.current[sym].length > MAX_TICKS) bufRef.current[sym] = bufRef.current[sym].slice(-MAX_TICKS);
-
-                    // Compute streak from buffer
-                    const buf = bufRef.current[sym];
-                    let streakDigit = buf.length > 0 ? buf[buf.length - 1] : null;
-                    let streakCount = 0;
-                    for (let i = buf.length - 1; i >= 0; i--) {
-                        if (buf[i] === streakDigit) streakCount++;
-                        else break;
-                    }
-                    streakRef.current[sym] = { digit: streakDigit ?? -1, count: streakCount };
-                    setSymProg(p => ({
-                        ...p,
-                        [sym]: {
-                            symbol: sym, ticks: buf.length,
-                            lastDigit: streakDigit,
-                            streakDigit, streakCount,
-                            status: streakCount >= cfgRef.current.max ? 'READY' : 'scanning',
-                            wins: p[sym]?.wins || 0, losses: p[sym]?.losses || 0,
-                        },
-                    }));
+                    if (priceBufRef.current[sym].length > MAX_TICKS) priceBufRef.current[sym] = priceBufRef.current[sym].slice(-MAX_TICKS);
+                    initStreak(sym, bufRef.current[sym]);
                     return;
                 }
 
-                // Handle live tick
+                // Live tick
                 if (d.msg_type !== 'tick' || !d.tick) return;
                 const sym = d.tick.symbol;
                 const q = d.tick.quote;
                 if (!sym || q === undefined) return;
+                const numPrice = Number(q);
                 const digit = parseInt(String(q).slice(-1), 10);
                 if (isNaN(digit)) return;
 
                 if (!bufRef.current[sym]) bufRef.current[sym] = [];
+                if (!priceBufRef.current[sym]) priceBufRef.current[sym] = [];
                 bufRef.current[sym].push(digit);
+                priceBufRef.current[sym].push(numPrice);
                 if (bufRef.current[sym].length > MAX_TICKS) bufRef.current[sym] = bufRef.current[sym].slice(-MAX_TICKS);
-                const buf = bufRef.current[sym];
+                if (priceBufRef.current[sym].length > MAX_TICKS) priceBufRef.current[sym] = priceBufRef.current[sym].slice(-MAX_TICKS);
 
-                // Update streak
+                const buf = bufRef.current[sym];
+                const prices = priceBufRef.current[sym];
+
+                // Update digit streak
                 const prev = streakRef.current[sym];
-                if (prev && prev.digit === digit) {
-                    prev.count++;
-                } else {
-                    streakRef.current[sym] = { digit, count: 1 };
-                }
+                if (prev && prev.digit === digit) { prev.count++; } else { streakRef.current[sym] = { digit, count: 1 }; }
                 const streak = streakRef.current[sym];
+
+                // Update direction tracking (for recovery)
+                updateDirection(sym, prices);
+
+                const dirInfo = directionRef.current[sym] || { dir: null, count: 0 };
+                const dirLabel = dirInfo.dir === 'up' ? '↑' : dirInfo.dir === 'down' ? '↓' : '—';
 
                 setSymProg(p => ({
                     ...p,
@@ -212,45 +319,94 @@ export const DiffersAuto: React.FC = () => {
                         lastDigit: digit,
                         streakDigit: streak.digit,
                         streakCount: streak.count,
-                        status: streak.count >= cfgRef.current.max ? 'READY' : 'scanning',
+                        status: streak.count >= cfgRef.current.max ? 'READY' : (recoveryPhaseRef.current !== 'idle' ? 'recovery' : 'scanning'),
                         wins: p[sym]?.wins || 0, losses: p[sym]?.losses || 0,
+                        dirCount: dirInfo.count, dirDir: dirLabel,
                     },
                 }));
 
-                if (lockRef.current) return;
+                // ── DIFFERS MODE ──
+                if (recoveryPhaseRef.current === 'idle') {
+                    if (lockRef.current) return;
+                    if (streak.count >= cfgRef.current.max) {
+                        addLog(`TRIGGER ${SYMBOL_LABELS[sym]}: digit ${streak.digit} appeared ${streak.count}x → DIFFER`, 'trigger');
+                        lockRef.current = true;
+                        buyDiffers(sym, streak.digit, currentStakeRef.current);
+                        streakRef.current[sym] = { digit, count: 0 };
+                    }
+                    return;
+                }
 
-                // Check if any digit hit max appearance
-                if (streak.count >= cfgRef.current.max) {
-                    addLog(`TRIGGER ${SYMBOL_LABELS[sym]}: digit ${streak.digit} appeared ${streak.count}x → DIFFER on next tick`, 'trigger');
-                    lockRef.current = true;
-                    const amt = currentStakeRef.current;
-                    buyDiffers(sym, streak.digit, amt);
-                    // Reset streak after trade
-                    streakRef.current[sym] = { digit, count: 0 };
+                // ── RECOVERY MODE — monitor all vols for direction pattern ──
+                if (recoveryPhaseRef.current === 'virtual' || recoveryPhaseRef.current === 'real') {
+                    if (lockRef.current) return;
+                    if (dirInfo.count >= cfgRef.current.maxDir && dirInfo.dir) {
+                        // Pattern found — execute opposite direction
+                        const direction = dirInfo.dir === 'up' ? 'PUT' : 'CALL';
+                        const label = direction === 'CALL' ? 'FALL' : 'RISE';
+                        addLog(`RECOVERY TRIGGER ${SYMBOL_LABELS[sym]}: ${dirInfo.dir} ${dirInfo.count}x → ${label}`, 'trigger');
+                        lockRef.current = true;
+                        const phase = recoveryPhaseRef.current === 'virtual' ? 'recov_virtual' : 'recov_real';
+                        const amt = recoveryStakeRef.current;
+                        buyRiseFall(sym, direction, amt, phase);
+                        // Reset direction
+                        directionRef.current[sym] = { dir: null, count: 0 };
+                    }
                 }
             } catch {}
         });
         return () => { unsub(); };
-    }, [running, addLog, buyDiffers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [running, addLog, buyDiffers, buyRiseFall]);
+
+    const initStreak = useCallback((sym: string, buf: number[]) => {
+        let streakDigit = buf.length > 0 ? buf[buf.length - 1] : null;
+        let streakCount = 0;
+        for (let i = buf.length - 1; i >= 0; i--) {
+            if (buf[i] === streakDigit) streakCount++; else break;
+        }
+        streakRef.current[sym] = { digit: streakDigit ?? -1, count: streakCount };
+        setSymProg(p => ({
+            ...p,
+            [sym]: {
+                symbol: sym, ticks: buf.length,
+                lastDigit: streakDigit, streakDigit, streakCount,
+                status: streakCount >= cfgRef.current.max ? 'READY' : 'scanning',
+                wins: p[sym]?.wins || 0, losses: p[sym]?.losses || 0,
+                dirCount: p[sym]?.dirCount || 0, dirDir: p[sym]?.dirDir || '—',
+            },
+        }));
+    }, []);
+
+    const updateDirection = useCallback((sym: string, prices: number[]) => {
+        if (prices.length < 2) return;
+        const last = prices[prices.length - 1];
+        const prev = prices[prices.length - 2];
+        const cur = directionRef.current[sym] || { dir: null, count: 0 };
+        if (last > prev) {
+            if (cur.dir === 'up') { cur.count++; } else { cur.dir = 'up'; cur.count = 1; }
+        } else if (last < prev) {
+            if (cur.dir === 'down') { cur.count++; } else { cur.dir = 'down'; cur.count = 1; }
+        } else {
+            cur.count = 0; cur.dir = null;
+        }
+        directionRef.current[sym] = cur;
+    }, []);
 
     const subscribeAll = useCallback(() => {
         if (window._newSystemWS?.readyState !== WebSocket.OPEN) return;
         ALL_SYMBOLS.forEach(sym => {
-            if (!bufRef.current[sym] || bufRef.current[sym].length === 0) {
-                bufRef.current[sym] = [];
-            }
+            if (!bufRef.current[sym] || bufRef.current[sym].length === 0) bufRef.current[sym] = [];
+            if (!priceBufRef.current[sym] || priceBufRef.current[sym].length === 0) priceBufRef.current[sym] = [];
             streakRef.current[sym] = { digit: -1, count: 0 };
+            directionRef.current[sym] = { dir: null, count: 0 };
             setSymProg(p => ({
                 ...p,
-                [sym]: {
-                    symbol: sym, ticks: p[sym]?.ticks || 0,
-                    lastDigit: null, streakDigit: null, streakCount: 0,
-                    status: 'scanning', wins: 0, losses: 0,
-                },
+                [sym]: { symbol: sym, ticks: p[sym]?.ticks || 0, lastDigit: null, streakDigit: null, streakCount: 0, status: 'scanning', wins: 0, losses: 0, dirCount: 0, dirDir: '—' },
             }));
             window._newSystemWS.send(JSON.stringify({ ticks_history: sym, style: 'ticks', count: 50, end: 'latest', subscribe: 1 }));
         });
-        addLog(`Subscribed to ${ALL_SYMBOLS.length} volatilities — loading 50 ticks each`, 'info');
+        addLog(`Subscribed to ${ALL_SYMBOLS.length} volatilities`, 'info');
     }, [addLog]);
 
     const unsubscribeAll = useCallback(() => {
@@ -260,38 +416,30 @@ export const DiffersAuto: React.FC = () => {
 
     const start = useCallback(() => {
         if (running) return;
-        runRef.current = true;
-        setRunning(true);
+        runRef.current = true; setRunning(true);
         lockRef.current = false;
-        cmapRef.current.clear();
-        bufRef.current = {};
-        streakRef.current = {};
-        pnlRef.current = 0;
-        cntRef.current = 0;
-        winsRef.current = 0;
-        lossesRef.current = 0;
+        cmapRef.current.clear(); bufRef.current = {}; priceBufRef.current = {}; streakRef.current = {}; directionRef.current = {};
+        pnlRef.current = 0; cntRef.current = 0; winsRef.current = 0; lossesRef.current = 0;
         currentStakeRef.current = cfgRef.current.s;
-        setPnl(0);
-        setTrades(0);
-        setWins(0);
-        setLosses(0);
-        setLogs([]);
+        recoveryPhaseRef.current = 'idle'; recoveryLossRef.current = 0; virtualLossCountRef.current = 0;
+        recoveryStakeRef.current = cfgRef.current.s; recoveryPnlRef.current = 0;
+        setPnl(0); setTrades(0); setWins(0); setLosses(0); setLogs([]);
+        setRecoveryDisplay({ phase: 'idle', loss: 0, virtualLosses: 0, recovered: 0 });
 
         addLog(`DIFFERS AUTO START | Stake: $${cfgRef.current.s} | MG: ${cfgRef.current.m}x | Max Appearance: ${cfgRef.current.max}`, 'info');
-        addLog('Strategy: Wait for digit to appear N times → DIFFER on next tick', 'info');
+        if (cfgRef.current.recov) {
+            addLog(`Recovery ON | Loss Threshold: ${cfgRef.current.threshold} | Max Tick Dir: ${cfgRef.current.maxDir}`, 'recovery');
+        }
 
         if (!wsRef.current) {
-            wsRef.current = openMakotiWS(() => {}, () => { setConn(true); addLog('Connected to WebSocket', 'info'); subscribeAll(); }, () => { setConn(false); }, { skipAuth: true });
-        } else {
-            subscribeAll();
-        }
+            wsRef.current = openMakotiWS(() => {}, () => { setConn(true); addLog('Connected', 'info'); subscribeAll(); }, () => { setConn(false); }, { skipAuth: true });
+        } else { subscribeAll(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [running, addLog]);
 
     const stop = useCallback(() => {
-        runRef.current = false;
-        setRunning(false);
-        lockRef.current = false;
+        runRef.current = false; setRunning(false); lockRef.current = false;
+        recoveryPhaseRef.current = 'idle';
         unsubscribeAll();
         if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
         addLog('STOPPED', 'info');
@@ -317,13 +465,37 @@ export const DiffersAuto: React.FC = () => {
                 </div>
             </div>
 
+            {/* ── Recovery toggle ── */}
+            <div className='mw-da__recovery-toggle'>
+                <label className='mw-killer__vh-toggle'>
+                    <input type='checkbox' checked={recoveryEnabled} onChange={e => setRecoveryEnabled(e.target.checked)} disabled={running} />
+                    <span>Rise/Fall Recovery</span>
+                </label>
+            </div>
+
+            {/* ── Recovery fields — only visible when enabled ── */}
+            {recoveryEnabled && (
+                <div className='mw-da__recovery-fields'>
+                    <div className='mw-field'>
+                        <label className='mw-label'>Loss Threshold</label>
+                        <input className='mw-input' type='number' step='1' min='1' max='20' value={lossThreshold} onChange={e => setLossThreshold(e.target.value)} disabled={running} />
+                    </div>
+                    <div className='mw-field'>
+                        <label className='mw-label'>Max Tick Direction</label>
+                        <input className='mw-input' type='number' step='1' min='2' max='20' value={maxTickDirection} onChange={e => setMaxTickDirection(e.target.value)} disabled={running} />
+                    </div>
+                </div>
+            )}
+
             <button className={`mw-btn ${running ? 'mw-btn--stop' : 'mw-btn--kill'}`} onClick={running ? stop : start}>
                 {running ? 'STOP' : 'RUN DIFFERS AUTO'}
             </button>
 
             {running && (
                 <div className='mw-da__mode'>
-                    Monitoring all volatilities — differ when digit repeats {cfgRef.current.max}x
+                    {recoveryPhaseRef.current === 'idle'
+                        ? `Monitoring — differ when digit repeats ${cfgRef.current.max}x`
+                        : `🔄 RECOVERY ${recoveryPhaseRef.current.toUpperCase()} — recovering $${recoveryLossRef.current.toFixed(2)}`}
                     {lockRef.current && <span className='mw-da__active-dot'> ● TRADING</span>}
                 </div>
             )}
@@ -333,9 +505,25 @@ export const DiffersAuto: React.FC = () => {
                 <span>Trades: {trades}</span>
                 <span className='mw-win'>W: {wins}</span>
                 <span className='mw-loss'>L: {losses}</span>
-                <span>Stake: ${currentStakeRef.current.toFixed(2)}</span>
+                <span>Stake: ${(recoveryPhaseRef.current !== 'idle' ? recoveryStakeRef.current : currentStakeRef.current).toFixed(2)}</span>
                 <span className={conn ? 'mw-win' : 'mw-loss'}>{conn ? 'Connected' : 'Disconnected'}</span>
             </div>
+
+            {/* ── Recovery progress ── */}
+            {recoveryEnabled && recoveryDisplay.phase !== 'idle' && running && (
+                <div className='mw-da__recovery-progress'>
+                    <div className='mw-da__recovery-title'>Recovery Progress</div>
+                    <div className='mw-da__recovery-bar-wrap'>
+                        <div className='mw-da__recovery-bar' style={{ width: `${Math.min((recoveryDisplay.recovered / Math.max(recoveryDisplay.loss, 0.01)) * 100, 100)}%` }} />
+                    </div>
+                    <div className='mw-da__recovery-info'>
+                        <span>Phase: <b>{recoveryDisplay.phase}</b></span>
+                        <span>Loss: <b className='mw-loss'>${recoveryDisplay.loss.toFixed(2)}</b></span>
+                        <span>Recovered: <b className={recoveryDisplay.recovered >= 0 ? 'mw-win' : 'mw-loss'}>${recoveryDisplay.recovered.toFixed(2)}</b></span>
+                        {recoveryDisplay.phase === 'virtual' && <span>Virtual L: <b className='mw-loss'>{recoveryDisplay.virtualLosses}/{cfgRef.current.threshold}</b></span>}
+                    </div>
+                </div>
+            )}
 
             <div className='mw-da__progress'>
                 <div className='mw-da__progress-title'>Volatility Streaks</div>
@@ -343,15 +531,17 @@ export const DiffersAuto: React.FC = () => {
                     const p = symProg[sym];
                     const streakPct = p ? Math.min((p.streakCount / cfgRef.current.max) * 100, 100) : 0;
                     const isReady = p?.status === 'READY';
+                    const isRecovery = p?.status === 'recovery';
                     return (
-                        <div key={sym} className={`mw-da__prog-row ${isReady ? 'mw-da__prog-row--ready' : ''} ${p?.status === 'trading' ? 'mw-da__prog-row--trading' : ''}`}>
+                        <div key={sym} className={`mw-da__prog-row ${isReady ? 'mw-da__prog-row--ready' : ''} ${isRecovery ? 'mw-da__prog-row--trading' : ''}`}>
                             <span className='mw-da__prog-sym'>{SYMBOL_LABELS[sym]}</span>
                             <div className='mw-da__prog-bar-wrap'>
                                 <div className='mw-da__prog-bar' style={{ width: `${streakPct}%`, background: isReady ? '#ef4444' : '#f97316' }} />
                             </div>
                             <span className='mw-da__prog-digit'>{p && p.streakDigit != null ? p.streakDigit : '—'}</span>
                             <span className='mw-da__prog-count'>{p?.streakCount || 0}/{cfgRef.current.max}</span>
-                            <span className={`mw-da__prog-status ${isReady ? 'mw-da__prog-status--ready' : ''}`}>{p?.status || 'idle'}</span>
+                            <span className='mw-da__prog-dir' title='Direction streak'>{p?.dirDir || '—'}{p?.dirCount || 0}</span>
+                            <span className={`mw-da__prog-status ${isReady ? 'mw-da__prog-status--ready' : ''} ${isRecovery ? 'mw-da__prog-status--recovery' : ''}`}>{p?.status || 'idle'}</span>
                         </div>
                     );
                 })}

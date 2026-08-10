@@ -3,6 +3,7 @@ import { ALL_SYMBOLS, SYMBOL_LABELS, PIP_SIZES, openMakotiWS, MakotiWS } from '.
 import { analyzeSignals, recordOutcome, TradeSignal } from './prediction-engine';
 import { sendViaNewSystemWithPromise, onNewSystemMessage } from '@/auth/NewDerivAuth';
 import { useStore } from '@/hooks/useStore';
+import { MwSelect } from './mw-select';
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
 type ContractSide = 'DIGITOVER' | 'DIGITUNDER';
@@ -763,12 +764,8 @@ export const OverUnderKiller: React.FC = () => {
                 </div>
                 <div className='mw-field'>
                     <label className='mw-label'>Contract Type</label>
-                    <select className='mw-select' value={contractSide}
-                        onChange={e => setContractSide(e.target.value as ContractSide)} disabled={running}>
-                        {CONTRACT_SIDES.map(s => (
-                            <option key={s.value} value={s.value}>{s.label}</option>
-                        ))}
-                    </select>
+                    <MwSelect value={contractSide} options={CONTRACT_SIDES.map(s => ({ value: s.value, label: s.label }))}
+                        onChange={v => setContractSide(v as ContractSide)} disabled={running} />
                 </div>
             </div>
 
@@ -809,12 +806,8 @@ export const OverUnderKiller: React.FC = () => {
                     </div>
                     <div className='mw-field'>
                         <label className='mw-label'>Recovery Side</label>
-                        <select className='mw-select' value={recoverySide}
-                            onChange={e => setRecoverySide(e.target.value as ContractSide)}>
-                            {CONTRACT_SIDES.map(s => (
-                                <option key={s.value} value={s.value}>{s.label}</option>
-                            ))}
-                        </select>
+                        <MwSelect value={recoverySide} options={CONTRACT_SIDES.map(s => ({ value: s.value, label: s.label }))}
+                            onChange={v => setRecoverySide(v as ContractSide)} />
                     </div>
                 </div>
             )}
