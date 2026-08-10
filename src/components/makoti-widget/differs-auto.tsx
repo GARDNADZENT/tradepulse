@@ -349,7 +349,7 @@ export const DiffersAuto: React.FC = () => {
                             <div className='mw-da__prog-bar-wrap'>
                                 <div className='mw-da__prog-bar' style={{ width: `${streakPct}%`, background: isReady ? '#ef4444' : '#f97316' }} />
                             </div>
-                            <span className='mw-da__prog-digit'>{p?.streakDigit !== null && p?.streakDigit !== null ? p.streakDigit : '—'}</span>
+                            <span className='mw-da__prog-digit'>{p && p.streakDigit != null ? p.streakDigit : '—'}</span>
                             <span className='mw-da__prog-count'>{p?.streakCount || 0}/{cfgRef.current.max}</span>
                             <span className={`mw-da__prog-status ${isReady ? 'mw-da__prog-status--ready' : ''}`}>{p?.status || 'idle'}</span>
                         </div>
