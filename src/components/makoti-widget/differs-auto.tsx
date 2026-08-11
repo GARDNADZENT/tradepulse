@@ -79,6 +79,7 @@ export const DiffersAuto: React.FC = () => {
         startTime: number;
         buyId: string;
         ticksElapsed: number;
+        resolved: boolean;
     } | null>(null);
     const lastTickSymRef = useRef('');
 
@@ -147,6 +148,7 @@ export const DiffersAuto: React.FC = () => {
             startTime: Math.floor(Date.now() / 1000),
             buyId,
             ticksElapsed: 0,
+            resolved: false,
         };
         const label = direction === 'CALL' ? 'RISE' : 'FALL';
         addLog(`🤖 VIRTUAL ${label} ${SYMBOL_LABELS[sym]} @ $${stake.toFixed(2)} — tracking`, 'trade');
@@ -429,8 +431,12 @@ export const DiffersAuto: React.FC = () => {
                     const vt = virtualTradeRef.current;
                     if (vt.symbol === sym) {
                         vt.ticksElapsed++;
-                        if (vt.ticksElapsed >= 1) {
-                            resolveVirtualTrade(sym, numPrice);
+                        if (vt.ticksElapsed >= 1 && !vt.resolved) {
+                            vt.resolved = true;
+                            const capturedPrice = numPrice;
+                            setTimeout(() => {
+                                resolveVirtualTrade(sym, capturedPrice);
+                            }, 1000);
                         }
                     }
                     return;

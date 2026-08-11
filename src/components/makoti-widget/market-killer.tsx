@@ -101,6 +101,7 @@ export const MarketKiller: React.FC = () => {
         stake: number;
         startTime: number;
         buyId: string;
+        resolved: boolean;
     } | null>(null);
 
     /* ── Persist ──────────────────────────────────────────────────────────── */
@@ -304,6 +305,7 @@ export const MarketKiller: React.FC = () => {
                 stake: vhStake,
                 startTime: Math.floor(Date.now() / 1000),
                 buyId: vhBuyId,
+                resolved: false,
             };
             const label = direction === 'CALL' ? 'RISE' : 'FALL';
             addLog(`🤖 [VIRTUAL HOOK] 🔍 Virtual ${label} D${duration} on ${SYMBOL_LABELS[sym]} @ $${entryPrice.toFixed(4)} — tracking ${duration} ticks`, 'info');
@@ -415,6 +417,63 @@ export const MarketKiller: React.FC = () => {
         }
     }, [addLog, flushDisplay]);
 
+    /* ── Resolve virtual trade after delay ── */
+    const resolveVirtualTrade = useCallback((sym: string, currentPrice: number) => {
+        const vt = virtualTradeRef.current;
+        if (!vt || vt.symbol !== sym) return;
+
+        const won = vt.direction === 'CALL'
+            ? currentPrice > vt.entryPrice
+            : currentPrice < vt.entryPrice;
+        const label = vt.direction === 'CALL' ? 'RISE' : 'FALL';
+        const vhProfit = won ? vt.stake * 0.95 : -vt.stake;
+        const sellPrice = won ? vt.stake * 1.95 : 0;
+        try {
+            const entrySpotStr = vt.entryPrice.toFixed(PIP_SIZES[vt.symbol] || 2);
+            const exitSpotStr = currentPrice.toFixed(PIP_SIZES[vt.symbol] || 2);
+            const vhDisplayName = won ? 'Virtual Win' : 'Virtual Loss';
+            transactions.onBotContractEvent({
+                transaction_ids: { buy: vt.buyId },
+                contract_id: vt.buyId,
+                buy_price: vt.stake,
+                sell_price: sellPrice,
+                currency: 'USD',
+                contract_type: vt.direction,
+                underlying: vt.symbol,
+                display_name: vhDisplayName,
+                date_start: vt.startTime,
+                date_expiry: Math.floor(Date.now() / 1000),
+                entry_spot: entrySpotStr,
+                entry_tick: entrySpotStr,
+                entry_tick_time: vt.startTime,
+                exit_spot: exitSpotStr,
+                exit_tick: exitSpotStr,
+                exit_tick_time: Math.floor(Date.now() / 1000),
+                profit: vhProfit,
+                is_sold: true,
+                is_completed: true,
+                status: 'sold',
+                is_virtual: true,
+            } as any);
+        } catch (_) {}
+        if (won) {
+            vhStateRef.current.loss_count = 0;
+            addLog(`🤖 [VIRTUAL HOOK] ✅ Virtual WIN ${label} D${vt.duration} on ${SYMBOL_LABELS[vt.symbol]} — Entry $${vt.entryPrice.toFixed(4)} → Exit $${currentPrice.toFixed(4)}`, 'win');
+        } else {
+            vhStateRef.current.loss_count++;
+            addLog(`🤖 [VIRTUAL HOOK] ❌ Virtual LOSS ${label} D${vt.duration} on ${SYMBOL_LABELS[vt.symbol]} #${vhStateRef.current.loss_count}/${vhStateRef.current.threshold} — Entry $${vt.entryPrice.toFixed(4)} → Exit $${currentPrice.toFixed(4)}`, 'loss');
+            if (vhStateRef.current.loss_count >= vhStateRef.current.threshold) {
+                vhStateRef.current.is_virtual = false;
+                addLog(`🤖 [VIRTUAL HOOK] 🔄 THRESHOLD REACHED — Switching to REAL trades`, 'info');
+            }
+        }
+        virtualTradeRef.current = null;
+        globalLock.current = false;
+        activeContractsRef.current = 0;
+        setActiveContracts(0);
+        checkLimits();
+    }, [addLog, transactions, checkLimits]);
+
     /* ── Handle every incoming tick ──────────────────────────────────────── */
     const onTickReceived = useCallback(() => {
         if (!runningRef.current) return;
@@ -426,58 +485,12 @@ export const MarketKiller: React.FC = () => {
             const sd = symbolDataRef.current[vt.symbol];
             if (sd) {
                 vt.ticksElapsed++;
-                if (vt.ticksElapsed >= vt.duration) {
-                    const currentPrice = sd.prices[sd.prices.length - 1];
-                    const won = vt.direction === 'CALL'
-                        ? currentPrice > vt.entryPrice
-                        : currentPrice < vt.entryPrice;
-                    const label = vt.direction === 'CALL' ? 'RISE' : 'FALL';
-                    const vhProfit = won ? vt.stake * 0.95 : -vt.stake;
-                    const sellPrice = won ? vt.stake * 1.95 : 0;
-                    try {
-                        const entrySpotStr = vt.entryPrice.toFixed(PIP_SIZES[vt.symbol] || 2);
-                        const exitSpotStr = currentPrice.toFixed(PIP_SIZES[vt.symbol] || 2);
-                        const vhDisplayName = won ? 'Virtual Win' : 'Virtual Loss';
-                        transactions.onBotContractEvent({
-                            transaction_ids: { buy: vt.buyId },
-                            contract_id: vt.buyId,
-                            buy_price: vt.stake,
-                            sell_price: sellPrice,
-                            currency: 'USD',
-                            contract_type: vt.direction,
-                            underlying: vt.symbol,
-                            display_name: vhDisplayName,
-                            date_start: vt.startTime,
-                            date_expiry: Math.floor(Date.now() / 1000),
-                            entry_spot: entrySpotStr,
-                            entry_tick: entrySpotStr,
-                            entry_tick_time: vt.startTime,
-                            exit_spot: exitSpotStr,
-                            exit_tick: exitSpotStr,
-                            exit_tick_time: Math.floor(Date.now() / 1000),
-                            profit: vhProfit,
-                            is_sold: true,
-                            is_completed: true,
-                            status: 'sold',
-                            is_virtual: true,
-                        } as any);
-                    } catch (_) {}
-                    if (won) {
-                        vhStateRef.current.loss_count = 0;
-                        addLog(`🤖 [VIRTUAL HOOK] ✅ Virtual WIN ${label} D${vt.duration} on ${SYMBOL_LABELS[vt.symbol]} — Entry $${vt.entryPrice.toFixed(4)} → Exit $${currentPrice.toFixed(4)}`, 'win');
-                    } else {
-                        vhStateRef.current.loss_count++;
-                        addLog(`🤖 [VIRTUAL HOOK] ❌ Virtual LOSS ${label} D${vt.duration} on ${SYMBOL_LABELS[vt.symbol]} #${vhStateRef.current.loss_count}/${vhStateRef.current.threshold} — Entry $${vt.entryPrice.toFixed(4)} → Exit $${currentPrice.toFixed(4)}`, 'loss');
-                        if (vhStateRef.current.loss_count >= vhStateRef.current.threshold) {
-                            vhStateRef.current.is_virtual = false;
-                            addLog(`🤖 [VIRTUAL HOOK] 🔄 THRESHOLD REACHED — Switching to REAL trades`, 'info');
-                        }
-                    }
-                    virtualTradeRef.current = null;
-                    globalLock.current = false;
-                    activeContractsRef.current = 0;
-                    setActiveContracts(0);
-                    checkLimits();
+                if (vt.ticksElapsed >= vt.duration && !vt.resolved) {
+                    vt.resolved = true;
+                    const capturedPrice = sd.prices[sd.prices.length - 1];
+                    setTimeout(() => {
+                        resolveVirtualTrade(vt.symbol, capturedPrice);
+                    }, 1000);
                 }
             }
             return; // wait for duration to elapse
