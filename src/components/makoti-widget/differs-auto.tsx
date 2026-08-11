@@ -82,6 +82,7 @@ export const DiffersAuto: React.FC = () => {
         resolved: boolean;
     } | null>(null);
     const lastTickSymRef = useRef('');
+    const cooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         saveCfg({ stake, martingale, maxAppearance, recoveryEnabled: String(recoveryEnabled), lossThreshold, maxTickDirection });
@@ -240,7 +241,12 @@ export const DiffersAuto: React.FC = () => {
         }
 
         virtualTradeRef.current = null;
-        lockRef.current = false;
+        lockRef.current = true;
+        if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
+        cooldownTimerRef.current = setTimeout(() => {
+            lockRef.current = false;
+            cooldownTimerRef.current = null;
+        }, 1500);
     }, [addLog, transactions]);
 
     /* ── Enter recovery mode after a DIFFER loss ── */
@@ -560,6 +566,7 @@ export const DiffersAuto: React.FC = () => {
 
     const stop = useCallback(() => {
         runRef.current = false; setRunning(false); lockRef.current = false;
+        if (cooldownTimerRef.current) { clearTimeout(cooldownTimerRef.current); cooldownTimerRef.current = null; }
         recoveryPhaseRef.current = 'idle';
         virtualTradeRef.current = null; lastTickSymRef.current = '';
         unsubscribeAll();
@@ -568,7 +575,7 @@ export const DiffersAuto: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [addLog]);
 
-    useEffect(() => { return () => { runRef.current = false; unsubscribeAll(); if (wsRef.current) { wsRef.current.close(); wsRef.current = null; } }; }, [unsubscribeAll]);
+    useEffect(() => { return () => { runRef.current = false; unsubscribeAll(); if (cooldownTimerRef.current) { clearTimeout(cooldownTimerRef.current); } if (wsRef.current) { wsRef.current.close(); wsRef.current = null; } }; }, [unsubscribeAll]);
 
     return (
         <div className='mw-da'>

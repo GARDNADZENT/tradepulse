@@ -34,6 +34,7 @@ const CONTRACT_SIDES: { label: string; value: ContractSide }[] = [
 ];
 
 const LS_CONFIG_KEY  = 'mw_ouk_config';
+const LS_LOGS_KEY = 'mw_ouk_logs';
 
 const DEFAULT_CONFIG = { stake: '0.35', martingale: '2', takeProfit: '10', stopLoss: '5', predictionDigit: '5', contractSide: 'DIGITOVER' as const, recoveryMode: false, manualRecovery: false, recoverySide: 'DIGITOVER' as const, recoveryDigit: '5', recoveryLossThreshold: '1', automate: false };
 

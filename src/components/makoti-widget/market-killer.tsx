@@ -1,11 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ALL_SYMBOLS, SYMBOL_LABELS, PIP_SIZES, openMakotiWS, MakotiWS } from './makoti-ws';
 import { recordOutcome } from './prediction-engine';
 import { sendViaNewSystemWithPromise, onNewSystemMessage } from '@/auth/NewDerivAuth';
 import { useStore } from '@/hooks/useStore';
 
-/* ── Types ─────────────────────────────────────────────────────────────────── */
-interface SymbolState {
+interface SymState {
     ticks: number[];
     prices: number[];
     lastSignal: string;
@@ -17,97 +16,87 @@ interface SymbolState {
 interface LogEntry {
     time: string;
     msg: string;
-    type: 'win' | 'loss' | 'info' | 'trade';
+    type: 'win' | 'loss' | 'info' | 'trade' | 'trigger' | 'recovery';
 }
 
-/* ── Constants ─────────────────────────────────────────────────────────────── */
-const MAX_TICKS              = 500;
-const MIN_TICKS_BEFORE_TRADE = 15;
-const LS_CONFIG_KEY          = 'mw_mk_config';
+interface SymbolDisplay {
+    label: string;
+    lastSignal: string;
+    wins: number;
+    losses: number;
+    dir: 'up' | 'down' | null;
+    dirCount: number;
+    stake: number;
+    digit: number | null;
+}
 
-const DEFAULT_CONFIG = { stake: '0.35', martingale: '2', takeProfit: '10', stopLoss: '5', vhEnabled: false, vhThreshold: '1', accurateMode: false, maxDir: '3' };
+const MAX_TICKS = 500;
+const MIN_TICKS = 15;
+const LS_CONFIG_KEY = 'mw_mk_config';
+const LS_LOGS_KEY = 'mw_mk_logs';
+const TRADE_COOLDOWN_MS = 1500;
+const VIRTUAL_RESOLVE_DELAY_MS = 1000;
+const BUY_TIMEOUT_MS = 8000;
+
+const DEFAULT_CONFIG = {
+    stake: '0.35', martingale: '2', takeProfit: '10', stopLoss: '5',
+    vhEnabled: false, vhThreshold: '1', maxDir: '3',
+};
 
 function loadConfig(): typeof DEFAULT_CONFIG {
     try {
         const raw = localStorage.getItem(LS_CONFIG_KEY);
         return raw ? { ...DEFAULT_CONFIG, ...JSON.parse(raw) } : DEFAULT_CONFIG;
-    } catch {
-        return DEFAULT_CONFIG;
-    }
+    } catch { return DEFAULT_CONFIG; }
 }
 
 function saveConfig(cfg: typeof DEFAULT_CONFIG) {
-    try {
-        localStorage.setItem(LS_CONFIG_KEY, JSON.stringify(cfg));
-    } catch {}
+    try { localStorage.setItem(LS_CONFIG_KEY, JSON.stringify(cfg)); } catch {}
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   MarketKiller
-═══════════════════════════════════════════════════════════════════════════ */
 export const MarketKiller: React.FC = () => {
     const { transactions } = useStore();
-
     const initCfg = loadConfig();
-    const [stake,       setStake]       = useState(initCfg.stake);
-    const [martingale,  setMartingale]  = useState(initCfg.martingale);
-    const [takeProfit,  setTakeProfit]  = useState(initCfg.takeProfit);
-    const [stopLoss,    setStopLoss]    = useState(initCfg.stopLoss);
-    const [vhEnabled,    setVhEnabled]   = useState(initCfg.vhEnabled);
-    const [vhThreshold,  setVhThreshold] = useState(initCfg.vhThreshold);
-    const [accurateMode, setAccurateMode] = useState(initCfg.accurateMode);
-    const [maxDir,       setMaxDir]       = useState(initCfg.maxDir);
-    const [running,     setRunning]     = useState(false);
-    const [pnl,         setPnl]         = useState(0);
-    const [logs,        setLogs]        = useState<LogEntry[]>([]);
-    const [activeContracts, setActiveContracts] = useState(0);
-    const [symbolDisplay, setSymbolDisplay] = useState<
-        Record<string, { lastSignal: string; wins: number; losses: number; stake: number }>
-    >({});
 
-    /* ── Refs ─────────────────────────────────────────────────────────────── */
-    const wsRef            = useRef<MakotiWS | null>(null);
-    const symbolDataRef    = useRef<Record<string, SymbolState>>({});
-    const pnlRef           = useRef(0);
-    const runningRef       = useRef(false);
-    const stakeParsed      = useRef(0.35);
-    const martingaleParsed = useRef(2);
-    const tpRef            = useRef(10);
-    const slRef            = useRef(5);
+    const [stake, setStake] = useState(initCfg.stake);
+    const [martingale, setMartingale] = useState(initCfg.martingale);
+    const [takeProfit, setTakeProfit] = useState(initCfg.takeProfit);
+    const [stopLoss, setStopLoss] = useState(initCfg.stopLoss);
+    const [vhEnabled, setVhEnabled] = useState(initCfg.vhEnabled);
+    const [vhThreshold, setVhThreshold] = useState(initCfg.vhThreshold);
+    const [maxDir, setMaxDir] = useState(initCfg.maxDir);
+    const [running, setRunning] = useState(false);
+    const [pnl, setPnl] = useState(0);
+    const [logs, setLogs] = useState<LogEntry[]>([]);
+    const [symDisplay, setSymDisplay] = useState<Record<string, SymbolDisplay>>({});
 
-    const globalLock         = useRef(false);
-    const activeContractsRef = useRef(0);
-    const globalStakeRef     = useRef(0.35);
-    const contractMapRef     = useRef<Map<string, { symbol: string; stake: number; strategyNames: string[]; duration: number }>>(new Map());
-    const consecutiveLossesRef = useRef(0);
-    const cooldownTicksRef     = useRef(0);
-    const signalHistoryRef     = useRef<{ sym: string; type: string; conf: number }[]>([]);
-
-    const vhStateRef = useRef({ enabled: false, threshold: 1, is_virtual: false, loss_count: 0 });
-    const vhEnabledRef = useRef(false);
-    const vhThresholdRef = useRef(1);
-    const accurateRef = useRef(false);
-    const recoveryRef = useRef<{ active: boolean; pending: number; stake: number; martingale: number } | null>(null);
-    const recoveryPnlRef = useRef(0);
-    const lastTickSymRef = useRef('');
-    const directionRef = useRef<Record<string, { dir: 'up' | 'down' | null; count: number }>>({});
+    const wsRef = useRef<MakotiWS | null>(null);
+    const runningRef = useRef(false);
+    const pnlRef = useRef(0);
+    const baseStakeRef = useRef(0.35);
+    const mgRef = useRef(2);
+    const tpRef = useRef(10);
+    const slRef = useRef(5);
     const maxDirRef = useRef(3);
-    const virtualTradeRef = useRef<{
-        symbol: string;
-        entryPrice: number;
-        direction: 'CALL' | 'PUT';
-        duration: number;
-        ticksElapsed: number;
-        stake: number;
-        startTime: number;
-        buyId: string;
-        resolved: boolean;
+    const symDataRef = useRef<Record<string, SymState>>({});
+    const tradeLockRef = useRef(false);
+    const cooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const currentStakeRef = useRef(0.35);
+    const contractMapRef = useRef<Map<string, { symbol: string; stake: number; strategyNames: string[] }>>(new Map());
+    const vhStateRef = useRef({ enabled: false, threshold: 1, isVirtual: false, lossCount: 0 });
+    const virtualRef = useRef<{
+        symbol: string; entryPrice: number; direction: 'CALL' | 'PUT';
+        stake: number; startTime: number; buyId: string;
+        ticksElapsed: number; resolved: boolean;
     } | null>(null);
+    const dirRef = useRef<Record<string, { dir: 'up' | 'down' | null; count: number }>>({});
+    const recoveryRef = useRef<{ active: boolean; pending: number; stake: number; martingale: number; vhThreshold: number } | null>(null);
+    const recoveryPnlRef = useRef(0);
 
-    /* ── Persist ──────────────────────────────────────────────────────────── */
-    useEffect(() => { saveConfig({ stake, martingale, takeProfit, stopLoss, vhEnabled, vhThreshold, accurateMode, maxDir }); }, [stake, martingale, takeProfit, stopLoss, vhEnabled, vhThreshold, accurateMode, maxDir]);
+    useEffect(() => {
+        saveConfig({ stake, martingale, takeProfit, stopLoss, vhEnabled, vhThreshold, maxDir });
+    }, [stake, martingale, takeProfit, stopLoss, vhEnabled, vhThreshold, maxDir]);
 
-    /* ── Recovery auto-start ─────────────────────────────────────────────── */
     useEffect(() => {
         if (window.DBot?.__recovery_auto_start) {
             window.DBot.__recovery_auto_start = false;
@@ -117,19 +106,263 @@ export const MarketKiller: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    /* ── POC listener on the OTP new system WS ────────────────────────────── */
-    // Re-subscribe POC on every contract buy by keying on activeContractsRef
-    const pocUnsubRef = useRef<(() => void) | null>(null);
+    const addLog = useCallback((msg: string, type: LogEntry['type'] = 'info') => {
+        const time = new Date().toLocaleTimeString();
+        setLogs(prev => [{ time, msg, type }, ...prev].slice(0, 150));
+    }, []);
+
+    const clearLogs = useCallback(() => {
+        setLogs([]);
+        try { localStorage.removeItem(LS_LOGS_KEY); } catch {}
+    }, []);
+
+    const flushSym = useCallback((sym: string) => {
+        const sd = symDataRef.current[sym];
+        if (!sd) return;
+        const d = dirRef.current[sym] || { dir: null, count: 0 };
+        const lastPrice = sd.prices[sd.prices.length - 1];
+        const pip = PIP_SIZES[sym] || 2;
+        const digit = lastPrice != null ? Number(lastPrice.toFixed(pip).slice(-1)) : null;
+        setSymDisplay(prev => ({
+            ...prev,
+            [sym]: {
+                label: SYMBOL_LABELS[sym], lastSignal: sd.lastSignal,
+                wins: sd.wins, losses: sd.losses, dir: d.dir, dirCount: d.count,
+                stake: currentStakeRef.current, digit,
+            },
+        }));
+    }, []);
+
+    const flushAllSyms = useCallback(() => {
+        ALL_SYMBOLS.forEach(sym => flushSym(sym));
+    }, [flushSym]);
+
+    const stopKiller = useCallback(() => {
+        runningRef.current = false;
+        tradeLockRef.current = false;
+        virtualRef.current = null;
+        if (cooldownTimerRef.current) { clearTimeout(cooldownTimerRef.current); cooldownTimerRef.current = null; }
+        setRunning(false);
+        try { wsRef.current?.close(); } catch {}
+        wsRef.current = null;
+        addLog('Market Killer stopped.', 'info');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [addLog]);
+
+    const checkLimits = useCallback(() => {
+        if (pnlRef.current >= tpRef.current) {
+            addLog(`✅ Take Profit +$${tpRef.current} reached! P&L: $${pnlRef.current.toFixed(2)}`, 'win');
+            stopKiller(); return true;
+        }
+        if (pnlRef.current <= -slRef.current) {
+            addLog(`🛑 Stop Loss -$${slRef.current} hit! P&L: $${pnlRef.current.toFixed(2)}`, 'loss');
+            stopKiller(); return true;
+        }
+        return false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [addLog]);
+
+    const updateDir = useCallback((sym: string, prices: number[]) => {
+        if (prices.length < 2) return;
+        const last = prices[prices.length - 1];
+        const prev = prices[prices.length - 2];
+        const cur = dirRef.current[sym] || { dir: null, count: 0 };
+        if (last > prev) {
+            if (cur.dir === 'up') cur.count++; else { cur.dir = 'up'; cur.count = 1; }
+        } else if (last < prev) {
+            if (cur.dir === 'down') cur.count++; else { cur.dir = 'down'; cur.count = 1; }
+        } else { cur.count = 0; cur.dir = null; }
+        dirRef.current[sym] = cur;
+    }, []);
+
+    const startVirtualTrade = useCallback((sym: string, direction: 'CALL' | 'PUT', stakeAmt: number) => {
+        const buyId = `vt_${sym}_${Date.now()}`;
+        const sd = symDataRef.current[sym];
+        const entryPrice = sd ? sd.prices[sd.prices.length - 1] : 0;
+        virtualRef.current = {
+            symbol: sym, entryPrice, direction, stake: stakeAmt,
+            startTime: Math.floor(Date.now() / 1000), buyId,
+            ticksElapsed: 0, resolved: false,
+        };
+        const label = direction === 'CALL' ? 'RISE' : 'FALL';
+        addLog(`🤖 VIRTUAL ${label} ${SYMBOL_LABELS[sym]} @ $${stakeAmt.toFixed(2)} — tracking`, 'trade');
+        try {
+            transactions.onBotContractEvent({
+                transaction_ids: { buy: buyId }, contract_id: buyId, buy_price: stakeAmt,
+                currency: 'USD', contract_type: direction, underlying: sym,
+                display_name: SYMBOL_LABELS[sym], date_start: Math.floor(Date.now() / 1000),
+                entry_tick_time: Math.floor(Date.now() / 1000), tick_count: 1, status: 'open', is_virtual: true,
+            } as any);
+        } catch {}
+    }, [addLog, transactions]);
+
+    const resolveVirtualTrade = useCallback((sym: string, exitPrice: number) => {
+        const vt = virtualRef.current;
+        if (!vt || vt.symbol !== sym) return;
+        const won = vt.direction === 'CALL' ? exitPrice > vt.entryPrice : exitPrice < vt.entryPrice;
+        const label = vt.direction === 'CALL' ? 'RISE' : 'FALL';
+        const profit = won ? vt.stake * 0.95 : -vt.stake;
+        const sellPrice = won ? vt.stake * 1.95 : 0;
+        const pip = PIP_SIZES[vt.symbol] || 2;
+        try {
+            transactions.onBotContractEvent({
+                transaction_ids: { buy: vt.buyId }, contract_id: vt.buyId,
+                buy_price: vt.stake, sell_price: sellPrice, currency: 'USD',
+                contract_type: vt.direction, underlying: vt.symbol,
+                display_name: won ? 'Virtual Win' : 'Virtual Loss',
+                date_start: vt.startTime, date_expiry: Math.floor(Date.now() / 1000),
+                entry_spot: vt.entryPrice.toFixed(pip), entry_tick: vt.entryPrice.toFixed(pip),
+                entry_tick_time: vt.startTime, exit_spot: exitPrice.toFixed(pip),
+                exit_tick: exitPrice.toFixed(pip), exit_tick_time: Math.floor(Date.now() / 1000),
+                profit, is_sold: true, is_completed: true, status: 'sold', is_virtual: true,
+            } as any);
+        } catch {}
+        pnlRef.current += profit;
+        setPnl(pnlRef.current);
+        const sd = symDataRef.current[sym];
+        if (won) {
+            if (sd) sd.wins++;
+            vhStateRef.current.lossCount = 0;
+            currentStakeRef.current = baseStakeRef.current;
+            addLog(`🤖 ✅ VIRTUAL WIN +$${profit.toFixed(2)} on ${SYMBOL_LABELS[sym]} — Entry $${vt.entryPrice.toFixed(4)} → Exit $${exitPrice.toFixed(4)}`, 'win');
+            if (vhStateRef.current.enabled && !vhStateRef.current.isVirtual) {
+                vhStateRef.current.isVirtual = true;
+                vhStateRef.current.lossCount = 0;
+                addLog(`🤖 🔄 Real WIN — switching back to VIRTUAL mode`, 'recovery');
+            }
+        } else {
+            if (sd) sd.losses++;
+            vhStateRef.current.lossCount++;
+            currentStakeRef.current = Number((vt.stake * mgRef.current).toFixed(2));
+            addLog(`🤖 ❌ VIRTUAL LOSS -$${Math.abs(profit).toFixed(2)} on ${SYMBOL_LABELS[sym]} #${vhStateRef.current.lossCount}/${vhStateRef.current.threshold} — Entry $${vt.entryPrice.toFixed(4)} → Exit $${exitPrice.toFixed(4)}`, 'loss');
+            if (vhStateRef.current.lossCount >= vhStateRef.current.threshold) {
+                vhStateRef.current.isVirtual = false;
+                addLog(`🤖 🔄 THRESHOLD REACHED (${vhStateRef.current.lossCount} virtual losses) — switching to REAL trades`, 'recovery');
+            }
+        }
+        virtualRef.current = null;
+        flushSym(sym);
+        tradeLockRef.current = true;
+        cooldownTimerRef.current = setTimeout(() => {
+            tradeLockRef.current = false;
+            cooldownTimerRef.current = null;
+            if (runningRef.current) { flushAllSyms(); checkLimits(); }
+        }, TRADE_COOLDOWN_MS);
+    }, [addLog, transactions, flushSym, flushAllSyms, checkLimits]);
+
+    const executeBuy = useCallback(async (sym: string, direction: 'CALL' | 'PUT'): Promise<boolean> => {
+        if (!runningRef.current) return false;
+        if (window._newSystemWS?.readyState !== WebSocket.OPEN) {
+            addLog(`WebSocket not open — skipping ${SYMBOL_LABELS[sym]}`, 'info');
+            return false;
+        }
+        const tradeStake = Number(currentStakeRef.current.toFixed(2));
+        const label = direction === 'CALL' ? 'RISE' : 'FALL';
+        addLog(`🎯 ${SYMBOL_LABELS[sym]}: ${label} @ $${tradeStake.toFixed(2)}`, 'trade');
+        const params = {
+            amount: tradeStake, basis: 'stake', currency: 'USD',
+            duration: 1, duration_unit: 't', symbol: sym, contract_type: direction,
+        };
+        try {
+            const response = await Promise.race([
+                sendViaNewSystemWithPromise({ buy: 1, price: tradeStake, parameters: params }),
+                new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Buy timeout')), BUY_TIMEOUT_MS)),
+            ]);
+            const contractId = (response as any)?.buy?.contract_id ?? (response as any)?.contract_id;
+            if (contractId) {
+                contractMapRef.current.set(String(contractId), {
+                    symbol: sym, stake: tradeStake, strategyNames: ['tick_direction'],
+                });
+                addLog(`Contract ${contractId} open on ${SYMBOL_LABELS[sym]}`, 'info');
+                try {
+                    transactions.onBotContractEvent({
+                        contract_id: contractId,
+                        transaction_ids: { buy: (response as any)?.buy?.transaction_id },
+                        buy_price: tradeStake, currency: 'USD', contract_type: direction,
+                        underlying: sym, display_name: SYMBOL_LABELS[sym],
+                        date_start: Math.floor(Date.now() / 1000), status: 'open',
+                    } as any);
+                } catch {}
+                const sd = symDataRef.current[sym];
+                if (sd) sd.lastSignal = label;
+                flushSym(sym);
+                return true;
+            } else {
+                addLog(`Buy ok but no contract_id for ${SYMBOL_LABELS[sym]}`, 'info');
+                tradeLockRef.current = false;
+                return false;
+            }
+        } catch (err: any) {
+            addLog(`Buy error ${SYMBOL_LABELS[sym]}: ${err?.error?.message || err?.message || 'timeout'}`, 'loss');
+            tradeLockRef.current = false;
+            return false;
+        }
+    }, [addLog, transactions, flushSym]);
+
+    const processContractSold = useCallback((contractId: string, profit: number) => {
+        const entry = contractMapRef.current.get(contractId);
+        if (!entry) return;
+        contractMapRef.current.delete(contractId);
+        const { symbol: sym, stake: tradeStake, strategyNames } = entry;
+        const won = profit >= 0;
+        const sd = symDataRef.current[sym];
+        strategyNames.forEach(n => recordOutcome(n, won));
+        pnlRef.current += profit;
+        setPnl(pnlRef.current);
+        try {
+            transactions.onBotContractEvent({
+                contract_id: contractId, buy_price: tradeStake, profit, currency: 'USD',
+                underlying: sym, display_name: SYMBOL_LABELS[sym],
+                is_sold: true, is_completed: true, status: 'sold',
+            } as any);
+        } catch {}
+        if (won) {
+            if (sd) sd.wins++;
+            currentStakeRef.current = baseStakeRef.current;
+            addLog(`✅ WON +$${profit.toFixed(2)} on ${SYMBOL_LABELS[sym]} — stake reset | P&L $${pnlRef.current.toFixed(2)}`, 'win');
+            if (vhStateRef.current.enabled && !vhStateRef.current.isVirtual) {
+                vhStateRef.current.isVirtual = true;
+                vhStateRef.current.lossCount = 0;
+                addLog(`🤖 🔄 Real WIN — switching back to VIRTUAL mode`, 'recovery');
+            }
+        } else {
+            if (sd) sd.losses++;
+            const nextStake = Number((tradeStake * mgRef.current).toFixed(2));
+            currentStakeRef.current = nextStake;
+            addLog(`❌ LOST -$${Math.abs(profit).toFixed(2)} on ${SYMBOL_LABELS[sym]} — next stake $${nextStake.toFixed(2)} | P&L $${pnlRef.current.toFixed(2)}`, 'loss');
+        }
+        if (recoveryRef.current) {
+            recoveryPnlRef.current += profit;
+            if (recoveryPnlRef.current >= 0) {
+                addLog(`🔄 RECOVERY COMPLETE — returning to Over/Under`, 'win');
+                window.DBot.__recovery = null;
+                stopKiller();
+                if (typeof window.DBot.__switchToTab === 'function') {
+                    window.DBot.__ou_auto_start = true;
+                    window.DBot.__switchToTab('over_under');
+                }
+                return;
+            }
+            addLog(`🔄 Recovery progress: $${recoveryPnlRef.current.toFixed(2)} / $0.00`, 'info');
+        }
+        flushSym(sym);
+        tradeLockRef.current = true;
+        cooldownTimerRef.current = setTimeout(() => {
+            tradeLockRef.current = false;
+            cooldownTimerRef.current = null;
+            if (runningRef.current) { flushAllSyms(); checkLimits(); }
+        }, TRADE_COOLDOWN_MS);
+    }, [addLog, transactions, flushSym, flushAllSyms, stopKiller, checkLimits]);
+
     const subscribePOC = useCallback(() => {
-        if (!window._newSystemWS) return;
-        window._newSystemWS.send(JSON.stringify({ proposal_open_contract: 1, subscribe: 1 }));
+        if (window._newSystemWS?.readyState === WebSocket.OPEN) {
+            window._newSystemWS.send(JSON.stringify({ proposal_open_contract: 1, subscribe: 1 }));
+        }
     }, []);
 
     useEffect(() => {
         if (!running) return;
         subscribePOC();
-        if (pocUnsubRef.current) pocUnsubRef.current();
-
         const unsub = onNewSystemMessage((event: MessageEvent) => {
             try {
                 const data = JSON.parse(event.data);
@@ -137,629 +370,189 @@ export const MarketKiller: React.FC = () => {
                 const c = data.proposal_open_contract;
                 if (!c?.is_sold) return;
                 const cid = String(c.contract_id);
-                const entry = contractMapRef.current.get(cid);
-                if (!entry) return;
-                contractMapRef.current.delete(cid);
-
-                const { symbol: sym, stake: tradeStake, strategyNames, duration } = entry;
-                const sd = symbolDataRef.current[sym];
-                if (!sd) return;
-
-                const profit = Number(c.profit);
-                const won = profit >= 0;
-
-                strategyNames.forEach(n => recordOutcome(n, won));
-
-                pnlRef.current += profit;
-                setPnl(pnlRef.current);
-
-                if (won) {
-                    sd.wins++;
-                    consecutiveLossesRef.current = 0;
-                    cooldownTicksRef.current = 0;
-                    globalStakeRef.current = stakeParsed.current;
-                    addLog(`✅ WON +$${profit.toFixed(2)} on ${SYMBOL_LABELS[sym]} | Next stake reset to $${stakeParsed.current.toFixed(2)} | P&L $${pnlRef.current.toFixed(2)}`, 'win');
-                    if (vhStateRef.current.enabled && !vhStateRef.current.is_virtual) {
-                        vhStateRef.current.is_virtual = true;
-                        vhStateRef.current.loss_count = 0;
-                        addLog(`🤖 [VIRTUAL HOOK] 🔄 Real WIN — switching back to VIRTUAL mode`, 'info');
-                    }
-                } else {
-                    sd.losses++;
-                    consecutiveLossesRef.current++;
-                    globalStakeRef.current = Number((tradeStake * martingaleParsed.current).toFixed(2));
-                    if (consecutiveLossesRef.current >= 3) {
-                        cooldownTicksRef.current = 8;
-                        addLog(`⚠ ${consecutiveLossesRef.current} consecutive losses — cooldown ${cooldownTicksRef.current} ticks`, 'loss');
-                    }
-                    addLog(`❌ LOST -$${Math.abs(profit).toFixed(2)} on ${SYMBOL_LABELS[sym]} | Next stake $${globalStakeRef.current.toFixed(2)} | P&L $${pnlRef.current.toFixed(2)}`, 'loss');
-                }
-
-                // Recovery mode P&L tracking
-                if (recoveryRef.current) {
-                    recoveryPnlRef.current += profit;
-                    if (recoveryPnlRef.current >= 0) {
-                        addLog(`🔄 RECOVERY COMPLETE — returning to Over/Under`, 'win');
-                        window.DBot.__recovery = null;
-                        stopKiller();
-                        if (typeof window.DBot.__switchToTab === 'function') {
-                            window.DBot.__ou_auto_start = true;
-                            window.DBot.__switchToTab('over_under');
-                        }
-                        return;
-                    }
-                    addLog(`🔄 Recovery progress: $${recoveryPnlRef.current.toFixed(2)} / $0.00`, 'info');
-                }
-
-                flushDisplay(sym);
-                globalLock.current = false;
-                activeContractsRef.current = 0;
-                setActiveContracts(0);
-                checkLimits();
-            } catch (_) {}
+                if (!contractMapRef.current.has(cid)) return;
+                processContractSold(cid, Number(c.profit));
+            } catch {}
         });
-
-        pocUnsubRef.current = unsub;
-        return () => { unsub(); pocUnsubRef.current = null; };
+        return () => { unsub(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [running]);
+    }, [running, processContractSold, subscribePOC]);
 
-    /* ── Log helper ──────────────────────────────────────────────────────── */
-    const addLog = useCallback((msg: string, type: LogEntry['type'] = 'info') => {
-        const time = new Date().toLocaleTimeString();
-        setLogs(prev => [{ time, msg, type }, ...prev].slice(0, 120));
-    }, []);
-
-    const clearLogs = useCallback(() => {
-        setLogs([]);
-        localStorage.removeItem(LS_LOGS_KEY);
-    }, []);
-
-    const flushDisplay = useCallback((sym: string) => {
-        const sd = symbolDataRef.current[sym];
-        if (!sd) return;
-        setSymbolDisplay(prev => ({
-            ...prev,
-            [sym]: {
-                lastSignal: sd.lastSignal,
-                wins: sd.wins,
-                losses: sd.losses,
-                stake: globalStakeRef.current,
-            },
-        }));
-    }, []);
-
-    const checkLimits = useCallback(() => {
-        if (pnlRef.current >= tpRef.current) {
-            addLog(`✅ Take Profit +$${tpRef.current} reached! P&L: $${pnlRef.current.toFixed(2)}`, 'win');
-            stopKiller();
-            return true;
-        }
-        if (pnlRef.current <= -slRef.current) {
-            addLog(`🛑 Stop Loss -$${slRef.current} hit! P&L: $${pnlRef.current.toFixed(2)}`, 'loss');
-            stopKiller();
-            return true;
-        }
-        return false;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [addLog]);
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    const stopKiller = useCallback(() => {
-        runningRef.current = false;
-        globalLock.current = false;
-        virtualTradeRef.current = null;
-        lastTickSymRef.current = '';
-        setRunning(false);
-        try { wsRef.current?.close(); } catch (_) {}
-        wsRef.current = null;
-        activeContractsRef.current = 0;
-        setActiveContracts(0);
-        addLog('Market Killer stopped.', 'info');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [addLog]);
-
-    /* ── Always D1 tick duration ──────────────────────────────────────────── */
-    const getBestDuration = useCallback((_prices: number[], _direction: 'CALL' | 'PUT'): number => {
-        return 1;
-    }, []);
-
-    /* ── Track tick direction: consecutive up/down ───────────────────────── */
-    const updateDirection = useCallback((sym: string, prices: number[]) => {
-        if (prices.length < 2) return;
-        const last = prices[prices.length - 1];
-        const prev = prices[prices.length - 2];
-        const cur = directionRef.current[sym] || { dir: null, count: 0 };
-        if (last > prev) {
-            if (cur.dir === 'up') { cur.count++; } else { cur.dir = 'up'; cur.count = 1; }
-        } else if (last < prev) {
-            if (cur.dir === 'down') { cur.count++; } else { cur.dir = 'down'; cur.count = 1; }
-        } else {
-            cur.count = 0; cur.dir = null;
-        }
-        directionRef.current[sym] = cur;
-    }, []);
-
-    /* ── Execute ONE trade using the global stake ────────────────────────── */
-    const executeTrade = useCallback(async (sym: string, direction: 'CALL' | 'PUT') => {
+    const onTickRef = useRef(() => {});
+    onTickRef.current = () => {
         if (!runningRef.current) return;
 
-        const sd = symbolDataRef.current[sym];
-        if (!sd) return;
+        ALL_SYMBOLS.forEach(sym => {
+            const sd = symDataRef.current[sym];
+            if (!sd || sd.ticks.length < MIN_TICKS) return;
+            updateDir(sym, sd.prices);
+            flushSym(sym);
+        });
 
-        // ── Virtual Hook: track the EXACT same trade over its duration ──
-        if (vhStateRef.current.enabled && vhStateRef.current.is_virtual) {
-            globalLock.current = true;
-            activeContractsRef.current = 1;
-            setActiveContracts(1);
-            const duration = getBestDuration(sd.prices, direction);
-            const entryPrice = sd.prices[sd.prices.length - 1];
-            const vhStake = globalStakeRef.current;
-            const vhBuyId = `vh_${sym}_${Date.now()}`;
-            virtualTradeRef.current = {
-                symbol: sym,
-                entryPrice,
-                direction,
-                duration,
-                ticksElapsed: 0,
-                stake: vhStake,
-                startTime: Math.floor(Date.now() / 1000),
-                buyId: vhBuyId,
-                resolved: false,
-            };
-            const label = direction === 'CALL' ? 'RISE' : 'FALL';
-            addLog(`🤖 [VIRTUAL HOOK] 🔍 Virtual ${label} D${duration} on ${SYMBOL_LABELS[sym]} @ $${entryPrice.toFixed(4)} — tracking ${duration} ticks`, 'info');
-            try {
-                transactions.onBotContractEvent({
-                    transaction_ids: { buy: vhBuyId },
-                    contract_id: vhBuyId,
-                    buy_price: vhStake,
-                    currency: 'USD',
-                    contract_type: direction,
-                    underlying: sym,
-                    display_name: SYMBOL_LABELS[sym],
-                    date_start: Math.floor(Date.now() / 1000),
-                    entry_tick_time: Math.floor(Date.now() / 1000),
-                    tick_count: duration,
-                    status: 'open',
-                    is_virtual: true,
-                } as any);
-            } catch (_) {}
-            signalHistoryRef.current = [];
+        if (virtualRef.current) {
+            const vt = virtualRef.current;
+            const sd = symDataRef.current[vt.symbol];
+            if (sd) {
+                vt.ticksElapsed++;
+                if (vt.ticksElapsed >= 1 && !vt.resolved) {
+                    vt.resolved = true;
+                    const capturedPrice = sd.prices[sd.prices.length - 1];
+                    setTimeout(() => { resolveVirtualTrade(vt.symbol, capturedPrice); }, VIRTUAL_RESOLVE_DELAY_MS);
+                }
+            }
             return;
         }
 
-        // Micro-trend entry gate: don't trade against the trend
-        if (direction === 'CALL' || direction === 'PUT') {
-            const last3 = sd.prices.slice(-3);
-            if (last3.length === 3) {
-                const rising = last3[0] < last3[1] && last3[1] < last3[2];
-                const falling = last3[0] > last3[1] && last3[1] > last3[2];
-                if (direction === 'CALL' && falling) return;
-                if (direction === 'PUT' && rising) return;
-            }
-        }
+        if (tradeLockRef.current) return;
 
-        globalLock.current = true;
-        activeContractsRef.current = 1;
-        setActiveContracts(1);
-
-        const tradeStake = Number(globalStakeRef.current.toFixed(2));
-        const duration   = getBestDuration(sd.prices, direction);
-        const label = direction === 'CALL' ? 'RISE' : 'FALL';
-        addLog(`Trade stake: $${tradeStake.toFixed(2)} (base: $${stakeParsed.current.toFixed(2)}, mg: ${martingaleParsed.current}x)`, 'trade');
-
-        const params: any = {
-            amount: tradeStake, basis: 'stake', currency: 'USD',
-            duration, duration_unit: 't',
-            symbol: sym, contract_type: direction,
-        };
-
-        if (window._newSystemWS?.readyState === WebSocket.OPEN) {
-            try {
-                const response = await sendViaNewSystemWithPromise({ buy: 1, price: tradeStake, parameters: params });
-                const contractId = response?.buy?.contract_id ?? response?.contract_id;
-                if (contractId) {
-                    contractMapRef.current.set(String(contractId), { symbol: sym, stake: tradeStake, strategyNames: ['tick_direction'], duration });
-                    sd.lastSignal = label;
-                    addLog(`🎯 ${SYMBOL_LABELS[sym]}: ${label} D${duration} @ $${tradeStake} — tick direction trick`, 'trade');
-                    addLog(`Contract ${contractId} open on ${SYMBOL_LABELS[sym]}`, 'info');
-                    flushDisplay(sym);
-                    try {
-                        transactions.onBotContractEvent({
-                            contract_id: contractId,
-                            transaction_ids: { buy: response?.buy?.transaction_id },
-                            buy_price: tradeStake,
-                            currency: 'USD',
-                            contract_type: direction,
-                            underlying: sym,
-                            display_name: SYMBOL_LABELS[sym],
-                            date_start: Math.floor(Date.now() / 1000),
-                            status: 'open',
-                        } as any);
-                    } catch (_) {}
-                } else {
-                    addLog(`Buy ok but no contract_id: ${JSON.stringify(response).slice(0, 100)}`, 'info');
-                    globalLock.current = false;
-                    activeContractsRef.current = 0;
-                    setActiveContracts(0);
-                }
-            } catch (err: any) {
-                addLog(`Buy error: ${err?.error?.message || err?.message || 'Unknown'}`, 'info');
-                globalLock.current = false;
-                activeContractsRef.current = 0;
-                setActiveContracts(0);
-            }
-        } else if (wsRef.current?.isOpen()) {
-            wsRef.current.send({ buy: 1, price: tradeStake, parameters: params });
-            sd.lastSignal = label;
-            addLog(`🎯 ${SYMBOL_LABELS[sym]}: ${label} D${duration} @ $${tradeStake} — tick direction trick`, 'trade');
-            contractMapRef.current.set(sym + Date.now(), { symbol: sym, stake: tradeStake, strategyNames: ['tick_direction'], duration });
-            flushDisplay(sym);
-            try {
-                transactions.onBotContractEvent({
-                    transaction_ids: { buy: sym + Date.now() },
-                    contract_id: sym + Date.now(),
-                    buy_price: tradeStake,
-                    currency: 'USD',
-                    contract_type: direction,
-                    underlying: sym,
-                    display_name: SYMBOL_LABELS[sym],
-                    date_start: Math.floor(Date.now() / 1000),
-                    entry_tick_time: Math.floor(Date.now() / 1000),
-                    status: 'open',
-                } as any);
-            } catch (_) {}
-        } else {
-            globalLock.current = false;
-            activeContractsRef.current = 0;
-            setActiveContracts(0);
-        }
-    }, [addLog, flushDisplay]);
-
-    /* ── Resolve virtual trade after delay ── */
-    const resolveVirtualTrade = useCallback((sym: string, currentPrice: number) => {
-        const vt = virtualTradeRef.current;
-        if (!vt || vt.symbol !== sym) return;
-
-        const won = vt.direction === 'CALL'
-            ? currentPrice > vt.entryPrice
-            : currentPrice < vt.entryPrice;
-        const label = vt.direction === 'CALL' ? 'RISE' : 'FALL';
-        const vhProfit = won ? vt.stake * 0.95 : -vt.stake;
-        const sellPrice = won ? vt.stake * 1.95 : 0;
-        try {
-            const entrySpotStr = vt.entryPrice.toFixed(PIP_SIZES[vt.symbol] || 2);
-            const exitSpotStr = currentPrice.toFixed(PIP_SIZES[vt.symbol] || 2);
-            const vhDisplayName = won ? 'Virtual Win' : 'Virtual Loss';
-            transactions.onBotContractEvent({
-                transaction_ids: { buy: vt.buyId },
-                contract_id: vt.buyId,
-                buy_price: vt.stake,
-                sell_price: sellPrice,
-                currency: 'USD',
-                contract_type: vt.direction,
-                underlying: vt.symbol,
-                display_name: vhDisplayName,
-                date_start: vt.startTime,
-                date_expiry: Math.floor(Date.now() / 1000),
-                entry_spot: entrySpotStr,
-                entry_tick: entrySpotStr,
-                entry_tick_time: vt.startTime,
-                exit_spot: exitSpotStr,
-                exit_tick: exitSpotStr,
-                exit_tick_time: Math.floor(Date.now() / 1000),
-                profit: vhProfit,
-                is_sold: true,
-                is_completed: true,
-                status: 'sold',
-                is_virtual: true,
-            } as any);
-        } catch (_) {}
-        if (won) {
-            vhStateRef.current.loss_count = 0;
-            addLog(`🤖 [VIRTUAL HOOK] ✅ Virtual WIN ${label} D${vt.duration} on ${SYMBOL_LABELS[vt.symbol]} — Entry $${vt.entryPrice.toFixed(4)} → Exit $${currentPrice.toFixed(4)}`, 'win');
-        } else {
-            vhStateRef.current.loss_count++;
-            addLog(`🤖 [VIRTUAL HOOK] ❌ Virtual LOSS ${label} D${vt.duration} on ${SYMBOL_LABELS[vt.symbol]} #${vhStateRef.current.loss_count}/${vhStateRef.current.threshold} — Entry $${vt.entryPrice.toFixed(4)} → Exit $${currentPrice.toFixed(4)}`, 'loss');
-            if (vhStateRef.current.loss_count >= vhStateRef.current.threshold) {
-                vhStateRef.current.is_virtual = false;
-                addLog(`🤖 [VIRTUAL HOOK] 🔄 THRESHOLD REACHED — Switching to REAL trades`, 'info');
-            }
-        }
-        virtualTradeRef.current = null;
-        globalLock.current = false;
-        activeContractsRef.current = 0;
-        setActiveContracts(0);
-        checkLimits();
-    }, [addLog, transactions, checkLimits]);
-
-    /* ── Handle every incoming tick ──────────────────────────────────────── */
-    const onTickReceived = useCallback(() => {
-        if (!runningRef.current) return;
-
-        // ── Virtual trade resolution (process before globalLock check) ──
-        if (virtualTradeRef.current) {
-            const vt = virtualTradeRef.current;
-            if (lastTickSymRef.current !== vt.symbol) return; // only advance on matching symbol
-            const sd = symbolDataRef.current[vt.symbol];
-            if (sd) {
-                vt.ticksElapsed++;
-                if (vt.ticksElapsed >= vt.duration && !vt.resolved) {
-                    vt.resolved = true;
-                    const capturedPrice = sd.prices[sd.prices.length - 1];
-                    setTimeout(() => {
-                        resolveVirtualTrade(vt.symbol, capturedPrice);
-                    }, 1000);
-                }
-            }
-            return; // wait for duration to elapse
-        }
-
-        if (globalLock.current)  return;
-        if (cooldownTicksRef.current > 0) { cooldownTicksRef.current--; return; }
-
-        // ── Tick direction trick: trade opposite after N consecutive ticks ──
-        ALL_SYMBOLS.forEach(s => {
-            const sd = symbolDataRef.current[s];
-            if (!sd || sd.ticks.length < MIN_TICKS_BEFORE_TRADE) return;
-            updateDirection(s, sd.prices);
-            const dirInfo = directionRef.current[s] || { dir: null, count: 0 };
-            if (dirInfo.count >= maxDirRef.current && dirInfo.dir) {
-                const direction = dirInfo.dir === 'up' ? 'PUT' : 'CALL';
+        ALL_SYMBOLS.forEach(sym => {
+            if (tradeLockRef.current) return;
+            const sd = symDataRef.current[sym];
+            if (!sd || sd.ticks.length < MIN_TICKS) return;
+            const d = dirRef.current[sym] || { dir: null, count: 0 };
+            if (d.count >= maxDirRef.current && d.dir) {
+                const direction = d.dir === 'up' ? 'PUT' : 'CALL';
                 const label = direction === 'CALL' ? 'RISE' : 'FALL';
-                addLog(`TRIGGER ${SYMBOL_LABELS[s]}: ${dirInfo.dir} ${dirInfo.count}x → ${label}`, 'trade');
-                directionRef.current[s] = { dir: null, count: 0 };
-                executeTrade(s, direction).catch(() => {});
+                addLog(`TRIGGER ${SYMBOL_LABELS[sym]}: ${d.dir} ${d.count}x → ${label}`, 'trigger');
+                dirRef.current[sym] = { dir: null, count: 0 };
+                tradeLockRef.current = true;
+                if (vhStateRef.current.enabled && vhStateRef.current.isVirtual) {
+                    startVirtualTrade(sym, direction, currentStakeRef.current);
+                } else {
+                    executeBuy(sym, direction).catch(() => { tradeLockRef.current = false; });
+                }
             }
         });
-    }, [executeTrade, addLog, updateDirection]);
+    };
 
-    // Ref for onTickReceived to avoid stale closure in WS handler
-    const onTickRef = useRef(onTickReceived);
-    onTickRef.current = onTickReceived;
-
-    /* ── Start ───────────────────────────────────────────────────────────── */
     const startKiller = useCallback(() => {
         const stakeVal = Math.max(0.35, parseFloat(stake) || 0.35);
-        const mgVal    = Math.max(1,    parseFloat(martingale) || 2);
-        const tpVal    = Math.max(0.5,  parseFloat(takeProfit) || 10);
-        const slVal    = Math.max(0.5,  parseFloat(stopLoss)   || 5);
+        const mgVal = Math.max(1, parseFloat(martingale) || 2);
+        const tpVal = Math.max(0.5, parseFloat(takeProfit) || 10);
+        const slVal = Math.max(0.5, parseFloat(stopLoss) || 5);
+        const mdVal = Math.max(2, parseInt(maxDir) || 3);
 
-        stakeParsed.current      = stakeVal;
-        martingaleParsed.current = mgVal;
-        tpRef.current            = tpVal;
-        slRef.current            = slVal;
-        globalLock.current       = false;
-        virtualTradeRef.current  = null;
-        lastTickSymRef.current   = '';
-        activeContractsRef.current = 0;
-        globalStakeRef.current   = stakeVal;
-        consecutiveLossesRef.current = 0;
-        cooldownTicksRef.current     = 0;
-        maxDirRef.current = Math.max(2, parseInt(maxDir) || 3);
-        directionRef.current = {};
+        baseStakeRef.current = stakeVal;
+        mgRef.current = mgVal;
+        tpRef.current = tpVal;
+        slRef.current = slVal;
+        maxDirRef.current = mdVal;
+        currentStakeRef.current = stakeVal;
+        pnlRef.current = 0;
+        tradeLockRef.current = false;
+        virtualRef.current = null;
+        contractMapRef.current.clear();
+        dirRef.current = {};
+        recoveryPnlRef.current = 0;
+        if (cooldownTimerRef.current) { clearTimeout(cooldownTimerRef.current); cooldownTimerRef.current = null; }
 
-        vhEnabledRef.current = vhEnabled;
-        vhThresholdRef.current = Math.max(1, parseInt(vhThreshold) || 1);
-        accurateRef.current = accurateMode;
         vhStateRef.current = {
-            enabled: vhEnabled,
-            threshold: vhThresholdRef.current,
-            is_virtual: vhEnabled,
-            loss_count: 0,
+            enabled: vhEnabled, threshold: Math.max(1, parseInt(vhThreshold) || 1),
+            isVirtual: vhEnabled, lossCount: 0,
         };
-        if (vhEnabled) {
-            addLog(`🤖 [VIRTUAL HOOK] Enabled — ${vhThresholdRef.current} virtual losses before real trades`, 'info');
-        }
+        if (vhEnabled) addLog(`🤖 Virtual Hook ON — ${vhStateRef.current.threshold} virtual losses before real trades`, 'recovery');
 
-        // ── Recovery mode override ──
         const recovery = window.DBot?.__recovery;
         recoveryRef.current = null;
         recoveryPnlRef.current = 0;
         if (recovery?.active) {
             const vhThresh = Math.max(0, recovery.vhThreshold ?? 1);
-            stakeParsed.current = recovery.stake;
-            martingaleParsed.current = recovery.martingale;
-            globalStakeRef.current = recovery.stake;
+            baseStakeRef.current = recovery.stake;
+            mgRef.current = recovery.martingale;
+            currentStakeRef.current = recovery.stake;
             recoveryPnlRef.current = -recovery.pending;
             recoveryRef.current = recovery;
-            vhEnabledRef.current = vhThresh > 0;
-            vhThresholdRef.current = vhThresh || 1;
-            vhStateRef.current = { enabled: vhThresh > 0, threshold: vhThresh || 1, is_virtual: vhThresh > 0, loss_count: 0 };
-            addLog(`🔄 RECOVERY MODE — recover $${recovery.pending.toFixed(2)} loss | stake $${recovery.stake} ×${recovery.martingale} | VH threshold ${vhThresh}`, 'info');
+            vhStateRef.current = { enabled: vhThresh > 0, threshold: vhThresh || 1, isVirtual: vhThresh > 0, lossCount: 0 };
+            addLog(`🔄 RECOVERY MODE — recover $${recovery.pending.toFixed(2)} | stake $${recovery.stake} x${recovery.martingale}`, 'recovery');
         }
 
-        setActiveContracts(0);
-        setSymbolDisplay({});
-        contractMapRef.current = new Map();
-
-        // Don't reset symbol data if already populated from auto-subscription
-        const hasData = Object.values(symbolDataRef.current).some(sd => sd.ticks.length > 0);
-        if (!hasData) {
-            symbolDataRef.current = {};
-            ALL_SYMBOLS.forEach(sym => {
-                symbolDataRef.current[sym] = {
-                    ticks: [], prices: [], lastSignal: '—',
-                    wins: 0, losses: 0, ready: false,
-                };
-            });
-        }
+        symDataRef.current = {};
+        ALL_SYMBOLS.forEach(sym => {
+            symDataRef.current[sym] = { ticks: [], prices: [], lastSignal: '—', wins: 0, losses: 0, ready: false };
+        });
+        setSymDisplay({});
 
         runningRef.current = true;
         setRunning(true);
+        setPnl(0);
+        setLogs([]);
+        addLog(`⚔ MARKET KILLER | stake $${stakeVal} MG x${mgVal} TP $${tpVal} SL $${slVal} | dir trigger: ${mdVal}`, 'info');
 
-        addLog(`⚔ Kill Market — Auto (Rise/Fall + Digits) | stake $${stakeVal}  MG ×${mgVal}  TP $${tpVal}  SL $${slVal}`, 'info');
-        addLog('Connected — using live tick stream', 'info');
-
-        if (wsRef.current) { try { wsRef.current.close(); } catch (_) {} wsRef.current = null; }
+        if (wsRef.current) { try { wsRef.current.close(); } catch {} wsRef.current = null; }
 
         const handleMsg = (data: any) => {
             if (!runningRef.current) return;
-
-            if (data.error) {
-                if (data.msg_type === 'buy') {
-                    addLog(`Buy error: ${data.error.message}`, 'info');
-                    globalLock.current = false;
-                    activeContractsRef.current = 0;
-                    setActiveContracts(0);
-                }
+            if (data.error?.msg_type === 'buy') {
+                addLog(`Buy error: ${data.error.message}`, 'info');
+                tradeLockRef.current = false;
                 return;
             }
-
+            if (data.error) return;
             switch (data.msg_type) {
-
                 case 'history': {
                     const sym: string = data.echo_req?.ticks_history;
-                    if (!sym || !symbolDataRef.current[sym]) return;
-                    const sd  = symbolDataRef.current[sym];
+                    if (!sym || !symDataRef.current[sym]) return;
+                    const sd = symDataRef.current[sym];
                     const pip = PIP_SIZES[sym] || 2;
                     const prices = (data.history.prices as (string | number)[]).map(p => Number(p));
-                    const digits = prices.map(p => Number(p.toFixed(pip).slice(-1)));
-                    sd.ticks  = digits.slice(-MAX_TICKS);
+                    sd.ticks = prices.map(p => Number(p.toFixed(pip).slice(-1))).slice(-MAX_TICKS);
                     sd.prices = prices.slice(-MAX_TICKS);
-                    sd.ready  = sd.ticks.length >= MIN_TICKS_BEFORE_TRADE;
-                    addLog(`Loaded ${digits.length} ticks — ${SYMBOL_LABELS[sym]}`, 'info');
+                    sd.ready = sd.ticks.length >= MIN_TICKS;
+                    addLog(`Loaded ${sd.ticks.length} ticks — ${SYMBOL_LABELS[sym]}`, 'info');
                     break;
                 }
-
                 case 'tick': {
-                    const tick     = data.tick;
+                    const tick = data.tick;
                     if (!tick) return;
                     const sym: string = tick.symbol;
-                    if (!sym || !symbolDataRef.current[sym]) return;
-                    const sd  = symbolDataRef.current[sym];
+                    if (!sym || !symDataRef.current[sym]) return;
+                    const sd = symDataRef.current[sym];
                     const pip = PIP_SIZES[sym] || tick.pip_size || 2;
                     const price = Number(tick.quote);
                     const digit = Number(price.toFixed(pip).slice(-1));
-
-                    sd.ticks  = [...sd.ticks.slice(-(MAX_TICKS - 1)), digit];
+                    sd.ticks = [...sd.ticks.slice(-(MAX_TICKS - 1)), digit];
                     sd.prices = [...sd.prices.slice(-(MAX_TICKS - 1)), price];
-                    sd.ready  = sd.ticks.length >= MIN_TICKS_BEFORE_TRADE;
-
-                    lastTickSymRef.current = sym;
+                    sd.ready = sd.ticks.length >= MIN_TICKS;
                     onTickRef.current();
                     break;
                 }
-
                 case 'buy': {
-                    const sym: string = data.echo_req?.parameters?.symbol;
-                    if (!sym) return;
                     if (data.error) {
-                        globalLock.current = false;
-                        activeContractsRef.current = 0;
-                        setActiveContracts(0);
+                        addLog(`Buy error: ${data.error.message}`, 'info');
+                        tradeLockRef.current = false;
                         return;
                     }
-                    if (!data.buy) { globalLock.current = false; activeContractsRef.current = 0; setActiveContracts(0); return; }
+                    if (!data.buy) { tradeLockRef.current = false; return; }
                     const cid = String(data.buy.contract_id);
-                    if (!cid || cid === 'undefined') { globalLock.current = false; activeContractsRef.current = 0; setActiveContracts(0); return; }
-                    contractMapRef.current.set(cid, { symbol: sym, stake: globalStakeRef.current, strategyNames: ['ensemble'] });
-                    addLog(`Contract ${cid} open on ${SYMBOL_LABELS[sym]}`, 'info');
-                    break;
-                }
-
-                case 'proposal_open_contract': {
-                    const c = data.proposal_open_contract;
-                    if (!c?.is_sold) return;
-                    const cid   = String(c.contract_id);
-                    const entry = contractMapRef.current.get(cid);
-                    if (!entry) return;
-                    contractMapRef.current.delete(cid);
-
-                    const { symbol: sym, stake: tradeStake, strategyNames, duration } = entry;
-                    const sd = symbolDataRef.current[sym];
-                    if (!sd) return;
-
-                    const profit = Number(c.profit);
-                    const won    = profit >= 0;
-
-                    strategyNames.forEach(n => recordOutcome(n, won));
-
-                    pnlRef.current += profit;
-                    setPnl(pnlRef.current);
-
-                    try {
-                        const pocWithDisplay = !(c as any).display_name ? { ...c, display_name: SYMBOL_LABELS[sym] } : c;
-                        transactions.onBotContractEvent(pocWithDisplay);
-                    } catch (_) {}
-
-                    if (won) {
-                        sd.wins++;
-                        consecutiveLossesRef.current = 0;
-                        cooldownTicksRef.current = 0;
-                        globalStakeRef.current = stakeParsed.current;
-                        addLog(`✅ WON +$${profit.toFixed(2)} on ${SYMBOL_LABELS[sym]} | Next stake reset to $${stakeParsed.current.toFixed(2)} | P&L $${pnlRef.current.toFixed(2)}`, 'win');
-                        if (vhStateRef.current.enabled && !vhStateRef.current.is_virtual) {
-                            vhStateRef.current.is_virtual = true;
-                            vhStateRef.current.loss_count = 0;
-                            addLog(`🤖 [VIRTUAL HOOK] 🔄 Real WIN — switching back to VIRTUAL mode`, 'info');
-                        }
-                    } else {
-                        sd.losses++;
-                        consecutiveLossesRef.current++;
-                        globalStakeRef.current = Number((tradeStake * martingaleParsed.current).toFixed(2));
-                        if (consecutiveLossesRef.current >= 3) {
-                            cooldownTicksRef.current = 8;
-                            addLog(`⚠ ${consecutiveLossesRef.current} consecutive losses — cooldown ${cooldownTicksRef.current} ticks`, 'loss');
-                        }
-                        addLog(`❌ LOST -$${Math.abs(profit).toFixed(2)} on ${SYMBOL_LABELS[sym]} | Next stake $${globalStakeRef.current.toFixed(2)} | P&L $${pnlRef.current.toFixed(2)}`, 'loss');
+                    if (!cid || cid === 'undefined') { tradeLockRef.current = false; return; }
+                    const sym: string = data.echo_req?.parameters?.symbol;
+                    if (sym) {
+                        contractMapRef.current.set(cid, {
+                            symbol: sym, stake: currentStakeRef.current, strategyNames: ['tick_direction'],
+                        });
                     }
-
-                    // Recovery mode P&L tracking
-                    if (recoveryRef.current) {
-                        recoveryPnlRef.current += profit;
-                        if (recoveryPnlRef.current >= 0) {
-                            addLog(`🔄 RECOVERY COMPLETE — returning to Over/Under`, 'win');
-                            window.DBot.__recovery = null;
-                            stopKiller();
-                            if (typeof window.DBot.__switchToTab === 'function') {
-                                window.DBot.__ou_auto_start = true;
-                                window.DBot.__switchToTab('over_under');
-                            }
-                            return;
-                        }
-                        addLog(`🔄 Recovery progress: $${recoveryPnlRef.current.toFixed(2)} / $0.00`, 'info');
-                    }
-
-                    flushDisplay(sym);
-                    globalLock.current = false;
-                    activeContractsRef.current = 0;
-                    setActiveContracts(0);
-                    checkLimits();
                     break;
                 }
             }
         };
 
-        const mws = openMakotiWS(
-            handleMsg,
-            () => {
-                addLog('Live tick stream active — trading immediately', 'info');
-                if (!window._newSystemWS) {
-                    mws.send({ proposal_open_contract: 1, subscribe: 1 });
-                }
-                // Skip ticks_history — live ticks already flowing from auto-subscription
-            },
-            () => {
-                if (runningRef.current) {
-                    addLog('Connection lost. Stopping.', 'info');
-                    stopKiller();
-                }
-            }
-        );
+        const mws = openMakotiWS(handleMsg, () => {
+            addLog('Connected — live tick stream active', 'info');
+        }, () => {
+            if (runningRef.current) { addLog('Connection lost. Stopping.', 'info'); stopKiller(); }
+        });
         wsRef.current = mws;
-    }, [stake, martingale, takeProfit, stopLoss, vhEnabled, vhThreshold, maxDir, addLog, flushDisplay, checkLimits, stopKiller, onTickReceived]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [stake, martingale, takeProfit, stopLoss, vhEnabled, vhThreshold, maxDir, addLog, stopKiller]);
 
-    /* ── Derived display values ──────────────────────────────────────────── */
-    const totalWins   = Object.values(symbolDisplay).reduce((a, b) => a + b.wins,  0);
-    const totalLosses = Object.values(symbolDisplay).reduce((a, b) => a + b.losses, 0);
+    const totalWins = Object.values(symDisplay).reduce((a, b) => a + b.wins, 0);
+    const totalLosses = Object.values(symDisplay).reduce((a, b) => a + b.losses, 0);
     const totalTrades = totalWins + totalLosses;
-    const winRate     = totalTrades > 0 ? (totalWins / totalTrades * 100).toFixed(1) : '—';
+    const winRate = totalTrades > 0 ? (totalWins / totalTrades * 100).toFixed(1) : '\u2014';
+    const isVirtual = vhStateRef.current.enabled && vhStateRef.current.isVirtual;
 
     return (
         <div className='mw-killer'>
-            {/* ── Input fields ── */}
             <div className='mw-killer__fields'>
                 <div className='mw-field'>
                     <label className='mw-label'>Stake ($)</label>
@@ -767,7 +560,7 @@ export const MarketKiller: React.FC = () => {
                         value={stake} onChange={e => setStake(e.target.value)} disabled={running} />
                 </div>
                 <div className='mw-field'>
-                    <label className='mw-label'>Martingale ×</label>
+                    <label className='mw-label'>Martingale x</label>
                     <input className='mw-input' type='number' min='1' step='0.1'
                         value={martingale} onChange={e => setMartingale(e.target.value)} disabled={running} />
                 </div>
@@ -787,8 +580,6 @@ export const MarketKiller: React.FC = () => {
                         value={maxDir} onChange={e => setMaxDir(e.target.value)} disabled={running} />
                 </div>
             </div>
-
-            {/* ── Virtual Hook toggle ── */}
             <div className='mw-killer__vh'>
                 <label className='mw-killer__vh-toggle'>
                     <input type='checkbox' checked={vhEnabled}
@@ -803,26 +594,17 @@ export const MarketKiller: React.FC = () => {
                     </div>
                 )}
             </div>
-
-            {/* ── Kill Market button ── */}
-            <button
-                className={`mw-btn${running ? ' mw-btn--stop' : ' mw-btn--kill'}`}
-                onClick={running ? stopKiller : startKiller}
-            >
-                {running
-                    ? <><span className='mw-pulse' /> STOP KILLER</>
-                    : '⚔ KILL MARKET'}
+            <button className={`mw-btn${running ? ' mw-btn--stop' : ' mw-btn--kill'}`}
+                onClick={running ? stopKiller : startKiller}>
+                {running ? <><span className='mw-pulse' /> STOP KILLER</> : 'KILL MARKET'}
             </button>
-
-            {/* ── Running notice ── */}
             {running && (
                 <div className='mw-killer__mode-note'>
-                    Tick Direction Rise/Fall — trade opposite after N consecutive ticks
-                    {activeContracts > 0 && <span className='mw-killer__active-dot'> ● TRADE LIVE</span>}
+                    Tick Direction \u2014 trade opposite after N consecutive ticks
+                    {isVirtual && <span className='mw-da__prog-status--recovery'> VIRTUAL MODE</span>}
+                    {!isVirtual && vhStateRef.current.enabled && <span className='mw-win'> REAL MODE</span>}
                 </div>
             )}
-
-            {/* ── Stats ── */}
             {(running || totalTrades > 0) && (
                 <div className='mw-killer__stats'>
                     <div className={`mw-killer__pnl${pnl >= 0 ? ' mw-killer__pnl--pos' : ' mw-killer__pnl--neg'}`}>
@@ -832,43 +614,47 @@ export const MarketKiller: React.FC = () => {
                         <span>Trades: {totalTrades}</span>
                         <span>W/L: {totalWins}/{totalLosses}</span>
                         <span>Win rate: {winRate}%</span>
-                        <span>Stake: ${globalStakeRef.current.toFixed(2)}</span>
+                        <span>Stake: ${currentStakeRef.current.toFixed(2)}</span>
                     </div>
                 </div>
             )}
-
-            {/* ── Per-symbol rows ── */}
-            {Object.keys(symbolDisplay).length > 0 && (
-                <div className='mw-killer__symbols'>
-                    {ALL_SYMBOLS.filter(s => symbolDisplay[s]).map(sym => {
-                        const ss = symbolDisplay[sym];
-                        const baseStake = parseFloat(stake) || 0.35;
-                        const isMgActive = ss.stake > baseStake + 0.001;
-                        return (
-                            <div key={sym} className='mw-killer__sym-row'>
-                                <span className='mw-killer__sym-name'>{SYMBOL_LABELS[sym]}</span>
-                                <span className='mw-killer__sym-signal'>{ss.lastSignal}</span>
-                                <span className='mw-killer__sym-wl'>
-                                    <span className='mw-win'>{ss.wins}W</span>
-                                    <span className='mw-loss'>{ss.losses}L</span>
-                                </span>
-                                {isMgActive && (
-                                    <span className='mw-killer__sym-stake' title='Martingale stake'>
-                                        ${ss.stake.toFixed(2)}
-                                    </span>
-                                )}
+            <div className='mw-killer__symbols'>
+                <div className='mw-da__progress-title'>Volatility Directions</div>
+                {ALL_SYMBOLS.map(sym => {
+                    const ss = symDisplay[sym];
+                    if (!ss) return (
+                        <div key={sym} className='mw-killer__sym-row'>
+                            <span className='mw-killer__sym-name'>{SYMBOL_LABELS[sym]}</span>
+                            <span className='mw-killer__sym-signal'>\u2014</span>
+                        </div>
+                    );
+                    const baseStake = parseFloat(stake) || 0.35;
+                    const isMgActive = ss.stake > baseStake + 0.001;
+                    const dirPct = maxDirRef.current > 0 ? Math.min((ss.dirCount / maxDirRef.current) * 100, 100) : 0;
+                    return (
+                        <div key={sym} className='mw-killer__sym-row'>
+                            <span className='mw-killer__sym-name'>{SYMBOL_LABELS[sym]}</span>
+                            <span className='mw-killer__sym-digit' title='Last digit'>{ss.digit ?? '\u2014'}</span>
+                            <span className='mw-killer__sym-signal' title='Direction'>
+                                {ss.dir === 'up' ? '\u2191' : ss.dir === 'down' ? '\u2193' : '\u2014'}{ss.dirCount}
+                            </span>
+                            <div style={{ width: 60, height: 6, background: '#1e293b', borderRadius: 3, overflow: 'hidden' }}>
+                                <div style={{ width: `${dirPct}%`, height: '100%', background: dirPct >= 100 ? '#ef4444' : '#f97316', borderRadius: 3, transition: 'width 0.3s' }} />
                             </div>
-                        );
-                    })}
-                </div>
-            )}
-
-            {/* ── Log ── */}
+                            <span className='mw-killer__sym-wl'>
+                                <span className='mw-win'>{ss.wins}W</span>
+                                <span className='mw-loss'>{ss.losses}L</span>
+                            </span>
+                            {isMgActive && <span className='mw-killer__sym-stake'>${ss.stake.toFixed(2)}</span>}
+                        </div>
+                    );
+                })}
+            </div>
             {logs.length > 0 && (
                 <div className='mw-killer__log-wrap'>
                     <div className='mw-killer__log-header'>
                         <span className='mw-killer__log-title'>Activity Log</span>
-                        <button className='mw-btn-clear' onClick={clearLogs} title='Clear log'>Clear</button>
+                        <button className='mw-btn-clear' onClick={clearLogs}>Clear</button>
                     </div>
                     <div className='mw-killer__log'>
                         {logs.map((l, i) => (
