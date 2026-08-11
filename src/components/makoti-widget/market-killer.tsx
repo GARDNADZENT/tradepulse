@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ALL_SYMBOLS, SYMBOL_LABELS, PIP_SIZES, openMakotiWS, MakotiWS } from './makoti-ws';
-import { findBestDuration, recordOutcome } from './prediction-engine';
+import { recordOutcome } from './prediction-engine';
 import { sendViaNewSystemWithPromise, onNewSystemMessage } from '@/auth/NewDerivAuth';
 import { useStore } from '@/hooks/useStore';
 
@@ -258,9 +258,9 @@ export const MarketKiller: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [addLog]);
 
-    /* ── Auto-detect best tick duration (1-5) by analyzing price history ──── */
-    const getBestDuration = useCallback((prices: number[], direction: 'CALL' | 'PUT'): number => {
-        return findBestDuration(prices, direction);
+    /* ── Always D1 tick duration ──────────────────────────────────────────── */
+    const getBestDuration = useCallback((_prices: number[], _direction: 'CALL' | 'PUT'): number => {
+        return 1;
     }, []);
 
     /* ── Track tick direction: consecutive up/down ───────────────────────── */
@@ -305,7 +305,7 @@ export const MarketKiller: React.FC = () => {
                 startTime: Math.floor(Date.now() / 1000),
                 buyId: vhBuyId,
             };
-            const label = signal.contract_type === 'CALL' ? 'RISE' : 'FALL';
+            const label = direction === 'CALL' ? 'RISE' : 'FALL';
             addLog(`🤖 [VIRTUAL HOOK] 🔍 Virtual ${label} D${duration} on ${SYMBOL_LABELS[sym]} @ $${entryPrice.toFixed(4)} — tracking ${duration} ticks`, 'info');
             try {
                 transactions.onBotContractEvent({
@@ -318,6 +318,7 @@ export const MarketKiller: React.FC = () => {
                     display_name: SYMBOL_LABELS[sym],
                     date_start: Math.floor(Date.now() / 1000),
                     entry_tick_time: Math.floor(Date.now() / 1000),
+                    tick_count: duration,
                     status: 'open',
                     is_virtual: true,
                 } as any);
@@ -448,8 +449,10 @@ export const MarketKiller: React.FC = () => {
                             display_name: vhDisplayName,
                             date_start: vt.startTime,
                             date_expiry: Math.floor(Date.now() / 1000),
+                            entry_spot: entrySpotStr,
                             entry_tick: entrySpotStr,
                             entry_tick_time: vt.startTime,
+                            exit_spot: exitSpotStr,
                             exit_tick: exitSpotStr,
                             exit_tick_time: Math.floor(Date.now() / 1000),
                             profit: vhProfit,

@@ -161,6 +161,7 @@ export const DiffersAuto: React.FC = () => {
                 display_name: SYMBOL_LABELS[sym],
                 date_start: Math.floor(Date.now() / 1000),
                 entry_tick_time: Math.floor(Date.now() / 1000),
+                tick_count: 1,
                 status: 'open',
                 is_virtual: true,
             } as any);
@@ -195,8 +196,10 @@ export const DiffersAuto: React.FC = () => {
                 display_name: displayName,
                 date_start: vt.startTime,
                 date_expiry: Math.floor(Date.now() / 1000),
+                entry_spot: entrySpotStr,
                 entry_tick: entrySpotStr,
                 entry_tick_time: vt.startTime,
+                exit_spot: exitSpotStr,
                 exit_tick: exitSpotStr,
                 exit_tick_time: Math.floor(Date.now() / 1000),
                 profit: profit,
@@ -320,14 +323,8 @@ export const DiffersAuto: React.FC = () => {
                         winsRef.current++;
                         setWins(winsRef.current);
                         addLog(`🔴 REAL WIN +$${profit.toFixed(2)} on ${SYMBOL_LABELS[e.sym]} | Consecutive real wins: ${realWinCountRef.current} | Recovery: $${recoveryPnlRef.current.toFixed(2)} / $${recoveryLossRef.current.toFixed(2)}`, 'win');
-                        if (realWinCountRef.current >= 2) {
-                            addLog(`🎉 2 CONSECUTIVE REAL WINS — back to DIFFERS`, 'recovery');
-                            recoveryPhaseRef.current = 'idle';
-                            currentStakeRef.current = cfgRef.current.s;
-                            realWinCountRef.current = 0;
-                            setRecoveryDisplay({ phase: 'idle', loss: 0, virtualLosses: 0, recovered: 0 });
-                        } else if (recoveryPnlRef.current >= recoveryLossRef.current) {
-                            addLog(`🎉 RECOVERY COMPLETE — back to DIFFERS`, 'recovery');
+                        if (realWinCountRef.current >= 2 && recoveryPnlRef.current >= recoveryLossRef.current) {
+                            addLog(`🎉 2 REAL WINS + RECOVERY COMPLETE ($${recoveryPnlRef.current.toFixed(2)} >= $${recoveryLossRef.current.toFixed(2)}) — back to DIFFERS`, 'recovery');
                             recoveryPhaseRef.current = 'idle';
                             currentStakeRef.current = cfgRef.current.s;
                             realWinCountRef.current = 0;
@@ -336,7 +333,8 @@ export const DiffersAuto: React.FC = () => {
                             recoveryPhaseRef.current = 'virtual';
                             recoveryStakeRef.current = cfgRef.current.s;
                             virtualLossCountRef.current = 0;
-                            addLog(`🔄 Back to VIRTUAL trades — still recovering | Virtual losses reset, stake: $${recoveryStakeRef.current.toFixed(2)} (base)`, 'recovery');
+                            const reason = realWinCountRef.current < 2 ? `${realWinCountRef.current}/2 wins` : `P&L $${recoveryPnlRef.current.toFixed(2)} < $${recoveryLossRef.current.toFixed(2)}`;
+                            addLog(`🔄 Back to VIRTUAL trades — ${reason} | Virtual losses reset, stake: $${recoveryStakeRef.current.toFixed(2)} (base)`, 'recovery');
                             setRecoveryDisplay(p => ({ ...p, phase: 'virtual', virtualLosses: 0, recovered: recoveryPnlRef.current }));
                         }
                         lockRef.current = false;
