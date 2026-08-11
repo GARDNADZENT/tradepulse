@@ -311,7 +311,9 @@ export const MarketKiller: React.FC = () => {
         setPnl(pnlRef.current);
         try {
             transactions.onBotContractEvent({
-                contract_id: contractId, buy_price: tradeStake, profit, currency: 'USD',
+                contract_id: contractId,
+                transaction_ids: { buy: contractId },
+                buy_price: tradeStake, profit, currency: 'USD',
                 underlying: sym, display_name: SYMBOL_LABELS[sym],
                 is_sold: true, is_completed: true, status: 'sold',
             } as any);
