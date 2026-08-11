@@ -218,14 +218,7 @@ export const DiffersAuto: React.FC = () => {
             virtualLossCountRef.current = 0;
             recoveryPnlRef.current += profit;
             addLog(`🤖 VIRTUAL WIN +$${profit.toFixed(2)} on ${SYMBOL_LABELS[sym]} | Recovery: $${recoveryPnlRef.current.toFixed(2)} / $${recoveryLossRef.current.toFixed(2)} | Virtual losses reset (consecutive)`, 'win');
-            if (recoveryPnlRef.current >= recoveryLossRef.current) {
-                addLog(`🎉 RECOVERY COMPLETE — profit covers loss! Back to DIFFERS`, 'recovery');
-                recoveryPhaseRef.current = 'idle';
-                currentStakeRef.current = cfgRef.current.s;
-                setRecoveryDisplay({ phase: 'idle', loss: 0, virtualLosses: 0, recovered: 0 });
-            } else {
-                setRecoveryDisplay(p => ({ ...p, virtualLosses: 0, recovered: recoveryPnlRef.current }));
-            }
+            setRecoveryDisplay(p => ({ ...p, virtualLosses: 0, recovered: recoveryPnlRef.current }));
         } else {
             lossesRef.current++;
             setLosses(lossesRef.current);
