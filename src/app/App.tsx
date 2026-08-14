@@ -7,6 +7,7 @@ import MakotiLoader from '@/components/loader/makoti-loader';
 import MakotiLoaderGate, { markLoaderDone } from '@/components/loader/makoti-loader-gate';
 import LocalStorageSyncWrapper from '@/components/localStorage-sync-wrapper';
 import RoutePromptDialog from '@/components/route-prompt-dialog';
+import InstallPrompt from '@/components/install-prompt';
 import { useAccountSwitching } from '@/hooks/useAccountSwitching';
 import { useLanguageFromURL } from '@/hooks/useLanguageFromURL';
 import { StoreProvider } from '@/hooks/useStore';
@@ -47,6 +48,7 @@ const router = createBrowserRouter(
                             <StoreProvider>
                                 <LocalStorageSyncWrapper>
                                     <RoutePromptDialog />
+                                    <InstallPrompt />
                                     <CoreStoreProvider>
                                         <Layout />
                                     </CoreStoreProvider>
