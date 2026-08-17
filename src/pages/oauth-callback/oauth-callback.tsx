@@ -11,6 +11,8 @@ const OAuthCallback = () => {
             try {
                 const redirectUri = process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI;
                 const clientId = process.env.NEXT_PUBLIC_DERIV_APP_ID;
+                console.log('[OAuthCallback] client_id:', clientId);
+                console.log('[OAuthCallback] redirect_uri:', redirectUri);
                 const authInfo = await handleOAuthCallback(window.location.href, {
                     clientId,
                     redirectUri,
