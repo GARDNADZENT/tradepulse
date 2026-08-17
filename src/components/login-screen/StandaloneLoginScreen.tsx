@@ -106,6 +106,12 @@ const StandaloneLoginScreen: React.FC = () => {
 
     if (!show) return null;
 
+    const debugInfo = {
+        appId: process.env.NEXT_PUBLIC_DERIV_APP_ID || 'NOT SET',
+        redirectUri: process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI || 'NOT SET',
+        env: process.env.NEXT_PUBLIC_DERIV_ENV || 'NOT SET',
+    };
+
     return (
         <div className={`login-screen${visible ? ' login-screen--visible' : ''}`}>
             <div className='login-screen__bg' />
@@ -180,6 +186,15 @@ const StandaloneLoginScreen: React.FC = () => {
                 <span>Contact: +254 799 476 880</span>
                 <span>Version 2.0.0</span>
                 <span>Powered by Deriv</span>
+            </div>
+
+            <div className='login-screen__debug'>
+                <div className='login-screen__debug-title'>OAuth Debug</div>
+                <div className='login-screen__debug-row'><span>App ID:</span><span>{debugInfo.appId}</span></div>
+                <div className='login-screen__debug-row'><span>Redirect URI:</span><span>{debugInfo.redirectUri}</span></div>
+                <div className='login-screen__debug-row'><span>Env:</span><span>{debugInfo.env}</span></div>
+                <div className='login-screen__debug-row'><span>Origin:</span><span>{window.location.origin}</span></div>
+                <div className='login-screen__debug-row'><span>Expected callback:</span><span>https://tradepulse-lovat.vercel.app/callback</span></div>
             </div>
         </div>
     );
