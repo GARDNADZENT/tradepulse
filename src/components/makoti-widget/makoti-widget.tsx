@@ -292,11 +292,11 @@ export const MakotiWidget: React.FC = () => {
                 style={{ position: 'fixed', left: btnPosRef.current.x, top: btnPosRef.current.y, zIndex: 100001 }}
                 onPointerDown={onBtnPointerDown}
                 onClick={onBtnClick}
-                title='MAKOTI — Scanner / Market Killer / O/U / HIGH/LOW'
+                title='TRADERSPULSE — Scanner / Market Killer / O/U / HIGH/LOW'
             >
                 <span className='mw-fab__pulse' />
                 <span className='mw-fab__icon'>⚔</span>
-                <span className='mw-fab__label'>MAKOTI</span>
+                <span className='mw-fab__label'>TRADERSPULSE</span>
             </button>
 
             {/* ── Floating window & tab content (always mounted so active killer survives close) ── */}
@@ -309,7 +309,7 @@ export const MakotiWidget: React.FC = () => {
                 <div className='mw-win-header'>
                     <div className='mw-win-title'>
                         <span className='mw-win-logo'>⚔</span>
-                        <span>MAKOTI</span>
+                        <span>TRADERSPULSE</span>
                         {tab !== 'scanner' && (
                             <span className={`mw-ws-dot ${wsReady ? 'mw-ws-dot--ok' : 'mw-ws-dot--off'}`}
                                 title={wsReady ? 'WebSocket connected' : 'WebSocket disconnected'} />

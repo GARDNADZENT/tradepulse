@@ -1,0 +1,338 @@
+@import '@/components/shared/styles/_themes.scss';
+@import '@/components/shared/styles/_constants.scss';
+
+.my-journey {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.my-journey__header {
+    margin-bottom: 8px;
+}
+
+.my-journey__label-today {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--brand-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.my-journey__title {
+    font-size: 2.4rem;
+    font-weight: bold;
+    color: var(--text-prominent);
+    margin: 4px 0 8px 0;
+}
+
+.my-journey__subtitle {
+    font-size: 1.3rem;
+    color: var(--text-less-prominent);
+    margin: 0;
+}
+
+.my-journey__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+}
+
+.kpi-card {
+    background: var(--general-main-2);
+    border: 1px solid var(--border-normal);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.kpi-card:hover {
+    box-shadow: 0 4px 6px rgba(15,23,42,.04), 0 20px 40px -20px rgba(15,23,42,.12);
+}
+
+.kpi-card--accent {
+    border-color: var(--brand-primary);
+    background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-primary) 100%);
+    color: #fff;
+}
+
+.kpi-card--accent .kpi-card__label,
+.kpi-card--accent .kpi-card__sub {
+    color: rgba(255,255,255,0.8);
+}
+
+.kpi-card--accent .kpi-card__value {
+    color: #fff;
+}
+
+.kpi-card--live {
+    border-color: var(--transparent-success);
+}
+
+.kpi-card--highlight .kpi-card__value {
+    color: var(--text-profit-success);
+}
+
+.kpi-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.kpi-card__label {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-less-prominent);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.kpi-card__live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-profit-success);
+    position: relative;
+}
+
+.kpi-card__live-dot::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    background: var(--text-profit-success);
+    opacity: 0.35;
+    animation: pulse 1.6s ease-out infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(0.6); opacity: 0.5; }
+    100% { transform: scale(1.8); opacity: 0; }
+}
+
+.kpi-card__value {
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: var(--text-prominent);
+}
+
+.kpi-card__sub {
+    font-size: 1.1rem;
+    color: var(--text-less-prominent);
+}
+
+.text-profit {
+    color: var(--text-profit-success);
+}
+
+.text-loss {
+    color: var(--text-loss-danger);
+}
+
+.my-journey__progress {
+    background: var(--general-main-2);
+    border: 1px solid var(--border-normal);
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.my-journey__progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+
+.my-journey__progress-label {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--text-prominent);
+}
+
+.my-journey__progress-sub {
+    font-size: 1.1rem;
+    color: var(--text-less-prominent);
+    margin-top: 2px;
+}
+
+.my-journey__progress-pct {
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: var(--text-prominent);
+}
+
+.my-journey__progress-bar {
+    height: 10px;
+    background: var(--general-section-1);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.my-journey__progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--brand-primary) 0%, #8b5cf6 50%, #06b6d4 100%);
+    border-radius: 999px;
+    transition: width 0.5s ease;
+}
+
+.my-journey__status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--general-main-2);
+    border: 1px solid var(--border-normal);
+    border-radius: 12px;
+    padding: 16px 20px;
+}
+
+.my-journey__status-label {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--text-prominent);
+}
+
+.my-journey__status-value {
+    font-size: 1.4rem;
+    font-weight: bold;
+    color: var(--brand-primary);
+}
+
+.my-journey__actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.my-journey__edit-btn {
+    padding: 10px 20px;
+    background: var(--general-main-2);
+    color: var(--text-prominent);
+    border: 1px solid var(--border-normal);
+    border-radius: 8px;
+    font-size: 1.3rem;
+    cursor: pointer;
+    font-family: var(--brand-font-primary);
+    transition: background 0.2s ease;
+}
+
+.my-journey__edit-btn:hover {
+    background: var(--general-section-1);
+}
+
+.my-journey__modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15,23,42,0.4);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 24px;
+}
+
+.my-journey__modal {
+    background: var(--general-main-2);
+    border: 1px solid var(--border-normal);
+    border-radius: 12px;
+    padding: 24px;
+    width: 100%;
+    max-width: 560px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.my-journey__modal-title {
+    font-size: 1.6rem;
+    font-weight: bold;
+    color: var(--text-prominent);
+    margin: 0 0 16px 0;
+}
+
+.my-journey__settings-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.my-journey__field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.my-journey__label {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text-less-prominent);
+}
+
+.my-journey__input {
+    padding: 10px 12px;
+    border: 1px solid var(--border-normal);
+    border-radius: 8px;
+    background: var(--general-main-1);
+    color: var(--text-prominent);
+    font-size: 1.4rem;
+    font-family: var(--brand-font-primary);
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.my-journey__input:focus {
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.my-journey__modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.my-journey__cancel-btn {
+    padding: 10px 20px;
+    background: transparent;
+    color: var(--text-prominent);
+    border: 1px solid var(--border-normal);
+    border-radius: 8px;
+    font-size: 1.3rem;
+    cursor: pointer;
+    font-family: var(--brand-font-primary);
+}
+
+.my-journey__save-btn {
+    padding: 10px 20px;
+    background: var(--brand-primary);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.3rem;
+    cursor: pointer;
+    font-family: var(--brand-font-primary);
+    font-weight: 600;
+}
+
+.my-journey__loading {
+    color: var(--text-less-prominent);
+    font-size: 1.4rem;
+    text-align: center;
+    padding: 40px 0;
+}
+
+@media (max-width: 768px) {
+    .my-journey__grid {
+        grid-template-columns: 1fr;
+    }
+
+    .my-journey__settings-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .my-journey__title {
+        font-size: 1.8rem;
+    }
+}

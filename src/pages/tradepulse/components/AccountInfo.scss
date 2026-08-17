@@ -1,0 +1,121 @@
+@import '@/components/shared/styles/_themes.scss';
+@import '@/components/shared/styles/_constants.scss';
+
+.account-info {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.account-info__header {
+    margin-bottom: 8px;
+}
+
+.account-info__label {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--brand-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.account-info__title {
+    font-size: 2.4rem;
+    font-weight: bold;
+    color: var(--text-prominent);
+    margin: 4px 0 8px 0;
+}
+
+.account-info__subtitle {
+    font-size: 1.3rem;
+    color: var(--text-less-prominent);
+    margin: 0;
+}
+
+.account-info__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+}
+
+.summary-card {
+    background: var(--general-main-2);
+    border: 1px solid var(--border-normal);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.summary-card:hover {
+    box-shadow: 0 4px 6px rgba(15,23,42,.04), 0 20px 40px -20px rgba(15,23,42,.12);
+}
+
+.summary-card--accent {
+    border-color: var(--brand-primary);
+}
+
+.summary-card--highlight {
+    border-color: var(--transparent-success);
+}
+
+.summary-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.summary-card__label {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-less-prominent);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.summary-card__icon {
+    color: var(--text-less-prominent);
+}
+
+.summary-card--accent .summary-card__icon {
+    color: var(--brand-primary);
+}
+
+.summary-card--highlight .summary-card__icon {
+    color: var(--text-profit-success);
+}
+
+.summary-card__value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--text-prominent);
+    word-break: break-word;
+}
+
+.summary-card--accent .summary-card__value {
+    color: var(--brand-primary);
+}
+
+.summary-card--highlight .summary-card__value {
+    color: var(--text-profit-success);
+}
+
+.mono {
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.text-profit {
+    color: var(--text-profit-success);
+}
+
+.text-loss {
+    color: var(--text-loss-danger);
+}
+
+@media (max-width: 768px) {
+    .account-info__grid {
+        grid-template-columns: 1fr;
+    }
+}

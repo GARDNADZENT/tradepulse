@@ -15,7 +15,7 @@
     &__bg {
         position: fixed;
         inset: 0;
-        background: url('../../assets/makoti-logo.png') center center / cover no-repeat;
+        background: url('../../assets/traderpulse-logo.png') center center / cover no-repeat;
         z-index: 0;
     }
 
@@ -111,158 +111,18 @@
         font-size: 1rem;
     }
 
-    // ── Hero area ────────────────────────────────────────────────────
-    &__hero {
+    &__center {
         position: relative;
         z-index: 2;
-        display: flex;
         flex: 1;
-        min-height: 0;
-        opacity: 0;
-        transition: opacity 0.7s 0.3s ease;
-
-        .login-screen--visible & { opacity: 1; }
-    }
-
-    // ── Left column ──────────────────────────────────────────────────
-    &__hero-left {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        gap: 1.8rem;
-        padding: 2rem 2.5rem 1.5rem;
-        overflow-y: auto;
-        border-right: 1px solid rgba(255,255,255,0.04);
-    }
-
-    &__brand-block {
-        max-width: 560px;
-    }
-
-    &__main-title {
-        font-size: clamp(1.6rem, 3vw, 2.4rem);
-        font-weight: 800;
-        letter-spacing: 0.08em;
-        margin: 0 0 0.15rem;
-        background: linear-gradient(135deg, #fff 0%, #93c5fd 40%, #a5b4fc 70%, #fff 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        background-size: 200% auto;
-        animation: shimmerText 6s ease-in-out infinite;
-    }
-
-    &__main-sub {
-        font-size: 0.85rem;
-        font-weight: 600;
-        color: #6366f1;
-        letter-spacing: 0.2em;
-        text-transform: uppercase;
-        margin: 0 0 0.6rem;
-    }
-
-    &__main-desc {
-        font-size: 0.88rem;
-        line-height: 1.7;
-        color: rgba(255,255,255,0.45);
-        margin: 0;
-    }
-
-    // ── Stats row ────────────────────────────────────────────────────
-    &__stats-row {
-        display: flex;
-        gap: 0.8rem;
-        flex-wrap: wrap;
-    }
-
-    &__stat-card {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.2rem;
-        padding: 1rem 1.6rem;
-        border-radius: 1rem;
-        background: rgba(255,255,255,0.03);
-        border: 1px solid rgba(255,255,255,0.05);
-        min-width: 90px;
-        transition: all 0.3s ease;
-
-        &:hover {
-            background: rgba(79,70,229,0.08);
-            border-color: rgba(79,70,229,0.2);
-            transform: translateY(-2px);
-        }
-    }
-
-    &__stat-value {
-        font-size: 1.3rem;
-        font-weight: 800;
-        background: linear-gradient(135deg, #6366f1, #06b6d4);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-    }
-
-    &__stat-label {
-        font-size: 0.68rem;
-        font-weight: 500;
-        color: rgba(255,255,255,0.35);
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-    }
-
-    // ── Features grid ────────────────────────────────────────────────
-    &__features-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: 0.8rem;
-    }
-
-    &__feature-card {
-        display: flex;
-        gap: 0.8rem;
-        padding: 1rem 1.2rem;
-        border-radius: 0.85rem;
-        background: rgba(255,255,255,0.02);
-        border: 1px solid rgba(255,255,255,0.04);
-        transition: all 0.3s ease;
-
-        &:hover {
-            background: rgba(255,255,255,0.04);
-            border-color: rgba(79,70,229,0.15);
-            transform: translateY(-2px);
-            box-shadow: 0 8px 30px rgba(0,0,0,0.2);
-        }
-    }
-
-    &__feature-icon {
-        font-size: 1.4rem;
-        flex-shrink: 0;
-        margin-top: 0.1rem;
-    }
-
-    &__feature-title {
-        font-size: 0.82rem;
-        font-weight: 700;
-        margin: 0 0 0.2rem;
-        color: rgba(255,255,255,0.85);
-    }
-
-    &__feature-desc {
-        font-size: 0.74rem;
-        line-height: 1.5;
-        color: rgba(255,255,255,0.35);
-        margin: 0;
-    }
-
-    // ── Right column ─────────────────────────────────────────────────
-    &__hero-right {
-        width: 380px;
-        flex-shrink: 0;
         display: flex;
         align-items: center;
         justify-content: center;
         padding: 2rem;
+        opacity: 0;
+        transition: opacity 0.7s 0.3s ease;
+
+        .login-screen--visible & { opacity: 1; }
     }
 
     &__auth-card {
@@ -432,11 +292,6 @@
     75% { opacity: 0.3; }
 }
 
-@keyframes shimmerText {
-    0%, 100% { background-position: 0% center; }
-    50% { background-position: 100% center; }
-}
-
 @keyframes loadingPulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
@@ -445,27 +300,12 @@
 // ── Responsive ──────────────────────────────────────────────────────
 @include mobile-or-tablet-screen {
     .login-screen {
-        &__hero {
-            flex-direction: column;
-        }
-
-        &__hero-left {
-            padding: 1.5rem 1.2rem 1rem;
-            border-right: none;
-            border-bottom: 1px solid rgba(255,255,255,0.04);
-        }
-
-        &__hero-right {
-            width: 100%;
+        &__center {
             padding: 1.5rem 1.2rem;
         }
 
         &__auth-card {
             max-width: 100%;
-        }
-
-        &__features-grid {
-            grid-template-columns: 1fr;
         }
 
         &__top-bar {

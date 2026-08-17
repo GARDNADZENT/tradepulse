@@ -3,7 +3,6 @@ import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
 /* [AI] - Analytics removed - rudderstack event tracking removed */
 /* [/AI] */
-import ChunkLoader from '@/components/loader/chunk-loader';
 import chart_api from '@/external/bot-skeleton/services/api/chart-api';
 import { useSmartChartAdaptor } from '@/hooks/useSmartChartAdaptor';
 import { useStore } from '@/hooks/useStore';
@@ -82,7 +81,7 @@ const Chart = observer(({ show_digits_stats }: { show_digits_stats: boolean }) =
     };
 
     if (!symbol || chartData.activeSymbols.length === 0) {
-        return <ChunkLoader message='' />;
+        return <div className='app-root__loading'>Loading...</div>;
     }
 
     return (

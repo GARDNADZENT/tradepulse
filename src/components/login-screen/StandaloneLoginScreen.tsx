@@ -3,21 +3,6 @@ import { generateOAuthURL } from '@/components/shared';
 import './LoginScreen.scss';
 
 const PARTICLES = 50;
-const FEATURES = [
-    { icon: '⚡', title: 'Automated Trading', desc: 'Deploy custom strategies across 10+ volatility markets simultaneously with sniper-precision entry.' },
-    { icon: '🎯', title: 'Sniper Engine', desc: 'Tick-level micro-structure analysis with multi-indicator scoring for high-probability entries.' },
-    { icon: '🛡️', title: 'Virtual Hook', desc: 'Backtest strategies risk-free with virtual trades. Switch to real only after proven profitability.' },
-    { icon: '🤖', title: 'Smart Martingale', desc: 'Advanced position sizing with configurable thresholds, capped exposure, and streak management.' },
-    { icon: '🔬', title: 'Market Killer', desc: 'High-frequency Rise/Fall and Over/Under auto-trader with adaptive entry logic.' },
-    { icon: '📊', title: 'Live Analytics', desc: 'Real-time P&L tracking, transaction journal, and per-market performance breakdowns.' },
-];
-
-const WHITELABEL_STATS = [
-    { value: '10+', label: 'Indices' },
-    { value: '24/7', label: 'Markets' },
-    { value: '2-tick', label: 'Entry' },
-    { value: '0-Risk', label: 'Virtual' },
-];
 
 const safeParse = (raw: string | null): unknown => {
     if (!raw) return null;
@@ -141,8 +126,8 @@ const StandaloneLoginScreen: React.FC = () => {
 
             <div className='login-screen__top-bar'>
                 <div className='login-screen__top-bar-left'>
-                    <img src='/makoti-logo.jpg' alt='Makoti Traders' className='login-screen__mini-logo' />
-                    <span className='login-screen__top-brand'>MAKOTI TRADERS</span>
+                    <img src='/traderpulse-logo.jpg' alt='TraderPulse' className='login-screen__mini-logo' />
+                    <span className='login-screen__top-brand'>TRADERSPULSE</span>
                 </div>
                 <div className='login-screen__top-bar-right'>
                     <a href='https://whatsapp.com/channel/0029VbBmfLc3LdQbqcezuz0d'
@@ -154,79 +139,44 @@ const StandaloneLoginScreen: React.FC = () => {
                 </div>
             </div>
 
-            <div className='login-screen__hero'>
-                <div className='login-screen__hero-left'>
-                    <div className='login-screen__brand-block'>
-                        <h1 className='login-screen__main-title'>MAKOTI TRADERS</h1>
-                        <p className='login-screen__main-sub'>Multi-Market Sniper Engine</p>
-                        <p className='login-screen__main-desc'>
-                            Professional-grade automated trading platform powered by Deriv.
-                            Deploy, backtest, and execute strategies across 10 Volatility Indices
-                            with tick-level precision.
-                        </p>
+            <div className='login-screen__center'>
+                <div className='login-screen__auth-card'>
+                    <div className='login-screen__auth-header'>
+                        <img src='/traderpulse-logo.jpg' alt='' className='login-screen__auth-logo' />
+                        <h2 className='login-screen__auth-title'>Welcome Back</h2>
+                        <p className='login-screen__auth-sub'>Sign in to start trading</p>
                     </div>
 
-                    <div className='login-screen__stats-row'>
-                        {WHITELABEL_STATS.map((s, i) => (
-                            <div key={i} className='login-screen__stat-card'>
-                                <span className='login-screen__stat-value'>{s.value}</span>
-                                <span className='login-screen__stat-label'>{s.label}</span>
-                            </div>
-                        ))}
-                    </div>
+                    <button
+                        className={`login-screen__btn login-screen__btn--login${isNewLoginLoading ? ' login-screen__btn--loading' : ''}`}
+                        onClick={handleNewAccountsLogin}
+                        disabled={isNewLoginLoading}
+                    >
+                        <span className='login-screen__btn-text'>{isNewLoginLoading ? 'Connecting...' : 'Login with Deriv'}</span>
+                    </button>
 
-                    <div className='login-screen__features-grid'>
-                        {FEATURES.map((f, i) => (
-                            <div key={i} className='login-screen__feature-card'>
-                                <span className='login-screen__feature-icon'>{f.icon}</span>
-                                <div>
-                                    <h3 className='login-screen__feature-title'>{f.title}</h3>
-                                    <p className='login-screen__feature-desc'>{f.desc}</p>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
+                    {newLoginError && <p className='login-screen__error'>{newLoginError}</p>}
 
-                <div className='login-screen__hero-right'>
-                    <div className='login-screen__auth-card'>
-                        <div className='login-screen__auth-header'>
-                            <img src='/makoti-logo.jpg' alt='' className='login-screen__auth-logo' />
-                            <h2 className='login-screen__auth-title'>Welcome Back</h2>
-                            <p className='login-screen__auth-sub'>Sign in to start trading</p>
-                        </div>
+                    <div className='login-screen__divider'><span>New here?</span></div>
 
-                        <button
-                            className={`login-screen__btn login-screen__btn--login${isNewLoginLoading ? ' login-screen__btn--loading' : ''}`}
-                            onClick={handleNewAccountsLogin}
-                            disabled={isNewLoginLoading}
-                        >
-                            <span className='login-screen__btn-text'>{isNewLoginLoading ? 'Connecting...' : 'Login with Deriv'}</span>
-                        </button>
+                    <button
+                        className={`login-screen__btn login-screen__btn--create${isNewSignupLoading ? ' login-screen__btn--loading' : ''}`}
+                        onClick={handleNewAccountsSignup}
+                        disabled={isNewSignupLoading}
+                    >
+                        <span className='login-screen__btn-text'>{isNewSignupLoading ? 'Redirecting...' : 'Create Free Account'}</span>
+                    </button>
 
-                        {newLoginError && <p className='login-screen__error'>{newLoginError}</p>}
-
-                        <div className='login-screen__divider'><span>New here?</span></div>
-
-                        <button
-                            className={`login-screen__btn login-screen__btn--create${isNewSignupLoading ? ' login-screen__btn--loading' : ''}`}
-                            onClick={handleNewAccountsSignup}
-                            disabled={isNewSignupLoading}
-                        >
-                            <span className='login-screen__btn-text'>{isNewSignupLoading ? 'Redirecting...' : 'Create Free Account'}</span>
-                        </button>
-
-                        <a href='https://whatsapp.com/channel/0029VbBmfLc3LdQbqcezuz0d'
-                           target='_blank' rel='noopener noreferrer'
-                           className='login-screen__whatsapp-link'>
-                            💬 Join our WhatsApp Channel for updates & support
-                        </a>
-                    </div>
+                    <a href='https://whatsapp.com/channel/0029VbBmfLc3LdQbqcezuz0d'
+                       target='_blank' rel='noopener noreferrer'
+                       className='login-screen__whatsapp-link'>
+                        💬 Join our WhatsApp Channel for updates & support
+                    </a>
                 </div>
             </div>
 
             <div className='login-screen__bottom-bar'>
-                <span>© 2026 Makoti Developers</span>
+                <span>© 2026 TraderPulse Developers</span>
                 <span>Contact: +254 799 476 880</span>
                 <span>Version 2.0.0</span>
                 <span>Powered by Deriv</span>

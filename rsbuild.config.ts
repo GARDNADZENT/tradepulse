@@ -3,7 +3,7 @@ import { defineConfig, loadEnv } from '@rsbuild/core';
 import { pluginReact } from '@rsbuild/plugin-react';
 import { pluginSass } from '@rsbuild/plugin-sass';
 
-// Load .env.production into process.env before `source.define` reads it below.
+// Load env files into process.env before `source.define` reads it below.
 // Heroku's build doesn't surface it otherwise; a missing file is a no-op.
 loadEnv({ mode: 'production' });
 
@@ -39,9 +39,11 @@ export default defineConfig({
         NEXT_PUBLIC_DERIV_ENV: JSON.stringify(process.env.NEXT_PUBLIC_DERIV_ENV ?? ''),
         // Partner referral link for affiliate attribution on OAuth login/sign-up.
         NEXT_PUBLIC_DERIV_REFERRAL_LINK: JSON.stringify(process.env.NEXT_PUBLIC_DERIV_REFERRAL_LINK ?? ''),
-        // Partner app name. The BFF writes this into .env.production at deploy time; the header
+        // Partner app name. The BFF writes this into .env at deploy time; the header
         // logo+name mark and the document title read it (with brand.config / default fallback).
         NEXT_PUBLIC_DERIV_APP_NAME: JSON.stringify(process.env.NEXT_PUBLIC_DERIV_APP_NAME ?? ''),
+        // OAuth redirect URI. Falls back to window.location.origin when unset.
+        NEXT_PUBLIC_DERIV_REDIRECT_URI: JSON.stringify(process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI ?? ''),
         // Marks the static preview build (served under /bot/preview); drives the
         // router basename so React Router resolves under that path prefix.
         NEXT_PUBLIC_APP_BUILD: JSON.stringify(process.env.NEXT_PUBLIC_APP_BUILD ?? ''),

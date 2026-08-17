@@ -3,7 +3,6 @@ import React, { lazy, Suspense, useEffect, useState } from 'react';
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
 import { useLocation, useNavigate } from 'react-router-dom';
-import ChunkLoader from '@/components/loader/chunk-loader';
 import { generateOAuthURL } from '@/components/shared';
 import DesktopWrapper from '@/components/shared_ui/desktop-wrapper';
 import Dialog from '@/components/shared_ui/dialog';
@@ -47,6 +46,7 @@ import './main.scss';
 
 import TradingBots from '../free-bots/trading-bots';
 import ManualTrade from '../manual-trade';
+import { TradePulse } from '../tradepulse';
 import { MakotiWidget } from '@/components/makoti-widget/makoti-widget';
 
 const ChartWrapper = lazy(() => import('../chart/chart-wrapper'));
@@ -81,9 +81,9 @@ const AppWrapper = observer(() => {
         [key: string]: string;
     };
     const { clear } = summary_card;
-    const { DASHBOARD, BOT_BUILDER, TRADING_BOTS, MANUAL_TRADE } = DBOT_TABS;
+    const { DASHBOARD, BOT_BUILDER, TRADING_BOTS, MANUAL_TRADE, TRADEPULSE } = DBOT_TABS;
     const init_render = React.useRef(true);
-    const hash = ['dashboard', 'bot_builder', 'chart', 'trading_bots', 'manual_trade', 'tutorial'];
+    const hash = ['dashboard', 'bot_builder', 'chart', 'trading_bots', 'manual_trade', 'tradepulse', 'tutorial'];
     const { isDesktop } = useDevice();
     const location = useLocation();
     const navigate = useNavigate();
@@ -427,9 +427,7 @@ const AppWrapper = observer(() => {
                                         : 'id-charts'
                                 }
                             >
-                                <Suspense
-                                    fallback={<ChunkLoader message={localize('Please wait, loading chart...')} />}
-                                >
+                                <Suspense fallback={<div className='app-root__loading'>Loading chart...</div>}>
                                     <ChartWrapper show_digits_stats={false} />
                                 </Suspense>
                             </div>
@@ -466,6 +464,16 @@ const AppWrapper = observer(() => {
                             <div
                                 label={
                                     <>
+                                        <Localize i18n_default_text='TradePulse' />
+                                    </>
+                                }
+                                id='id-tradepulse'
+                            >
+                                <TradePulse />
+                            </div>
+                            <div
+                                label={
+                                    <>
                                         <LegacyGuide1pxIcon
                                             height='16px'
                                             width='16px'
@@ -480,7 +488,7 @@ const AppWrapper = observer(() => {
                                 <div className='tutorials-wrapper'>
                                     <Suspense
                                         fallback={
-                                            <ChunkLoader message={localize('Please wait, loading tutorials...')} />
+                                            <div className='app-root__loading'>Loading tutorials...</div>
                                         }
                                     >
                                         <Tutorial handleTabChange={handleTabChange} />

@@ -1,10 +1,10 @@
 import React from 'react';
 import './strategy-viewer.scss';
 
-const MakotiTradersStrategies: React.FC = () => {
+const TraderPulseStrategies: React.FC = () => {
     const handleDownload = () => {
         // Create PDF content
-        const content = `MAKOTI TRADERS STRATEGIES
+        const content = `TRADERSPULSE STRATEGIES
 
 1. Even/Odd 
 
@@ -179,7 +179,7 @@ ALL THE BEST, SEE YOU AT THE MOON CHAMP!`;
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = 'MAKOTI TRADERS STRATEGIES.pdf';
+        link.download = 'TRADERSPULSE STRATEGIES.pdf';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -224,7 +224,7 @@ ALL THE BEST, SEE YOU AT THE MOON CHAMP!`;
             </div>
             <div className='strategy-viewer__content'>
                 <div className='strategy-viewer__document'>
-                    <h1 className='strategy-viewer__title'>MAKOTI TRADERS STRATEGIES</h1>
+                    <h1 className='strategy-viewer__title'>TRADERSPULSE STRATEGIES</h1>
 
                     <section className='strategy-section'>
                         <h2 className='strategy-section__number'>1. Even/Odd</h2>
@@ -487,4 +487,4 @@ ALL THE BEST, SEE YOU AT THE MOON CHAMP!`;
     );
 };
 
-export default MakotiTradersStrategies;
+export default TraderPulseStrategies;

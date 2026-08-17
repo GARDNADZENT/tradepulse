@@ -10,7 +10,7 @@
 // import { observer } from 'mobx-react-lite';
 // import { useStore } from '@/hooks/useStore';
 // import { useTranslations } from '@deriv-com/translations';
-// import { MenuItem, Text } from '@deriv-com/ui';
+// import { MenuItem } from '@deriv-com/ui';
 //
 // export const MenuItems = observer(() => {
 //     const { localize } = useTranslations();
@@ -37,10 +37,28 @@
 // src/components/layout/header/mobile-menu/use-mobile-menu-config.tsx
 
 import { observer } from 'mobx-react-lite';
+import { useStore } from '@/hooks/useStore';
+import { useTranslations } from '@deriv-com/translations';
+import { MenuItem } from '@deriv-com/ui';
 
 export const MenuItems = observer(() => {
-    // No menu items by default - add your custom menu items here
-    return null;
+    const store = useStore();
+    const { localize } = useTranslations();
+    const is_logged_in = store?.client?.is_logged_in ?? false;
+
+    if (!is_logged_in) return null;
+
+    return (
+        <>
+            <MenuItem
+                as='a'
+                className='app-header__menu'
+                href='/#tradepulse'
+            >
+                {localize('TradePulse')}
+            </MenuItem>
+        </>
+    );
 });
 
 export const TradershubLink = observer(() => {

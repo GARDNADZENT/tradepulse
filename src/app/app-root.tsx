@@ -2,9 +2,6 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { observer } from 'mobx-react-lite';
 import ErrorBoundary from '@/components/error-component/error-boundary';
 import ErrorComponent from '@/components/error-component/error-component';
-import ChunkLoader from '@/components/loader/chunk-loader';
-import MakotiLoader from '@/components/loader/makoti-loader';
-import MakotiLoaderGate, { markLoaderDone } from '@/components/loader/makoti-loader-gate';
 import { api_base } from '@/external/bot-skeleton';
 import { useStore } from '@/hooks/useStore';
 import { localize } from '@deriv-com/translations';
@@ -13,7 +10,7 @@ import './app-root.scss';
 const AppContent = lazy(() => import('./app-content'));
 
 const AppRootLoader = () => {
-    return <MakotiLoaderGate message='Initializing system' />;
+    return <div className='app-root__loading'>Loading...</div>;
 };
 
 const ErrorComponentWrapper = observer(() => {
@@ -45,7 +42,6 @@ const AppRoot = () => {
         const timeoutId = setTimeout(() => {
             if (!is_api_initialized) {
                 setIsApiInitialized(true);
-                markLoaderDone();
             }
         }, 5000);
 
@@ -59,8 +55,7 @@ const AppRoot = () => {
                     api_base_initialized.current = false;
                 } finally {
                     setIsApiInitialized(true);
-                    markLoaderDone();
-                    clearTimeout(timeoutId); // Clear timeout if API init completes
+                    clearTimeout(timeoutId);
                 }
             }
         };

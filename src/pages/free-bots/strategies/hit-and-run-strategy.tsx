@@ -86,7 +86,7 @@ on data-driven signals, traders can enhance their success rate while maintaining
 
 The key rule is to hit and run while increasing stake strategically to optimize returns.
 
-USE makotitraderss.vercel.app TO TRADE`;
+USE traderpulse.vercel.app TO TRADE`;
 
         const blob = new Blob([content], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
@@ -311,7 +311,7 @@ USE makotitraderss.vercel.app TO TRADE`;
                     </section>
 
                     <div className='strategy-footer'>
-                        <p className='strategy-footer__text'>USE makotitraderss.vercel.app TO TRADE</p>
+                        <p className='strategy-footer__text'>USE traderpulse.vercel.app TO TRADE</p>
                     </div>
                 </div>
             </div>

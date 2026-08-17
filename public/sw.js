@@ -8,7 +8,7 @@
  * - Cross-origin requests (Deriv WS API, GTM, LiveChat, fonts, CDNs): never touched,
  *   always go straight to the network.
  */
-const CACHE_NAME = 'makoti-traders-v1';
+const CACHE_NAME = 'makoti-traders-v2';
 
 self.addEventListener('install', (event) => {
     event.waitUntil(

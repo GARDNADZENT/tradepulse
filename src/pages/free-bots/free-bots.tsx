@@ -32,14 +32,14 @@ const FreeBots = observer(() => {
     const getBotDescription = (botName: string): string => {
         const descriptions: { [key: string]: string } = {
             'STARTER BOT':
-                'Official starter bot for Makoti Traders. Optimized for beginners with standard risk management.',
+                'Official starter bot for TraderPulse. Optimized for beginners with standard risk management.',
             'POVERTY KILLER':
                 'High-performance digit trading bot with intelligent recovery and profit optimization.',
             'POVERTY KILLER V2.1':
                 'Updated version of the Poverty Killer bot with enhanced performance and risk management.',
             'BEST RISE FALL':
                 'Automated rise and fall strategy optimized for consistent returns in trending markets.',
-            'MAKOTI AUTOMATED RISE FALL':
+            'TRADERSPULSE AUTOMATED RISE FALL':
                 'Premium rise and fall strategy featuring advanced entry points and recovery mechanisms.',
             'OVER1 R32 PRO':
                 'Professional Over 1 trading bot with R32 recovery strategy. Optimized for high win rates with intelligent recovery mechanisms and risk management.',
@@ -53,10 +53,10 @@ const FreeBots = observer(() => {
                 'Professional Under 7 bot with R56 recovery mechanism. Features intelligent risk management and recovery strategies for consistent returns.',
             'UNDER8 R67 PRO':
                 'Advanced Under 8 trading bot with R67 recovery system. Designed for optimal performance with sophisticated pattern recognition and recovery.',
-            'MAKOTIV3RISE FALL':
+            'TRADERSPULSEV3RISE FALL':
                 'Premium Rise/Fall trading bot with MACD analysis and intelligent recovery. Optimized for consistent returns in trending markets.',
-            'MAKOTI RISE/FALL V4':
-                'Latest version of the Makoti Rise/Fall bot. Enhanced with improved entry signals and advanced recovery management for maximum stability.',
+            'TRADERSPULSE RISE/FALL V4':
+                'Latest version of the TraderPulse Rise/Fall bot. Enhanced with improved entry signals and advanced recovery management for maximum stability.',
                         };
 
         // Try exact match first
@@ -81,15 +81,15 @@ const FreeBots = observer(() => {
             'POVERTY_KILLER.xml',
             'POVERTY_KILLER_V2.1.xml',
             'BEST_RISE_FALL.xml',
-            'MAKOTI_AUTOMATED_RISE_FALL.xml',
+            'TRADERSPULSE_AUTOMATED_RISE_FALL.xml',
             'THE CMV PRO.xml',
             'UNDER BLAST PRO.xml',
             'OVER1_R32 PRO.xml',
             'OVER2_R43 PRO.xml',
             'UNDER8_R67 PRO.xml',
             'UNDER7_R56 PRO.xml',
-            'MAKOTIV3RISE_FALL.xml',
-            'MAKOTIRISE_FALLV4.xml',
+            'TRADERSPULSEV3RISE_FALL.xml',
+            'TRADERSPULSERISE_FALLV4.xml',
         ];
     };
 
@@ -156,8 +156,8 @@ const FreeBots = observer(() => {
 
                 // Update skeletons to our explicit list
                 const skeletonBots: BotData[] = manifest.map(item => {
-                    const botName = (item.name || item.file.replace('.xml', '')).replace(/[_-]/g, ' ').replace('MAKOTIRISE FALLV4', 'MAKOTI RISE/FALL V4');
-                    const isPremiumPlus = botName.includes('MAKOTI RISE/FALL V4');
+                    const botName = (item.name || item.file.replace('.xml', '')).replace(/[_-]/g, ' ').replace('TRADERSPULSERISE FALLV4', 'TRADERSPULSE RISE/FALL V4');
+                    const isPremiumPlus = botName.includes('TRADERSPULSE RISE/FALL V4');
                     return {
                         name: botName,
                         description: getBotDescription(botName),
@@ -178,8 +178,8 @@ const FreeBots = observer(() => {
                     try {
                         const xml = await fetchXmlWithCache(item.file);
                         if (xml) {
-                            const botName = (item.name || item.file.replace('.xml', '')).replace(/[_-]/g, ' ').replace('MAKOTIRISE FALLV4', 'MAKOTI RISE/FALL V4');
-                            const isPremiumPlus = botName.includes('MAKOTI RISE/FALL V4');
+                            const botName = (item.name || item.file.replace('.xml', '')).replace(/[_-]/g, ' ').replace('TRADERSPULSERISE FALLV4', 'TRADERSPULSE RISE/FALL V4');
+                            const isPremiumPlus = botName.includes('TRADERSPULSE RISE/FALL V4');
                             loadedBots.push({
                                 name: botName,
                                 description: getBotDescription(botName),

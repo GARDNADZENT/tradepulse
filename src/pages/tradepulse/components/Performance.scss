@@ -1,0 +1,206 @@
+@import '@/components/shared/styles/_themes.scss';
+@import '@/components/shared/styles/_constants.scss';
+
+.performance {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.performance__loading {
+    color: var(--text-less-prominent);
+    font-size: 1.4rem;
+    text-align: center;
+    padding: 40px 0;
+}
+
+.performance__error {
+    color: var(--text-loss-danger);
+    font-size: 1.4rem;
+    text-align: center;
+    padding: 40px 0;
+}
+
+.performance__header {
+    margin-bottom: 8px;
+}
+
+.performance__label {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--brand-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.performance__title {
+    font-size: 2.4rem;
+    font-weight: bold;
+    color: var(--text-prominent);
+    margin: 4px 0 8px 0;
+}
+
+.performance__subtitle {
+    font-size: 1.3rem;
+    color: var(--text-less-prominent);
+    margin: 0;
+}
+
+.performance__section {
+    background: var(--general-main-2);
+    border: 1px solid var(--border-normal);
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.performance__section-header {
+    margin-bottom: 16px;
+}
+
+.performance__section-title {
+    font-size: 1.6rem;
+    font-weight: bold;
+    color: var(--text-prominent);
+    margin: 0;
+}
+
+.performance__stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px;
+}
+
+.stat-card {
+    background: var(--general-main-1);
+    border: 1px solid var(--border-normal);
+    border-radius: 10px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.stat-card:hover {
+    box-shadow: 0 4px 6px rgba(15,23,42,.04), 0 20px 40px -20px rgba(15,23,42,.12);
+}
+
+.stat-card--accent {
+    border-color: var(--brand-primary);
+}
+
+.stat-card__label {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-less-prominent);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.stat-card__value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--text-prominent);
+}
+
+.stat-card--accent .stat-card__value {
+    color: var(--brand-primary);
+}
+
+.text-profit {
+    color: var(--text-profit-success);
+}
+
+.text-loss {
+    color: var(--text-loss-danger);
+}
+
+.performance__card {
+    background: var(--general-main-1);
+    border: 1px solid var(--border-normal);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.performance__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 1.2rem;
+}
+
+.performance__table th,
+.performance__table td {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border-normal);
+    white-space: nowrap;
+}
+
+.performance__table th {
+    background: var(--general-section-1);
+    color: var(--text-less-prominent);
+    font-weight: 600;
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.performance__table-row:hover {
+    background: rgba(99, 102, 241, 0.03);
+}
+
+.performance__win-bar {
+    margin-top: 8px;
+    height: 4px;
+    width: 96px;
+    background: var(--general-section-1);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.performance__win-fill {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.3s ease;
+}
+
+.performance__empty {
+    text-align: center;
+    padding: 48px 24px;
+}
+
+.performance__empty-icon {
+    width: 48px;
+    height: 48px;
+    margin: 0 auto 12px;
+    border-radius: 12px;
+    background: var(--general-section-1);
+    color: var(--text-less-prominent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.performance__empty-text {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--text-prominent);
+    margin: 0 0 4px 0;
+}
+
+.performance__empty-sub {
+    font-size: 1.1rem;
+    color: var(--text-less-prominent);
+    margin: 0;
+}
+
+@media (max-width: 768px) {
+    .performance__stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .performance__table th,
+    .performance__table td {
+        padding: 10px 12px;
+        font-size: 1rem;
+    }
+}
