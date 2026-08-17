@@ -9,9 +9,10 @@ const OAuthCallback = () => {
 
     useEffect(() => {
         const handleCallback = async () => {
+            const redirectUri = process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI;
+            const clientId = process.env.NEXT_PUBLIC_DERIV_APP_ID;
+
             try {
-                const redirectUri = process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI;
-                const clientId = process.env.NEXT_PUBLIC_DERIV_APP_ID;
                 const authInfo = await handleOAuthCallback(window.location.href, {
                     clientId,
                     redirectUri,
@@ -53,7 +54,7 @@ const OAuthCallback = () => {
                 console.error('OAuth callback error:', error);
             } finally {
                 cleanupUrl(redirectUri);
-                setTimeout(() => navigate('/', { replace: true }), 150);
+                navigate('/', { replace: true });
             }
         };
 
