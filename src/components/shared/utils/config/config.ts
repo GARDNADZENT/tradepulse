@@ -147,10 +147,6 @@ export const generateOAuthURL = async (prompt?: string): Promise<string> => {
             scopes: 'trade',
         };
 
-        console.log('[OAuth] client_id:', clientId);
-        console.log('[OAuth] redirect_uri:', redirectUri);
-        console.log('[OAuth] auth URL:', await buildAuthorizationUrl(config));
-
         // Static referral link (fallback for direct visits without affiliate click)
         const referralLink = process.env.NEXT_PUBLIC_DERIV_REFERRAL_LINK;
         if (referralLink) {
