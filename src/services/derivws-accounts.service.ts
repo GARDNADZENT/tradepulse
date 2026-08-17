@@ -251,7 +251,7 @@ export class DerivWSAccountsService {
         const headers: Record<string, string> = {
             Authorization: `Bearer ${accessToken}`,
         };
-        const appId = process.env.NEXT_PUBLIC_DERIV_APP_ID || '33UD5Xga7WHSzXFtBYdmr';
+        const appId = process.env.NEXT_PUBLIC_DERIV_APP_ID;
         if (appId) headers['Deriv-App-ID'] = appId;
 
         const response = await fetch(endpoint, {

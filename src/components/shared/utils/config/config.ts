@@ -86,7 +86,7 @@ export const getSocketURL = async (): Promise<string> => {
 };
 
 export const getAppId = () => {
-    return process.env.NEXT_PUBLIC_DERIV_APP_ID || '33UD5Xga7WHSzXFtBYdmr';
+    return process.env.NEXT_PUBLIC_DERIV_APP_ID;
 };
 
 export const getDebugServiceWorker = () => {
@@ -137,19 +137,16 @@ const cacheReferral = (referral: ResolvedReferral): void => {
  */
 export const generateOAuthURL = async (prompt?: string): Promise<string> => {
     try {
-        const clientId = getAppId();
+        const clientId = process.env.NEXT_PUBLIC_DERIV_APP_ID;
         if (!clientId) return '';
 
-        const redirectUri =
-            process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI || `${window.location.origin}/callback`;
+        const redirectUri = process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI;
 
         const config: AuthConfig = {
             clientId,
             redirectUri,
             scopes: 'trade',
         };
-
-        console.log('[OAuth] redirect_uri:', redirectUri);
 
         // Static referral link (fallback for direct visits without affiliate click)
         const referralLink = process.env.NEXT_PUBLIC_DERIV_REFERRAL_LINK;
