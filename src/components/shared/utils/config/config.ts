@@ -137,7 +137,7 @@ const cacheReferral = (referral: ResolvedReferral): void => {
  */
 export const generateOAuthURL = async (prompt?: string): Promise<string> => {
     try {
-        const clientId = process.env.NEXT_PUBLIC_DERIV_APP_ID;
+        const clientId = getAppId();
         if (!clientId) return '';
 
         const redirectUri =
