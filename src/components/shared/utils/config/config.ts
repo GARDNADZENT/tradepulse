@@ -141,7 +141,7 @@ export const generateOAuthURL = async (prompt?: string): Promise<string> => {
         if (!clientId) return '';
 
         const redirectUri =
-            process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI || window.location.origin;
+            process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI || `${window.location.origin}/callback`;
 
         const config: AuthConfig = {
             clientId,

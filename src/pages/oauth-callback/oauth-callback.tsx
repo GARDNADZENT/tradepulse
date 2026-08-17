@@ -10,7 +10,7 @@ const OAuthCallback = () => {
         const handleCallback = async () => {
             try {
                 const redirectUri =
-                    process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI || window.location.origin;
+                    process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI || `${window.location.origin}/callback`;
                 const authInfo = await handleOAuthCallback(window.location.href, {
                     clientId: process.env.NEXT_PUBLIC_DERIV_APP_ID || '',
                     redirectUri,
@@ -37,7 +37,7 @@ const OAuthCallback = () => {
                 console.error('OAuth callback error:', error);
             } finally {
                 const redirectUri =
-                    process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI || window.location.origin;
+                    process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI || `${window.location.origin}/callback`;
                 cleanupUrl(redirectUri);
                 navigate('/', { replace: true });
             }
