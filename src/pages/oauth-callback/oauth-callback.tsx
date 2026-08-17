@@ -52,9 +52,8 @@ const OAuthCallback = () => {
             } catch (error) {
                 console.error('OAuth callback error:', error);
             } finally {
-                const redirectUri = process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI;
                 cleanupUrl(redirectUri);
-                navigate('/', { replace: true });
+                setTimeout(() => navigate('/', { replace: true }), 150);
             }
         };
 
