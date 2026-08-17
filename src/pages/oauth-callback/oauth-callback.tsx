@@ -2,6 +2,7 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { handleOAuthCallback, cleanupUrl } from '@/external/deriv-core';
+import { setAuthData, setAccountList } from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
 
 const OAuthCallback = () => {
     const navigate = useNavigate();
@@ -27,6 +28,21 @@ const OAuthCallback = () => {
                     const isDemo =
                         firstAccount.account_id.startsWith('VRT') || firstAccount.account_id.startsWith('VRTC');
                     localStorage.setItem('account_type', isDemo ? 'demo' : 'real');
+
+                    const mappedAccounts = accounts.map(acc => ({
+                        loginid: acc.account_id,
+                        balance: parseFloat(acc.balance) || 0,
+                        currency: acc.currency || 'USD',
+                        is_virtual: acc.account_type === 'demo' ? 1 : 0,
+                    }));
+                    setAccountList(mappedAccounts);
+                    setAuthData({
+                        loginid: firstAccount.account_id,
+                        balance: parseFloat(firstAccount.balance) || 0,
+                        currency: firstAccount.currency || 'USD',
+                        is_virtual: isDemo ? 1 : 0,
+                        account_list: mappedAccounts,
+                    });
 
                     const { api_base } = await import('@/external/bot-skeleton');
                     await api_base.init(true);
