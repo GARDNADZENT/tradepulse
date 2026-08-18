@@ -69,6 +69,42 @@ export interface Database {
                 };
                 Relationships: [];
             };
+            journey_days: {
+                Row: {
+                    id: string;
+                    journey_id: string;
+                    day_number: number;
+                    date: string;
+                    expected_start: number;
+                    expected_end: number;
+                    actual_balance: number | null;
+                    status: string;
+                    created_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    journey_id: string;
+                    day_number: number;
+                    date: string;
+                    expected_start: number;
+                    expected_end: number;
+                    actual_balance?: number | null;
+                    status?: string;
+                    created_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    journey_id?: string;
+                    day_number?: number;
+                    date?: string;
+                    expected_start?: number;
+                    expected_end?: number;
+                    actual_balance?: number | null;
+                    status?: string;
+                    created_at?: string;
+                };
+                Relationships: [];
+            };
         };
         Functions: {};
         Enums: {};

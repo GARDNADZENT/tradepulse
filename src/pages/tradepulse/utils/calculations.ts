@@ -50,7 +50,11 @@ export const loadJourneySync = (loginid: string): Journey | null => {
 
 export const saveJourney = async (loginid: string, journey: Journey) => {
     localStorage.setItem(getJourneyStorageKey(loginid), JSON.stringify(journey));
-    await journeyService.saveJourney(loginid, journey);
+    const saved = await journeyService.saveJourney(loginid, journey);
+    if (saved?.id) {
+        const schedule = buildSchedule(journey);
+        await journeyService.saveJourneyDays(saved.id, journey, schedule);
+    }
 };
 
 export const buildSchedule = (journey: Journey): ScheduleRow[] => {
