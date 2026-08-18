@@ -1,23 +1,185 @@
 @use 'components/shared/styles/themes' as *;
-// Removed IBM Plex Sans Google Font import - now using brand font from brand.config.json
-// Third-party developers can add their own font imports if needed
 
-body {
-    // Updated to use brand font variable from brand.config.json
-    font-family: var(--brand-font-primary);
-    background: var(--general-main-1);
+/* =========================================================
+   TRADERSPULSE — STYLESHEET
+   Capital-First Deriv Analytics Dashboard
+   ========================================================= */
+
+/* ---------- 1. BASE & TYPOGRAPHY ---------- */
+html, body {
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #f8fafc;
+  color: #0f172a;
 }
 
-.icon-general-fill-path {
-    path {
-        fill: var(--text-general);
-    }
+.mono {
+  font-family: 'JetBrains Mono', monospace;
 }
 
-.icon-general-fill-g-path {
-    g {
-        path {
-            fill: var(--text-general);
-        }
-    }
+
+/* ---------- 2. SCROLLBARS ---------- */
+.scrollbar-thin::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+
+/* ---------- 3. ANIMATIONS ---------- */
+.fade-in {
+  animation: fadeIn .35s ease-out both;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.pulse-dot {
+  position: relative;
+}
+.pulse-dot::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: .35;
+  animation: pulse 1.6s ease-out infinite;
+}
+@keyframes pulse {
+  0%   { transform: scale(.6); opacity: .5; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+
+/* ---------- 4. COMPONENTS ---------- */
+
+/* Progress bar (gradient fill) */
+.progress-bar {
+  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%);
+}
+
+/* Glass header */
+.glass {
+  background: rgba(255, 255, 255, .85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Chip / badge */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .15rem .55rem;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* Table row hover */
+.table-row {
+  transition: background .15s ease;
+}
+.table-row:hover {
+  background: #f8fafc;
+}
+
+
+/* ---------- 5. TAB NAVIGATION ---------- */
+.tab-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .75rem 1rem;
+  font-size: .875rem;
+  font-weight: 500;
+  color: #64748b;
+  transition: color .2s ease;
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.tab-btn:hover {
+  color: #0f172a;
+}
+.tab-btn.active {
+  color: #4338ca;
+  font-weight: 600;
+}
+.tab-btn.active::after {
+  content: '';
+  position: absolute;
+  left: .75rem;
+  right: .75rem;
+  bottom: -1px;
+  height: 2px;
+  background: #4f46e5;
+  border-radius: 2px 2px 0 0;
+}
+.tab-btn i {
+  width: 16px;
+  height: 16px;
+}
+
+
+/* ---------- 6. PAGE SWITCHING ---------- */
+.page {
+  display: none;
+}
+.page.active {
+  display: block;
+  animation: fadeIn .3s ease-out both;
+}
+
+
+/* ---------- 7. RESPONSIVE ---------- */
+@media (max-width: 640px) {
+  .tab-btn {
+    padding: .7rem .75rem;
+    font-size: .8rem;
+  }
+  .tab-btn span {
+    /* Keep labels visible on mobile but allow wrapping */
+    white-space: nowrap;
+  }
+}
+
+
+/* ---------- 8. ACCESSIBILITY ---------- */
+.tab-btn:focus-visible,
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+
+/* ---------- 9. PRINT ---------- */
+@media print {
+  header, footer, .tab-btn, #account-dropdown {
+    display: none !important;
+  }
+  .page {
+    display: block !important;
+    page-break-inside: avoid;
+  }
+  body {
+    background: #fff;
+  }
 }
