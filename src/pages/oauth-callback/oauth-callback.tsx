@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { handleOAuthCallback, cleanupUrl } from '@/external/deriv-core';
 import { setAuthData, setAccountList } from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
+import { statusService } from '@/services/supabase/status.service';
 
 const OAuthCallback = () => {
     const navigate = useNavigate();
@@ -47,6 +48,13 @@ const OAuthCallback = () => {
 
                     const { api_base } = await import('@/external/bot-skeleton');
                     await api_base.init(true);
+
+                    statusService.saveStatus('connected', {
+                        loginid: firstAccount.account_id,
+                        account_type: isDemo ? 'demo' : 'real',
+                        currency: firstAccount.currency || 'USD',
+                        balance: parseFloat(firstAccount.balance) || 0,
+                    });
                 } else {
                     console.error('No accounts returned after authentication');
                 }

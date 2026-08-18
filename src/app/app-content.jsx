@@ -13,6 +13,7 @@ import useDevMode from '@/hooks/useDevMode';
 import { useStore } from '@/hooks/useStore';
 import useThemeSwitcher from '@/hooks/useThemeSwitcher';
 import { isPreviewMode } from '@/utils/is-preview-mode';
+import { statusService } from '@/services/supabase/status.service';
 import { ThemeProvider } from '@deriv-com/quill-ui';
 import { setSmartChartsPublicPath } from '@deriv-com/smartcharts-champion';
 import { localize } from '@deriv-com/translations';
@@ -79,8 +80,10 @@ const AppContent = observer(() => {
         if (connectionStatus === CONNECTION_STATUS.OPENED) {
             setIsApiInitialized(true);
             common.setSocketOpened(true);
+            statusService.saveStatus('connected', { connectionStatus: 'opened' });
         } else if (connectionStatus !== CONNECTION_STATUS.OPENED) {
             common.setSocketOpened(false);
+            statusService.saveStatus('disconnected', { connectionStatus });
         }
     }, [common, connectionStatus]);
 

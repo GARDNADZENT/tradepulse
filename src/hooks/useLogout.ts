@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { clearAuthInfo } from '@/external/deriv-core';
 import { useStore } from '@/hooks/useStore';
 import { ErrorLogger } from '@/utils/error-logger';
+import { statusService } from '@/services/supabase/status.service';
 
 /**
  * Custom hook to handle logout functionality
@@ -13,27 +14,20 @@ export const useLogout = () => {
 
     return useCallback(async () => {
         try {
-            // Call the client store logout method which clears all storage
             await client?.logout();
-            // Analytics.reset() removed - Analytics package has been removed from the project
-            // See migrate-docs/MONITORING_PACKAGES.md for re-enabling analytics if needed
+            await statusService.saveStatus('disconnected', { reason: 'user_logout' });
         } catch (error) {
             ErrorLogger.error('Logout', 'Logout failed', error);
-            // If logout fails, clear only auth-related storage keys
-            // This preserves user preferences (theme, language, etc.) while ensuring auth data is cleared
             try {
-                // Clear auth token via vendored deriv-core
                 clearAuthInfo();
-
-                // Clear auth-related localStorage items
                 localStorage.removeItem('active_loginid');
                 localStorage.removeItem('authToken');
                 localStorage.removeItem('accountsList');
                 localStorage.removeItem('clientAccounts');
                 localStorage.removeItem('account_type');
+                await statusService.saveStatus('disconnected', { reason: 'logout_clear_storage' });
             } catch (storageError) {
                 ErrorLogger.error('Logout', 'Failed to clear auth storage', storageError);
-                // Last resort: if targeted clearing fails, clear all storage
                 try {
                     sessionStorage.clear();
                     localStorage.clear();
