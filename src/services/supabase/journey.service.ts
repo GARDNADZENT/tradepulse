@@ -1,6 +1,12 @@
 import { supabase, type JourneyRecord } from './client';
 import type { Journey } from '@/pages/tradepulse/types';
 
+const isMissingColumnError = (error: { message?: string; code?: string } | null) => {
+    if (!error) return false;
+    const msg = error.message || '';
+    return msg.includes('does not exist') || error.code === '42703';
+};
+
 export const journeyService = {
     async loadJourney(loginid: string): Promise<Journey | null> {
         if (!supabase) return null;
@@ -12,7 +18,11 @@ export const journeyService = {
             .maybeSingle();
 
         if (error) {
-            console.error('Supabase loadJourney error:', error);
+            if (isMissingColumnError(error)) {
+                console.warn('[Supabase] journeys table is missing expected columns. Run supabase/journeys-table.sql in Supabase SQL Editor.');
+            } else {
+                console.error('Supabase loadJourney error:', error);
+            }
             return null;
         }
 
@@ -46,7 +56,11 @@ export const journeyService = {
             .single();
 
         if (error) {
-            console.error('Supabase saveJourney error:', error);
+            if (isMissingColumnError(error)) {
+                console.warn('[Supabase] journeys table is missing expected columns. Run supabase/journeys-table.sql in Supabase SQL Editor.');
+            } else {
+                console.error('Supabase saveJourney error:', error);
+            }
             return null;
         }
 
@@ -62,7 +76,11 @@ export const journeyService = {
             .eq('loginid', loginid);
 
         if (error) {
-            console.error('Supabase deleteJourney error:', error);
+            if (isMissingColumnError(error)) {
+                console.warn('[Supabase] journeys table is missing expected columns. Run supabase/journeys-table.sql in Supabase SQL Editor.');
+            } else {
+                console.error('Supabase deleteJourney error:', error);
+            }
         }
     },
 };

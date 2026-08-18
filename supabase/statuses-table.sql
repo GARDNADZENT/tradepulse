@@ -1,5 +1,5 @@
--- Supabase table for storing app status
--- Run this in Supabase SQL Editor (https://supabase.com/dashboard/project/_/sql)
+-- Supabase statuses table migration
+-- Run this in Supabase SQL Editor: https://supabase.com/dashboard/project/zvbeggqktvkwvpupjgfk/sql
 
 create table if not exists public.statuses (
     id uuid primary key default gen_random_uuid(),
@@ -13,10 +13,42 @@ create table if not exists public.statuses (
 create index if not exists idx_statuses_user_id on public.statuses(user_id);
 create index if not exists idx_statuses_updated_at on public.statuses(updated_at desc);
 
--- Optional: enable Row Level Security if needed
--- alter table public.statuses enable row level security;
+-- If the table already exists but with different columns, add missing ones
+do $$
+begin
+    if not exists (
+        select 1 from information_schema.columns
+        where table_schema = 'public'
+        and table_name = 'statuses'
+        and column_name = 'user_id'
+    ) then
+        alter table public.statuses add column user_id text;
+    end if;
 
--- Optional: allow public access for demo purposes (replace with proper auth in production)
--- create policy "Enable read access for all users" on public.statuses for select using (true);
--- create policy "Enable insert for all users" on public.statuses for insert with check (true);
--- create policy "Enable update for all users" on public.statuses for update using (true);
+    if not exists (
+        select 1 from information_schema.columns
+        where table_schema = 'public'
+        and table_name = 'statuses'
+        and column_name = 'details'
+    ) then
+        alter table public.statuses add column details jsonb;
+    end if;
+
+    if not exists (
+        select 1 from information_schema.columns
+        where table_schema = 'public'
+        and table_name = 'statuses'
+        and column_name = 'created_at'
+    ) then
+        alter table public.statuses add column created_at timestamptz not null default now();
+    end if;
+
+    if not exists (
+        select 1 from information_schema.columns
+        where table_schema = 'public'
+        and table_name = 'statuses'
+        and column_name = 'updated_at'
+    ) then
+        alter table public.statuses add column updated_at timestamptz not null default now();
+    end if;
+end $$;

@@ -1,5 +1,11 @@
 import { supabase, type StatusRecord } from './client';
 
+const isMissingColumnError = (error: { message?: string; code?: string } | null) => {
+    if (!error) return false;
+    const msg = error.message || '';
+    return msg.includes('does not exist') || error.code === '42703';
+};
+
 export const statusService = {
     async saveStatus(status: string, details?: Record<string, unknown>): Promise<StatusRecord | null> {
         if (!supabase) {
@@ -14,7 +20,11 @@ export const statusService = {
             .single();
 
         if (error) {
-            console.error('Supabase saveStatus error:', error);
+            if (isMissingColumnError(error)) {
+                console.warn('[Supabase] statuses table is missing expected columns. Run supabase/statuses-table.sql in Supabase SQL Editor.');
+            } else {
+                console.error('Supabase saveStatus error:', error);
+            }
             return null;
         }
 
@@ -35,7 +45,11 @@ export const statusService = {
             .maybeSingle();
 
         if (error) {
-            console.error('Supabase getStatus error:', error);
+            if (isMissingColumnError(error)) {
+                console.warn('[Supabase] statuses table is missing expected columns. Run supabase/statuses-table.sql in Supabase SQL Editor.');
+            } else {
+                console.error('Supabase getStatus error:', error);
+            }
             return null;
         }
 
