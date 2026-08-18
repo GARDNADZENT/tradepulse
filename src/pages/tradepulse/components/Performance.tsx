@@ -2,42 +2,18 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
+import { useStore } from '@/hooks/useStore';
 import { localize } from '@deriv-com/translations';
 import useTradePulseData from '../hooks/useTradePulseData';
 import { loadJourney, buildSchedule, formatCurrency } from '../utils/calculations';
 import './Performance.scss';
 
-const safeNumber = (value: any, fallback = 0) => {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : fallback;
-};
-
-const safeDate = (dateStr: any) => {
-    try {
-        if (!dateStr) return null;
-        const d = new Date(dateStr + 'T00:00:00');
-        if (isNaN(d.getTime())) return null;
-        return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    } catch {
-        return null;
-    }
-};
-
 const Performance = observer(() => {
     const { overallStats, currency, loading, error, dailyPnL, balance, loginid } = useTradePulseData();
     const [filter, setFilter] = useState<'7d' | '30d' | 'all'>('all');
     const [journey, setJourney] = useState<any>(null);
-    const [journeyError, setJourneyError] = useState<string | null>(null);
-    const [debugLogs, setDebugLogs] = useState<any[]>([]);
 
-    const addLog = (entry: any) => {
-        const timestamp = new Date().toISOString();
-        const fullEntry = { timestamp, ...entry };
-        setDebugLogs(prev => [...prev.slice(-200), fullEntry]);
-        console.log('[Performance]', fullEntry);
-    };
-
-    addLog({ type: 'HOOKS_DATA', hasOverallStats: !!overallStats, currency, loading, error: !!error, dailyPnLLength: Array.isArray(dailyPnL) ? dailyPnL.length : 'not_array', balance, loginid });
+    console.log('[Performance] render start', { loading, error, hasOverallStats: !!overallStats, currency, balance, loginid });
 
     useEffect(() => {
         let cancelled = false;
@@ -47,24 +23,17 @@ const Performance = observer(() => {
                 const loaded = await loadJourney(loginid);
                 if (!cancelled) setJourney(loaded);
             } catch (e) {
-                if (!cancelled) setJourneyError(e?.message || 'Failed to load journey');
+                console.error('[Performance] journey load error:', e);
             }
         };
         fetchJourney();
         return () => { cancelled = true; };
     }, [loginid]);
 
-    const schedule = useMemo(() => {
-        try {
-            return journey ? buildSchedule(journey) : [];
-        } catch {
-            return [];
-        }
-    }, [journey]);
-
-    const startingBalance = safeNumber(journey?.initial_balance ?? (balance - (overallStats?.total_profit ?? 0)));
-    const targetBalance = schedule.length > 0 ? safeNumber(schedule[schedule.length - 1].end) : 0;
-    const currentBalance = safeNumber(balance);
+    const schedule = useMemo(() => journey ? buildSchedule(journey) : [], [journey]);
+    const startingBalance = journey?.initial_balance ?? (balance - overallStats.total_profit);
+    const targetBalance = schedule.length > 0 ? schedule[schedule.length - 1].end : 0;
+    const currentBalance = balance;
 
     if (loading) {
         return (
@@ -75,7 +44,6 @@ const Performance = observer(() => {
     }
 
     if (error) {
-        addLog({ type: 'HOOK_ERROR', error });
         return (
             <div className='performance'>
                 <p className='performance__error'>{localize('Failed to load performance data:')} {error}</p>
@@ -83,58 +51,38 @@ const Performance = observer(() => {
         );
     }
 
-    if (journeyError) {
-        addLog({ type: 'JOURNEY_ERROR', journeyError });
-    }
-
-    addLog({ type: 'COMPUTING_VALUES', dailyPnLLength: safeDailyPnL.length, scheduleLength: schedule.length });
-
     const filteredPnL = useMemo(() => {
-        try {
-            if (filter === 'all') return safeDailyPnL;
-            const cutoff = new Date();
-            const days = Number(filter.slice(0, -1));
-            if (Number.isFinite(days)) {
-                cutoff.setDate(cutoff.getDate() - days);
-                const cutoffStr = cutoff.toISOString().slice(0, 10);
-                const result = safeDailyPnL.filter((d: any) => d && d.date && d.date >= cutoffStr);
-                addLog({ type: 'FILTERED_PNL', filter, resultLength: result.length });
-                return result;
-            }
-            addLog({ type: 'FILTERED_PNL_INVALID_DAYS', filter, days });
-            return safeDailyPnL;
-        } catch (e) {
-            addLog({ type: 'FILTERED_PNL_ERROR', error: e?.message });
-            return [];
-        }
-    }, [safeDailyPnL, filter]);
+        if (filter === 'all') return dailyPnL;
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - Number(filter.slice(0, -1)));
+        const cutoffStr = cutoff.toISOString().slice(0, 10);
+        return dailyPnL.filter(d => d.date >= cutoffStr);
+    }, [dailyPnL, filter]);
 
-    const winningDays = filteredPnL.filter((d: any) => safeNumber(d?.profit, 0) > 0).length;
-    const losingDays = filteredPnL.filter((d: any) => safeNumber(d?.profit, 0) < 0).length;
-    const netProfit = filteredPnL.reduce((s: number, d: any) => s + safeNumber(d?.profit, 0), 0);
-    const bestDay = filteredPnL.length > 0 ? filteredPnL.reduce((a: any, b: any) => safeNumber(b?.profit, 0) > safeNumber(a?.profit, 0) ? b : a) : null;
-    const worstDay = filteredPnL.length > 0 ? filteredPnL.reduce((a: any, b: any) => safeNumber(b?.profit, 0) < safeNumber(a?.profit, 0) ? b : a) : null;
+    const winningDays = filteredPnL.filter(d => d.profit > 0).length;
+    const losingDays = filteredPnL.filter(d => d.profit < 0).length;
+    const netProfit = filteredPnL.reduce((s, d) => s + d.profit, 0);
+    const bestDay = filteredPnL.length > 0 ? filteredPnL.reduce((a, b) => b.profit > a.profit ? b : a) : null;
+    const worstDay = filteredPnL.length > 0 ? filteredPnL.reduce((a, b) => b.profit < a.profit ? b : a) : null;
     const avgDaily = filteredPnL.length > 0 ? netProfit / filteredPnL.length : 0;
     const winRate = filteredPnL.length > 0 ? (winningDays / filteredPnL.length) * 100 : 0;
 
-    const profits = filteredPnL.map((d: any) => safeNumber(d?.profit, 0));
-    const maxAbs = profits.length > 0 ? Math.max(...profits.map(p => Math.abs(p)), 1) : 1;
+    const maxAbs = Math.max(...filteredPnL.map(d => Math.abs(d.profit)), 1);
+
+    console.log('[Performance] render return', {
+        filteredPnLLength: filteredPnL.length,
+        winningDays,
+        losingDays,
+        netProfit,
+        bestDay: bestDay ? bestDay.date : null,
+        worstDay: worstDay ? worstDay.date : null,
+        avgDaily,
+        winRate,
+        maxAbs,
+    });
 
     return (
         <div className='performance'>
-            {journeyError && (
-                <div className='performance__error-banner'>
-                    {journeyError}
-                </div>
-            )}
-
-            <div className='performance__debug'>
-                <details>
-                    <summary>Debug Logs (click to expand)</summary>
-                    <pre>{JSON.stringify(debugLogs.slice(-10), null, 2)}</pre>
-                </details>
-            </div>
-
             <div className='performance__header'>
                 <div>
                     <div className='performance__label'>{localize('Analytics')}</div>
@@ -173,33 +121,32 @@ const Performance = observer(() => {
                         <div className='performance__chart'>
                             <div className='performance__chart-bars'>
                                 {filteredPnL.map((d, i) => {
-                                    const profit = safeNumber(d?.profit, 0);
-                                    const heightPct = Math.max(2, (Math.abs(profit) / maxAbs) * 100);
-                                    const isProfit = profit >= 0;
+                                    const heightPct = Math.max(2, (Math.abs(d.profit) / maxAbs) * 100);
+                                    const isProfit = d.profit >= 0;
                                     const isLast = i === filteredPnL.length - 1;
 
                                     return (
-                                        <div key={d?.date || i} className={classNames('performance__bar-wrap', { 'performance__bar-wrap--last': isLast })}>
+                                        <div key={d.date} className={classNames('performance__bar-wrap', { 'performance__bar-wrap--last': isLast })}>
                                             <div
                                                 className={classNames('performance__bar', {
                                                     'performance__bar--profit': isProfit,
                                                     'performance__bar--loss': !isProfit,
                                                 })}
                                                 style={{ height: `${heightPct}%` }}
-                                                title={`${d?.date || ''}: ${formatCurrency(profit, currency)} (${safeNumber(d?.trades, 0)} trades)`}
+                                                title={`${d.date}: ${formatCurrency(d.profit, currency)} (${d.trades} trades)`}
                                             />
                                         </div>
                                     );
                                 })}
                             </div>
                             <div className='performance__chart-labels'>
-                                {filteredPnL.length <= 15 ? filteredPnL.map((d, i) => (
-                                    <span key={d?.date || i} className='performance__chart-label'>{safeDate(d?.date) || ''}</span>
+                                {filteredPnL.length <= 15 ? filteredPnL.map(d => (
+                                    <span key={d.date} className='performance__chart-label'>{new Date(d.date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                                 )) : (
                                     <>
-                                        <span className='performance__chart-label'>{safeDate(filteredPnL[0]?.date) || ''}</span>
+                                        <span className='performance__chart-label'>{new Date(filteredPnL[0]?.date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                                         <span className='performance__chart-label'>...</span>
-                                        <span className='performance__chart-label'>{safeDate(filteredPnL[filteredPnL.length - 1]?.date) || ''}</span>
+                                        <span className='performance__chart-label'>{new Date(filteredPnL[filteredPnL.length - 1]?.date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                                     </>
                                 )}
                             </div>
@@ -216,8 +163,8 @@ const Performance = observer(() => {
                     <StatCard label={localize('Winning Days')} value={String(winningDays)} accent />
                     <StatCard label={localize('Losing Days')} value={String(losingDays)} />
                     <StatCard label={localize('Net P/L')} value={formatCurrency(netProfit, currency)} highlight={netProfit >= 0} />
-                    <StatCard label={localize('Best Day')} value={bestDay ? formatCurrency(safeNumber(bestDay.profit, 0), currency) : '—'} accent />
-                    <StatCard label={localize('Worst Day')} value={worstDay ? formatCurrency(safeNumber(worstDay.profit, 0), currency) : '—'} />
+                    <StatCard label={localize('Best Day')} value={bestDay ? formatCurrency(bestDay.profit, currency) : '—'} accent />
+                    <StatCard label={localize('Worst Day')} value={worstDay ? formatCurrency(worstDay.profit, currency) : '—'} />
                     <StatCard label={localize('Win Rate')} value={`${winRate.toFixed(1)}%`} accent />
                     <StatCard label={localize('Avg Daily P/L')} value={formatCurrency(avgDaily, currency)} highlight={avgDaily >= 0} />
                 </div>
@@ -250,19 +197,19 @@ const Performance = observer(() => {
                                     </tr>
                                 ) : (
                                     filteredPnL.slice(-50).reverse().map((d, i) => {
-                                        const profit = safeNumber(d?.profit, 0);
-                                        const isProfit = profit >= 0;
-                                        const dateLabel = safeDate(d?.date) || '—';
+                                        const isProfit = d.profit >= 0;
+                                        const dateObj = new Date(d.date + 'T00:00:00');
+                                        const dateLabel = dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 
                                         return (
-                                            <tr key={`${d?.date || i}-${i}`} className='performance__table-row'>
+                                            <tr key={`${d.date}-${i}`} className='performance__table-row'>
                                                 <td className='font-medium'>{dateLabel}</td>
-                                                <td className='text-right mono'>{safeNumber(d?.trades, 0)}</td>
+                                                <td className='text-right mono'>{d.trades}</td>
                                                 <td className={classNames('text-right mono font-semibold', {
                                                     'text-profit': isProfit,
                                                     'text-loss': !isProfit,
                                                 })}>
-                                                    {isProfit ? '+' : ''}{formatCurrency(profit, currency)}
+                                                    {isProfit ? '+' : ''}{formatCurrency(d.profit, currency)}
                                                 </td>
                                                 <td className='text-center'>
                                                     <span className={classNames('chip', {

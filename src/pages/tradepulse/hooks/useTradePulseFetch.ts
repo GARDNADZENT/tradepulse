@@ -5,8 +5,7 @@ import { useStore } from '@/hooks/useStore';
 import type { PerformanceStats, DailyPnL } from '@/pages/tradepulse/types';
 
 const useTradePulseFetch = () => {
-    const store = useStore();
-    const { client } = store || {};
+    const { client } = useStore();
     const loginid = client?.loginid ?? '';
     const isLoggedIn = client?.is_logged_in ?? false;
 
@@ -17,10 +16,15 @@ const useTradePulseFetch = () => {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!isLoggedIn || !loginid) return;
+        if (!isLoggedIn || !loginid) {
+            console.log('[useTradePulseFetch] skip: not logged in or no loginid', { isLoggedIn, loginid });
+            return;
+        }
 
         let cancelled = false;
         let balanceInterval: ReturnType<typeof setInterval> | null = null;
+
+        console.log('[useTradePulseFetch] starting fetch for', loginid);
 
         const waitForSocket = () => {
             return new Promise<void>((resolve) => {
@@ -43,6 +47,8 @@ const useTradePulseFetch = () => {
                 setLoading(true);
                 setError(null);
 
+                console.log('[useTradePulseFetch] socket ready, fetching data...');
+
                 const [profitTableRes, balanceRes] = await Promise.all([
                     sendViaNewSystemWithPromise({ profit_table: 1, description: 1, limit: 500 }).catch((err) => {
                         console.warn('[TradePulse] profit_table fetch failed:', err);
@@ -59,10 +65,12 @@ const useTradePulseFetch = () => {
                 if (balanceRes?.balance) {
                     setLiveBalance(Number(balanceRes.balance.balance) || 0);
                     setCurrency(balanceRes.balance.currency || 'USD');
+                    console.log('[useTradePulseFetch] balance updated:', Number(balanceRes.balance.balance) || 0, balanceRes.balance.currency);
                 }
 
                 if (profitTableRes?.profit_table?.transactions) {
                     const items = profitTableRes.profit_table.transactions;
+                    console.log('[useTradePulseFetch] profit_table transactions:', items.length);
                     const contracts = items.map((item: any) => {
                         const buyPrice = Number(item.buy_price) || 0;
                         const sellPrice = Number(item.sell_price) || 0;
@@ -90,9 +98,13 @@ const useTradePulseFetch = () => {
                         };
                     });
                     setRawContracts(contracts);
+                    console.log('[useTradePulseFetch] setRawContracts count:', contracts.length);
                 }
             } catch (err) {
-                if (!cancelled) setError(err.message || 'Failed to fetch data');
+                if (!cancelled) {
+                    console.error('[useTradePulseFetch] fetch error:', err);
+                    setError(err.message || 'Failed to fetch data');
+                }
             } finally {
                 if (!cancelled) setLoading(false);
             }
@@ -134,29 +146,20 @@ const useTradePulseFetch = () => {
 
         const byDay: Record<string, number> = {};
         rawContracts.forEach(c => {
-            try {
-                const t = c.closeTime || c.purchaseTime || (c.date_start ? new Date(c.date_start).getTime() / 1000 : null);
-                if (!t) return;
-                const day = new Date(Number(t) * 1000).toISOString().slice(0, 10);
-                byDay[day] = (byDay[day] || 0) + Number(c.profit || 0);
-            } catch {
-                // skip contracts with invalid dates
-            }
+            const t = c.closeTime || c.purchaseTime || (c.date_start ? new Date(c.date_start).getTime() / 1000 : null);
+            if (!t) return;
+            const day = new Date(Number(t) * 1000).toISOString().slice(0, 10);
+            byDay[day] = (byDay[day] || 0) + Number(c.profit || 0);
         });
         const dayEntries = Object.entries(byDay);
         const bestDay = dayEntries.length ? dayEntries.reduce((a, b) => b[1] > a[1] ? b : a) : null;
         const worstDay = dayEntries.length ? dayEntries.reduce((a, b) => b[1] < a[1] ? b : a) : null;
 
         let winStreak = 0, lossStreak = 0;
-        const sorted = [...rawContracts].sort((a, b) => {
-            try {
-                const ta = Number(a.closeTime || a.purchaseTime || (a.date_start ? new Date(a.date_start).getTime() / 1000 : 0)) || 0;
-                const tb = Number(b.closeTime || b.purchaseTime || (b.date_start ? new Date(b.date_start).getTime() / 1000 : 0)) || 0;
-                return tb - ta;
-            } catch {
-                return 0;
-            }
-        });
+        const sorted = [...rawContracts].sort((a, b) =>
+            (Number(b.closeTime || b.purchaseTime || (b.date_start ? new Date(b.date_start).getTime() / 1000 : 0)) || 0) -
+            (Number(a.closeTime || a.purchaseTime || (a.date_start ? new Date(a.date_start).getTime() / 1000 : 0)) || 0)
+        );
         let curWin = 0, curLoss = 0;
         for (const c of sorted) {
             const p = Number(c.profit) || 0;
@@ -185,17 +188,13 @@ const useTradePulseFetch = () => {
     const dailyPnL = useMemo<DailyPnL[]>(() => {
         const map = new Map<string, { profit: number; trades: number }>();
         rawContracts.forEach(c => {
-            try {
-                const t = c.closeTime || c.purchaseTime || (c.date_start ? new Date(c.date_start).getTime() / 1000 : null);
-                if (!t) return;
-                const date = new Date(Number(t) * 1000).toISOString().slice(0, 10);
-                const entry = map.get(date) ?? { profit: 0, trades: 0 };
-                entry.profit += Number(c.profit) || 0;
-                entry.trades += 1;
-                map.set(date, entry);
-            } catch {
-                // skip contracts with invalid dates
-            }
+            const t = c.closeTime || c.purchaseTime || (c.date_start ? new Date(c.date_start).getTime() / 1000 : null);
+            if (!t) return;
+            const date = new Date(Number(t) * 1000).toISOString().slice(0, 10);
+            const entry = map.get(date) ?? { profit: 0, trades: 0 };
+            entry.profit += Number(c.profit) || 0;
+            entry.trades += 1;
+            map.set(date, entry);
         });
 
         return Array.from(map.entries())
@@ -209,6 +208,8 @@ const useTradePulseFetch = () => {
         currency,
         loading,
         error,
+        statsKeys: stats ? Object.keys(stats) : [],
+        dailyPnLLength: dailyPnL.length,
     });
 
     return {
