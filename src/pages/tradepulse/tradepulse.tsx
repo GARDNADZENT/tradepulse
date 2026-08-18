@@ -9,7 +9,55 @@ import MyJourney from './components/MyJourney';
 import MasterSchedule from './components/MasterSchedule';
 import Performance from './components/Performance';
 import AccountInfo from './components/AccountInfo';
+import DebugOverlay from './components/DebugOverlay';
 import './tradepulse.scss';
+
+const PerformanceWrapper = () => {
+    const [error, setError] = useState<string | null>(null);
+    const [logs, setLogs] = useState<any[]>([]);
+
+    const addLog = (entry: any) => {
+        const timestamp = new Date().toISOString();
+        const fullEntry = { timestamp, ...entry };
+        setLogs(prev => [...prev.slice(-200), fullEntry]);
+        console.log('[PerformanceDebug]', fullEntry);
+    };
+
+    useEffect(() => {
+        addLog({ type: 'WRAPPER_MOUNT' });
+        return () => addLog({ type: 'WRAPPER_UNMOUNT' });
+    }, []);
+
+    useEffect(() => {
+        addLog({ type: 'ERROR_STATE_CHANGE', error });
+    }, [error]);
+
+    if (error) {
+        return (
+            <>
+                <div className='performance'>
+                    <p className='performance__error'>{localize('Failed to load performance data.')}</p>
+                    <button className='master-schedule__submit-btn' onClick={() => { setError(null); setLogs([]); }} type='button'>
+                        {localize('Retry')}
+                    </button>
+                </div>
+                <DebugOverlay logs={logs} onClose={() => { setError(null); setLogs([]); }} />
+            </>
+        );
+    }
+
+    try {
+        addLog({ type: 'RENDER_PERFORMANCE_START' });
+        const result = <Performance />;
+        addLog({ type: 'RENDER_PERFORMANCE_SUCCESS' });
+        return result;
+    } catch (e) {
+        const err = e instanceof Error ? e : new Error(String(e));
+        addLog({ type: 'RENDER_PERFORMANCE_CRASH', message: err.message, stack: err.stack });
+        setError(err.message);
+        return <DebugOverlay logs={logs} onClose={() => { setError(null); setLogs([]); }} />;
+    }
+};
 
 type TabKey = 'journey' | 'schedule' | 'performance' | 'account';
 
@@ -183,7 +231,7 @@ const TradePulse = observer(() => {
             <div className='tradepulse__content'>
                 {activeTab === 'journey' && <MyJourney loginid={loginid} />}
                 {activeTab === 'schedule' && <MasterSchedule loginid={loginid} />}
-                {activeTab === 'performance' && <Performance loginid={loginid} />}
+                {activeTab === 'performance' && <PerformanceWrapper />}
                 {activeTab === 'account' && <AccountInfo />}
             </div>
         </div>
