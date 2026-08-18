@@ -31,6 +31,30 @@
     margin-bottom: 8px;
 }
 
+.performance__debug {
+    background: var(--general-main-1);
+    border: 1px solid var(--border-normal);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 8px;
+}
+
+.performance__debug summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--text-less-prominent);
+}
+
+.performance__debug pre {
+    background: var(--general-section-1);
+    padding: 12px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 1.1rem;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
 .performance__header {
     margin-bottom: 8px;
 }

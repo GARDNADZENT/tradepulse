@@ -203,6 +203,14 @@ const useTradePulseFetch = () => {
             .sort((a, b) => a.date.localeCompare(b.date));
     }, [rawContracts]);
 
+    console.log('[useTradePulseFetch] returning', {
+        rawContractsLength: rawContracts.length,
+        liveBalance,
+        currency,
+        loading,
+        error,
+    });
+
     return {
         isLoggedIn,
         loginid,

@@ -18,19 +18,23 @@ const useTradePulseData = () => {
 
     const storeContracts = useMemo(() => {
         const trxs = transactions?.transactions ?? [];
-        return trxs
+        const result = trxs
             .filter(trx => trx.type === 'contract' && typeof trx.data === 'object')
             .map(trx => trx.data as any);
+        console.log('[useTradePulseData] storeContracts count:', result.length);
+        return result;
     }, [transactions?.transactions]);
 
     const allContracts = useMemo(() => {
         if (storeContracts.length > 0) return storeContracts;
-        return fetched.rawContracts ?? [];
+        const result = fetched.rawContracts ?? [];
+        console.log('[useTradePulseData] using fetched rawContracts count:', result.length);
+        return result;
     }, [storeContracts, fetched.rawContracts]);
 
     const todayContracts = useMemo(() => {
         const today = new Date().toISOString().slice(0, 10);
-        return (allContracts ?? []).filter(c => {
+        const result = (allContracts ?? []).filter(c => {
             try {
                 const t = c.closeTime || c.purchaseTime || (c.date_start ? new Date(c.date_start).getTime() / 1000 : null);
                 if (!t) return false;
@@ -39,6 +43,8 @@ const useTradePulseData = () => {
                 return false;
             }
         });
+        console.log('[useTradePulseData] todayContracts count:', result.length, 'today:', today);
+        return result;
     }, [allContracts]);
 
     const computeStats = (contracts: any[]): PerformanceStats => {
@@ -107,7 +113,23 @@ const useTradePulseData = () => {
             if (curLoss > lossStreak) lossStreak = curLoss;
         }
 
-        return {
+    console.log('[useTradePulseData] returning', {
+        isLoggedIn,
+        loginid,
+        balance,
+        currency,
+        accountType,
+        isVirtual,
+        todayStatsKeys: todayStats ? Object.keys(todayStats) : [],
+        overallStatsKeys: overallStats ? Object.keys(overallStats) : [],
+        contractPerformanceLength: contractPerformance.length,
+        dailyPnLLength: dailyPnL.length,
+        loading: fetched.loading,
+        error: fetched.error,
+        rawContractsLength: allContracts.length,
+    });
+
+    return {
             total_profit: net,
             win_rate: winRate,
             total_trades: total,
@@ -167,9 +189,11 @@ const useTradePulseData = () => {
             }
         });
 
-        return Array.from(map.entries())
+        const result = Array.from(map.entries())
             .map(([date, values]) => ({ date, ...values }))
             .sort((a, b) => a.date.localeCompare(b.date));
+        console.log('[useTradePulseData] dailyPnL days:', result.length);
+        return result;
     }, [allContracts]);
 
     return {

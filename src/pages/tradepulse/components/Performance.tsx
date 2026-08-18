@@ -28,6 +28,16 @@ const Performance = observer(() => {
     const [filter, setFilter] = useState<'7d' | '30d' | 'all'>('all');
     const [journey, setJourney] = useState<any>(null);
     const [journeyError, setJourneyError] = useState<string | null>(null);
+    const [debugLogs, setDebugLogs] = useState<any[]>([]);
+
+    const addLog = (entry: any) => {
+        const timestamp = new Date().toISOString();
+        const fullEntry = { timestamp, ...entry };
+        setDebugLogs(prev => [...prev.slice(-200), fullEntry]);
+        console.log('[Performance]', fullEntry);
+    };
+
+    addLog({ type: 'HOOKS_DATA', hasOverallStats: !!overallStats, currency, loading, error: !!error, dailyPnLLength: Array.isArray(dailyPnL) ? dailyPnL.length : 'not_array', balance, loginid });
 
     useEffect(() => {
         let cancelled = false;
@@ -65,6 +75,7 @@ const Performance = observer(() => {
     }
 
     if (error) {
+        addLog({ type: 'HOOK_ERROR', error });
         return (
             <div className='performance'>
                 <p className='performance__error'>{localize('Failed to load performance data:')} {error}</p>
@@ -72,7 +83,11 @@ const Performance = observer(() => {
         );
     }
 
-    const safeDailyPnL = Array.isArray(dailyPnL) ? dailyPnL : [];
+    if (journeyError) {
+        addLog({ type: 'JOURNEY_ERROR', journeyError });
+    }
+
+    addLog({ type: 'COMPUTING_VALUES', dailyPnLLength: safeDailyPnL.length, scheduleLength: schedule.length });
 
     const filteredPnL = useMemo(() => {
         try {
@@ -82,10 +97,14 @@ const Performance = observer(() => {
             if (Number.isFinite(days)) {
                 cutoff.setDate(cutoff.getDate() - days);
                 const cutoffStr = cutoff.toISOString().slice(0, 10);
-                return safeDailyPnL.filter((d: any) => d && d.date && d.date >= cutoffStr);
+                const result = safeDailyPnL.filter((d: any) => d && d.date && d.date >= cutoffStr);
+                addLog({ type: 'FILTERED_PNL', filter, resultLength: result.length });
+                return result;
             }
+            addLog({ type: 'FILTERED_PNL_INVALID_DAYS', filter, days });
             return safeDailyPnL;
-        } catch {
+        } catch (e) {
+            addLog({ type: 'FILTERED_PNL_ERROR', error: e?.message });
             return [];
         }
     }, [safeDailyPnL, filter]);
@@ -108,6 +127,13 @@ const Performance = observer(() => {
                     {journeyError}
                 </div>
             )}
+
+            <div className='performance__debug'>
+                <details>
+                    <summary>Debug Logs (click to expand)</summary>
+                    <pre>{JSON.stringify(debugLogs.slice(-10), null, 2)}</pre>
+                </details>
+            </div>
 
             <div className='performance__header'>
                 <div>
