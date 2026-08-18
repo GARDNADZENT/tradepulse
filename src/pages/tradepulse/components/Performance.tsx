@@ -7,6 +7,22 @@ import useTradePulseData from '../hooks/useTradePulseData';
 import { loadJourney, buildSchedule, formatCurrency } from '../utils/calculations';
 import './Performance.scss';
 
+const safeNumber = (value: any, fallback = 0) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+};
+
+const safeDate = (dateStr: any) => {
+    try {
+        if (!dateStr) return null;
+        const d = new Date(dateStr + 'T00:00:00');
+        if (isNaN(d.getTime())) return null;
+        return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    } catch {
+        return null;
+    }
+};
+
 const Performance = observer(() => {
     const { overallStats, currency, loading, error, dailyPnL, balance, loginid } = useTradePulseData();
     const [filter, setFilter] = useState<'7d' | '30d' | 'all'>('all');
@@ -27,11 +43,6 @@ const Performance = observer(() => {
         fetchJourney();
         return () => { cancelled = true; };
     }, [loginid]);
-
-    const safeNumber = (value: any, fallback = 0) => {
-        const n = Number(value);
-        return Number.isFinite(n) ? n : fallback;
-    };
 
     const schedule = useMemo(() => {
         try {
@@ -89,17 +100,6 @@ const Performance = observer(() => {
 
     const profits = filteredPnL.map((d: any) => safeNumber(d?.profit, 0));
     const maxAbs = profits.length > 0 ? Math.max(...profits.map(p => Math.abs(p)), 1) : 1;
-
-    const safeDate = (dateStr: any) => {
-        try {
-            if (!dateStr) return null;
-            const d = new Date(dateStr + 'T00:00:00');
-            if (isNaN(d.getTime())) return null;
-            return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-        } catch {
-            return null;
-        }
-    };
 
     return (
         <div className='performance'>

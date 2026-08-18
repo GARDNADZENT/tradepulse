@@ -5,7 +5,8 @@ import { useStore } from '@/hooks/useStore';
 import type { PerformanceStats, DailyPnL } from '@/pages/tradepulse/types';
 
 const useTradePulseFetch = () => {
-    const { client } = useStore();
+    const store = useStore();
+    const { client } = store || {};
     const loginid = client?.loginid ?? '';
     const isLoggedIn = client?.is_logged_in ?? false;
 
@@ -133,20 +134,29 @@ const useTradePulseFetch = () => {
 
         const byDay: Record<string, number> = {};
         rawContracts.forEach(c => {
-            const t = c.closeTime || c.purchaseTime || (c.date_start ? new Date(c.date_start).getTime() / 1000 : null);
-            if (!t) return;
-            const day = new Date(Number(t) * 1000).toISOString().slice(0, 10);
-            byDay[day] = (byDay[day] || 0) + Number(c.profit || 0);
+            try {
+                const t = c.closeTime || c.purchaseTime || (c.date_start ? new Date(c.date_start).getTime() / 1000 : null);
+                if (!t) return;
+                const day = new Date(Number(t) * 1000).toISOString().slice(0, 10);
+                byDay[day] = (byDay[day] || 0) + Number(c.profit || 0);
+            } catch {
+                // skip contracts with invalid dates
+            }
         });
         const dayEntries = Object.entries(byDay);
         const bestDay = dayEntries.length ? dayEntries.reduce((a, b) => b[1] > a[1] ? b : a) : null;
         const worstDay = dayEntries.length ? dayEntries.reduce((a, b) => b[1] < a[1] ? b : a) : null;
 
         let winStreak = 0, lossStreak = 0;
-        const sorted = [...rawContracts].sort((a, b) =>
-            (Number(b.closeTime || b.purchaseTime || (b.date_start ? new Date(b.date_start).getTime() / 1000 : 0)) || 0) -
-            (Number(a.closeTime || a.purchaseTime || (a.date_start ? new Date(a.date_start).getTime() / 1000 : 0)) || 0)
-        );
+        const sorted = [...rawContracts].sort((a, b) => {
+            try {
+                const ta = Number(a.closeTime || a.purchaseTime || (a.date_start ? new Date(a.date_start).getTime() / 1000 : 0)) || 0;
+                const tb = Number(b.closeTime || b.purchaseTime || (b.date_start ? new Date(b.date_start).getTime() / 1000 : 0)) || 0;
+                return tb - ta;
+            } catch {
+                return 0;
+            }
+        });
         let curWin = 0, curLoss = 0;
         for (const c of sorted) {
             const p = Number(c.profit) || 0;
@@ -175,13 +185,17 @@ const useTradePulseFetch = () => {
     const dailyPnL = useMemo<DailyPnL[]>(() => {
         const map = new Map<string, { profit: number; trades: number }>();
         rawContracts.forEach(c => {
-            const t = c.closeTime || c.purchaseTime || (c.date_start ? new Date(c.date_start).getTime() / 1000 : null);
-            if (!t) return;
-            const date = new Date(Number(t) * 1000).toISOString().slice(0, 10);
-            const entry = map.get(date) ?? { profit: 0, trades: 0 };
-            entry.profit += Number(c.profit) || 0;
-            entry.trades += 1;
-            map.set(date, entry);
+            try {
+                const t = c.closeTime || c.purchaseTime || (c.date_start ? new Date(c.date_start).getTime() / 1000 : null);
+                if (!t) return;
+                const date = new Date(Number(t) * 1000).toISOString().slice(0, 10);
+                const entry = map.get(date) ?? { profit: 0, trades: 0 };
+                entry.profit += Number(c.profit) || 0;
+                entry.trades += 1;
+                map.set(date, entry);
+            } catch {
+                // skip contracts with invalid dates
+            }
         });
 
         return Array.from(map.entries())
