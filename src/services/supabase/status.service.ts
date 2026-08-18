@@ -2,6 +2,11 @@ import { supabase, type StatusRecord } from './client';
 
 export const statusService = {
     async saveStatus(status: string, details?: Record<string, unknown>): Promise<StatusRecord | null> {
+        if (!supabase) {
+            console.warn('[Supabase] saveStatus skipped — client not initialized');
+            return null;
+        }
+
         const { data, error } = await supabase
             .from('statuses')
             .upsert({ status, details, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
@@ -17,6 +22,11 @@ export const statusService = {
     },
 
     async getStatus(): Promise<StatusRecord | null> {
+        if (!supabase) {
+            console.warn('[Supabase] getStatus skipped — client not initialized');
+            return null;
+        }
+
         const { data, error } = await supabase
             .from('statuses')
             .select('*')
