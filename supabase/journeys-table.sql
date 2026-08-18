@@ -1,5 +1,31 @@
 -- Supabase journeys and journey_days tables migration
 -- Run this in Supabase SQL Editor: https://supabase.com/dashboard/project/zvbeggqktvkwvpupjgfk/sql
+--
+-- NOTE: The following tables already exist from the previous project and should NOT be recreated:
+--
+-- create table public.app_sessions (
+--   sid text not null,
+--   sess jsonb not null,
+--   expire timestamp with time zone not null,
+--   constraint app_sessions_pkey primary key (sid)
+-- );
+-- create index IF not exists app_sessions_expire_idx on public.app_sessions using btree (expire);
+--
+-- create table public.contract_snapshots (
+--   id bigint generated always as identity not null,
+--   user_loginid text not null,
+--   account_type text not null,
+--   contract_id text null,
+--   contract_type text null,
+--   profit real null,
+--   date_expiry integer null,
+--   purchase_time integer null,
+--   created_at timestamp with time zone null default now(),
+--   constraint contract_snapshots_pkey primary key (id)
+-- );
+--
+-- This migration only creates/updates the journeys and journey_days tables.
+
 
 -- Create journeys table if it doesn't exist
 create table if not exists public.journeys (

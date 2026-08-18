@@ -105,6 +105,60 @@ export interface Database {
                 };
                 Relationships: [];
             };
+            app_sessions: {
+                Row: {
+                    sid: string;
+                    sess: Json;
+                    expire: string;
+                };
+                Insert: {
+                    sid: string;
+                    sess: Json;
+                    expire: string;
+                };
+                Update: {
+                    sid?: string;
+                    sess?: Json;
+                    expire?: string;
+                };
+                Relationships: [];
+            };
+            contract_snapshots: {
+                Row: {
+                    id: number;
+                    user_loginid: string;
+                    account_type: string;
+                    contract_id: string | null;
+                    contract_type: string | null;
+                    profit: number | null;
+                    date_expiry: number | null;
+                    purchase_time: number | null;
+                    created_at: string | null;
+                };
+                Insert: {
+                    id?: number;
+                    user_loginid: string;
+                    account_type: string;
+                    contract_id?: string | null;
+                    contract_type?: string | null;
+                    profit?: number | null;
+                    date_expiry?: number | null;
+                    purchase_time?: number | null;
+                    created_at?: string | null;
+                };
+                Update: {
+                    id?: number;
+                    user_loginid?: string;
+                    account_type?: string;
+                    contract_id?: string | null;
+                    contract_type?: string | null;
+                    profit?: number | null;
+                    date_expiry?: number | null;
+                    purchase_time?: number | null;
+                    created_at?: string | null;
+                };
+                Relationships: [];
+            };
         };
         Functions: {};
         Enums: {};
