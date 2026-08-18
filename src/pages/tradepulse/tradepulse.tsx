@@ -76,7 +76,7 @@ const tabs: { key: TabKey; label: string; icon: string }[] = [
 const TradePulse = observer(() => {
     const [activeTab, setActiveTab] = useState<TabKey>('journey');
     const store = useStore();
-    const { client } = store;
+    const { client } = store || {};
     const loginid = client?.loginid ?? '';
     const isLoggedIn = client?.is_logged_in ?? false;
 
