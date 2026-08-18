@@ -1,11 +1,12 @@
 // @ts-nocheck — TradePulse component with known type gaps
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
 import { useStore } from '@/hooks/useStore';
 import useActiveAccount from '@/hooks/api/account/useActiveAccount';
 import { localize } from '@deriv-com/translations';
 import useTradePulseData from '../hooks/useTradePulseData';
+import { loadJourney } from '../utils/calculations';
 import './AccountInfo.scss';
 
 const AccountInfo = observer(() => {
@@ -24,19 +25,46 @@ const AccountInfo = observer(() => {
     const isLoggedIn = client?.is_logged_in ?? false;
     const landingCompany = client?.landing_company_shortcode ?? '—';
 
-    const journey = useMemo(() => {
-        try {
-            const raw = localStorage.getItem(`tradepulse_journey_${loginid}`);
-            return raw ? JSON.parse(raw) : null;
-        } catch {
-            return null;
-        }
+    const [journey, setJourney] = useState<any>(null);
+    const [journeyLoaded, setJourneyLoaded] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const fetchJourney = async () => {
+            if (!loginid || loginid === '—') {
+                if (!cancelled) setJourneyLoaded(true);
+                return;
+            }
+            const loaded = await loadJourney(loginid);
+            if (!cancelled) {
+                setJourney(loaded);
+                setJourneyLoaded(true);
+            }
+        };
+
+        fetchJourney();
+
+        return () => {
+            cancelled = true;
+        };
     }, [loginid]);
 
     const journeyInitialBalance = journey?.initial_balance ?? 0;
     const currentBalanceNum = typeof balance === 'number' ? balance : 0;
     const startingBalance = currentBalanceNum - overallStats.total_profit;
     const roi = journeyInitialBalance > 0 ? ((overallStats.total_profit / journeyInitialBalance) * 100) : 0;
+
+    if (!journeyLoaded) {
+        return (
+            <div className='account-info'>
+                <div className='account-info__header'>
+                    <h1 className='account-info__title'>{localize('Account')}</h1>
+                </div>
+                <p className='account-info__loading'>{localize('Loading account info...')}</p>
+            </div>
+        );
+    }
 
     return (
         <div className='account-info'>

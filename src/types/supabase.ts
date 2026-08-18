@@ -36,6 +36,39 @@ export interface Database {
                 };
                 Relationships: [];
             };
+            journeys: {
+                Row: {
+                    id: string;
+                    loginid: string;
+                    initial_balance: number;
+                    daily_target_pct: number;
+                    cycle_length_days: number;
+                    start_date: string;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    loginid: string;
+                    initial_balance: number;
+                    daily_target_pct: number;
+                    cycle_length_days: number;
+                    start_date: string;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    loginid?: string;
+                    initial_balance?: number;
+                    daily_target_pct?: number;
+                    cycle_length_days?: number;
+                    start_date?: string;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Relationships: [];
+            };
         };
         Functions: {};
         Enums: {};

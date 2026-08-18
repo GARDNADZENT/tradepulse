@@ -23,18 +23,50 @@ const MasterSchedule = observer(({ loginid }: { loginid: string }) => {
     const balance = client?.balance ? parseFloat(client.balance) : fetchedBalance;
     const currency = client?.currency ?? 'USD';
 
-    const journey = useMemo(() => loadJourney(loginid) ?? getDefaultJourney(loginid), [loginid]);
-    const schedule = useMemo(() => buildSchedule(journey), [journey]);
+    const [journey, setJourney] = useState<Journey | null>(null);
+    const [journeyLoaded, setJourneyLoaded] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const fetchJourney = async () => {
+            const loaded = await loadJourney(loginid);
+            if (!cancelled) {
+                setJourney(loaded ?? getDefaultJourney(loginid));
+                setJourneyLoaded(true);
+            }
+        };
+
+        fetchJourney();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [loginid]);
+
+    const schedule = useMemo(() => journey ? buildSchedule(journey) : [], [journey]);
 
     const [editing, setEditing] = useState(false);
     const [form, setForm] = useState({
-        initial_balance: journey.initial_balance,
-        daily_target_pct: journey.daily_target_pct,
-        cycle_length_days: journey.cycle_length_days,
-        start_date: journey.start_date,
+        initial_balance: 0,
+        daily_target_pct: 5,
+        cycle_length_days: 30,
+        start_date: new Date().toISOString().slice(0, 10),
     });
 
-    const handleLock = useCallback(() => {
+    useEffect(() => {
+        if (journey) {
+            setForm({
+                initial_balance: journey.initial_balance,
+                daily_target_pct: journey.daily_target_pct,
+                cycle_length_days: journey.cycle_length_days,
+                start_date: journey.start_date,
+            });
+        }
+    }, [journey]);
+
+    const handleLock = useCallback(async () => {
+        if (!journey) return;
         const locked = {
             loginid,
             initial_balance: Number(form.initial_balance) || 0,
@@ -44,12 +76,14 @@ const MasterSchedule = observer(({ loginid }: { loginid: string }) => {
             created_at: journey.created_at,
             updated_at: new Date().toISOString(),
         };
-        saveJourney(loginid, locked);
+        await saveJourney(loginid, locked);
+        setJourney(locked);
         setEditing(false);
-    }, [loginid, form, journey.created_at]);
+    }, [loginid, form, journey]);
 
-    const handleReset = useCallback(() => {
+    const handleReset = useCallback(async () => {
         localStorage.removeItem(`tradepulse_journey_${loginid}`);
+        await journeyService.deleteJourney(loginid);
         window.location.reload();
     }, [loginid]);
 
@@ -57,9 +91,9 @@ const MasterSchedule = observer(({ loginid }: { loginid: string }) => {
         setForm(prev => ({ ...prev, [field]: value }));
     }, []);
 
-    const currentDay = getCurrentJourneyDay(journey.start_date);
+    const currentDay = journey ? getCurrentJourneyDay(journey.start_date) : 1;
 
-    if (loading && balance === 0) {
+    if (!journeyLoaded || !journey || (loading && balance === 0)) {
         return (
             <div className='master-schedule'>
                 <p className='master-schedule__loading'>{localize('Loading schedule...')}</p>

@@ -1,5 +1,6 @@
 import type { Journey, JourneyDay, ScheduleStatus, ScheduleRow } from '@/pages/tradepulse/types';
 import { addComma, getDecimalPlaces } from '@/components/shared';
+import { journeyService } from '@/services/supabase/journey.service';
 
 export const getJourneyStorageKey = (loginid: string) => `tradepulse_journey_${loginid}`;
 
@@ -13,12 +14,17 @@ export const getDefaultJourney = (loginid: string): Journey => ({
     updated_at: new Date().toISOString(),
 });
 
-export const loadJourney = (loginid: string): Journey | null => {
+export const loadJourney = async (loginid: string): Promise<Journey | null> => {
+    const supabaseJourney = await journeyService.loadJourney(loginid);
+    if (supabaseJourney) {
+        localStorage.setItem(getJourneyStorageKey(loginid), JSON.stringify(supabaseJourney));
+        return supabaseJourney;
+    }
+
     try {
         const raw = localStorage.getItem(getJourneyStorageKey(loginid));
         if (!raw) return null;
         const parsed = JSON.parse(raw) as Journey;
-        // Validate required fields
         if (!parsed.initial_balance || !parsed.cycle_length_days || !parsed.start_date) {
             return null;
         }
@@ -28,8 +34,23 @@ export const loadJourney = (loginid: string): Journey | null => {
     }
 };
 
-export const saveJourney = (loginid: string, journey: Journey) => {
+export const loadJourneySync = (loginid: string): Journey | null => {
+    try {
+        const raw = localStorage.getItem(getJourneyStorageKey(loginid));
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as Journey;
+        if (!parsed.initial_balance || !parsed.cycle_length_days || !parsed.start_date) {
+            return null;
+        }
+        return parsed;
+    } catch {
+        return null;
+    }
+};
+
+export const saveJourney = async (loginid: string, journey: Journey) => {
     localStorage.setItem(getJourneyStorageKey(loginid), JSON.stringify(journey));
+    await journeyService.saveJourney(loginid, journey);
 };
 
 export const buildSchedule = (journey: Journey): ScheduleRow[] => {

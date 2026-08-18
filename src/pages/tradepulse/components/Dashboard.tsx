@@ -1,5 +1,5 @@
 // @ts-nocheck — TradePulse component with known type gaps
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
 import { useStore } from '@/hooks/useStore';
@@ -32,21 +32,41 @@ const Dashboard = observer(({ loginid }: { loginid: string }) => {
     const balance = client?.balance ? parseFloat(client.balance) : (fetchedBalance || (activeAccount?.balance ? parseFloat(activeAccount.balance) : 0));
     const displayCurrency = client?.currency ?? currency ?? 'USD';
 
-    const journey = useMemo(() => loadJourney(loginid) ?? getDefaultJourney(loginid), [loginid]);
-    const currentDay = getCurrentJourneyDay(journey.start_date);
-    const schedule = useMemo(() => buildSchedule(journey), [journey]);
+    const [journey, setJourney] = useState<Journey | null>(null);
+    const [journeyLoaded, setJourneyLoaded] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const fetchJourney = async () => {
+            const loaded = await loadJourney(loginid);
+            if (!cancelled) {
+                setJourney(loaded ?? getDefaultJourney(loginid));
+                setJourneyLoaded(true);
+            }
+        };
+
+        fetchJourney();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [loginid]);
+
+    const currentDay = journey ? getCurrentJourneyDay(journey.start_date) : 1;
+    const schedule = useMemo(() => journey ? buildSchedule(journey) : [], [journey]);
     const idx = Math.min(Math.max(currentDay, 1), schedule.length) - 1;
     const baseRow = schedule[idx];
-    const row = computeJourneyDay(baseRow, balance, currentDay);
+    const row = journey ? computeJourneyDay(baseRow, balance, currentDay) : undefined;
     const displayRow = row || baseRow;
 
-    const progress = Math.min(100, Math.max(0, ((currentDay - 1) / journey.cycle_length_days) * 100));
-    const delta = balance - baseRow.end;
+    const progress = journey ? Math.min(100, Math.max(0, ((currentDay - 1) / journey.cycle_length_days) * 100)) : 0;
+    const delta = balance - (baseRow?.end ?? 0);
 
     const isConnected = connectionStatus === 'opened' || connectionStatus === 'OPENED';
     const equity = balance;
 
-    if (loading && balance === 0) {
+    if (!journeyLoaded || !journey || (loading && balance === 0)) {
         return (
             <div className='dashboard'>
                 <div className='dashboard__page-header'>

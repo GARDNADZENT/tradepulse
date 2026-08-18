@@ -27,3 +27,14 @@ export type StatusRecord = {
     created_at?: string;
     updated_at?: string;
 };
+
+export type JourneyRecord = {
+    id?: string;
+    loginid: string;
+    initial_balance: number;
+    daily_target_pct: number;
+    cycle_length_days: number;
+    start_date: string;
+    created_at?: string;
+    updated_at?: string;
+};

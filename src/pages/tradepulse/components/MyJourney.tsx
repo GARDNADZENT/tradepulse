@@ -1,5 +1,5 @@
 // @ts-nocheck — TradePulse component with known type gaps
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
 import { useStore } from '@/hooks/useStore';
@@ -23,26 +23,58 @@ const MyJourney = observer(({ loginid }: { loginid: string }) => {
     const balance = client?.balance ? parseFloat(client.balance) : fetchedBalance;
     const currency = client?.currency ?? 'USD';
 
-    const journey = useMemo(() => loadJourney(loginid) ?? getDefaultJourney(loginid), [loginid]);
-    const currentDay = getCurrentJourneyDay(journey.start_date);
-    const schedule = useMemo(() => buildSchedule(journey), [journey]);
+    const [journey, setJourney] = useState<Journey | null>(null);
+    const [journeyLoaded, setJourneyLoaded] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const fetchJourney = async () => {
+            const loaded = await loadJourney(loginid);
+            if (!cancelled) {
+                setJourney(loaded ?? getDefaultJourney(loginid));
+                setJourneyLoaded(true);
+            }
+        };
+
+        fetchJourney();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [loginid]);
+
+    const currentDay = journey ? getCurrentJourneyDay(journey.start_date) : 1;
+    const schedule = useMemo(() => journey ? buildSchedule(journey) : [], [journey]);
     const idx = Math.min(Math.max(currentDay, 1), schedule.length) - 1;
     const baseRow = schedule[idx];
-    const row = computeJourneyDay(baseRow, balance, currentDay);
-    const progress = Math.min(100, Math.max(0, ((currentDay - 1) / journey.cycle_length_days) * 100));
-    const balanceProgress = journey.initial_balance > 0
+    const row = journey ? computeJourneyDay(baseRow, balance, currentDay) : undefined;
+    const progress = journey ? Math.min(100, Math.max(0, ((currentDay - 1) / journey.cycle_length_days) * 100)) : 0;
+    const balanceProgress = journey && journey.initial_balance > 0
         ? ((balance - journey.initial_balance) / journey.initial_balance * 100)
         : 0;
 
     const [editing, setEditing] = useState(false);
     const [form, setForm] = useState({
-        initial_balance: journey.initial_balance,
-        daily_target_pct: journey.daily_target_pct,
-        cycle_length_days: journey.cycle_length_days,
-        start_date: journey.start_date,
+        initial_balance: 0,
+        daily_target_pct: 5,
+        cycle_length_days: 30,
+        start_date: new Date().toISOString().slice(0, 10),
     });
 
-    const handleLock = () => {
+    useEffect(() => {
+        if (journey) {
+            setForm({
+                initial_balance: journey.initial_balance,
+                daily_target_pct: journey.daily_target_pct,
+                cycle_length_days: journey.cycle_length_days,
+                start_date: journey.start_date,
+            });
+        }
+    }, [journey]);
+
+    const handleLock = async () => {
+        if (!journey) return;
         const locked = {
             loginid,
             initial_balance: Number(form.initial_balance) || 0,
@@ -52,12 +84,14 @@ const MyJourney = observer(({ loginid }: { loginid: string }) => {
             created_at: journey.created_at,
             updated_at: new Date().toISOString(),
         };
-        saveJourney(loginid, locked);
+        await saveJourney(loginid, locked);
+        setJourney(locked);
         setEditing(false);
     };
 
-    const handleReset = () => {
+    const handleReset = async () => {
         localStorage.removeItem(`tradepulse_journey_${loginid}`);
+        await journeyService.deleteJourney(loginid);
         window.location.reload();
     };
 
@@ -65,7 +99,7 @@ const MyJourney = observer(({ loginid }: { loginid: string }) => {
         setForm(prev => ({ ...prev, [field]: value }));
     };
 
-    if (loading && balance === 0) {
+    if (!journeyLoaded || !journey) {
         return (
             <div className='my-journey'>
                 <p className='my-journey__loading'>{localize('Loading journey data...')}</p>
@@ -74,7 +108,7 @@ const MyJourney = observer(({ loginid }: { loginid: string }) => {
     }
 
     const displayRow = row || baseRow;
-    const delta = balance - baseRow.end;
+    const delta = balance - (baseRow?.start ?? 0);
 
     return (
         <div className='my-journey'>
@@ -89,23 +123,23 @@ const MyJourney = observer(({ loginid }: { loginid: string }) => {
             <div className='my-journey__grid'>
                 <KPICard
                     label={localize('Starting Balance')}
-                    value={formatCurrency(baseRow.start, currency)}
+                    value={formatCurrency(baseRow?.start ?? 0, currency)}
                     sub={localize('Expected today')}
                 />
                 <KPICard
                     label={localize("Today's Profit Target")}
-                    value={`+${formatCurrency(baseRow.profit, currency)}`}
+                    value={`+${formatCurrency(baseRow?.profit ?? 0, currency)}`}
                     sub={localize('Plan to secure')}
                     accent
                 />
                 <KPICard
                     label={localize('Required %')}
-                    value={`${baseRow.rate}%`}
+                    value={`${baseRow?.rate ?? 0}%`}
                     sub={localize('Daily growth rate')}
                 />
                 <KPICard
                     label={localize('Expected Balance')}
-                    value={formatCurrency(baseRow.end, currency)}
+                    value={formatCurrency(baseRow?.end ?? 0, currency)}
                     sub={localize('End of day target')}
                 />
                 <KPICard
@@ -117,7 +151,7 @@ const MyJourney = observer(({ loginid }: { loginid: string }) => {
                 />
                 <KPICard
                     label={localize('30-Day Goal')}
-                    value={formatCurrency(schedule[schedule.length - 1].end, currency)}
+                    value={formatCurrency(schedule[schedule.length - 1]?.end ?? 0, currency)}
                     sub={localize('Cycle end target')}
                 />
             </div>
@@ -138,13 +172,16 @@ const MyJourney = observer(({ loginid }: { loginid: string }) => {
             <div className='my-journey__status'>
                 <div className='my-journey__status-label'>{localize("Today's Progress")}</div>
                 <div className='my-journey__status-value'>
-                    {displayRow.status === 'complete' ? localize('Complete') : displayRow.status === 'behind' ? localize('Behind') : displayRow.status === 'missed' ? localize('Missed') : localize('Pending')}
+                    {displayRow?.status === 'complete' ? localize('Complete') : displayRow?.status === 'behind' ? localize('Behind') : displayRow?.status === 'missed' ? localize('Missed') : localize('Pending')}
                 </div>
             </div>
 
             <div className='my-journey__actions'>
                 <button className='my-journey__edit-btn' onClick={() => setEditing(true)} type='button'>
                     {localize('Edit Journey')}
+                </button>
+                <button className='my-journey__edit-btn' onClick={handleReset} type='button' style={{ marginLeft: 8 }}>
+                    {localize('Reset Journey')}
                 </button>
             </div>
 
