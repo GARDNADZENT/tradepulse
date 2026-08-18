@@ -11,6 +11,28 @@ import Performance from './components/Performance';
 import AccountInfo from './components/AccountInfo';
 import './tradepulse.scss';
 
+const PerformanceWrapper = () => {
+    const [error, setError] = useState<string | null>(null);
+
+    if (error) {
+        return (
+            <div className='performance'>
+                <p className='performance__error'>{localize('Failed to load performance data.')}</p>
+                <button className='master-schedule__submit-btn' onClick={() => setError(null)} type='button'>
+                    {localize('Retry')}
+                </button>
+            </div>
+        );
+    }
+
+    try {
+        return <Performance />;
+    } catch (e) {
+        setError(e?.message || 'Unknown error');
+        return null;
+    }
+};
+
 type TabKey = 'journey' | 'schedule' | 'performance' | 'account';
 
 const tabs: { key: TabKey; label: string; icon: string }[] = [
@@ -183,7 +205,7 @@ const TradePulse = observer(() => {
             <div className='tradepulse__content'>
                 {activeTab === 'journey' && <MyJourney loginid={loginid} />}
                 {activeTab === 'schedule' && <MasterSchedule loginid={loginid} />}
-                {activeTab === 'performance' && <Performance loginid={loginid} />}
+                {activeTab === 'performance' && <PerformanceWrapper />}
                 {activeTab === 'account' && <AccountInfo />}
             </div>
         </div>
