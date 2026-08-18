@@ -23,7 +23,7 @@ const MyJourney = observer(({ loginid }: { loginid: string }) => {
     const balance = client?.balance ? parseFloat(client.balance) : fetchedBalance;
     const currency = client?.currency ?? 'USD';
 
-    const [journey, setJourney] = useState<Journey | null>(null);
+    const [journey, setJourney] = useState<any>(null);
     const [journeyLoaded, setJourneyLoaded] = useState(false);
 
     useEffect(() => {
@@ -49,10 +49,10 @@ const MyJourney = observer(({ loginid }: { loginid: string }) => {
     const idx = Math.min(Math.max(currentDay, 1), schedule.length) - 1;
     const baseRow = schedule[idx];
     const row = journey ? computeJourneyDay(baseRow, balance, currentDay) : undefined;
+    const displayRow = row || baseRow;
+
     const progress = journey ? Math.min(100, Math.max(0, ((currentDay - 1) / journey.cycle_length_days) * 100)) : 0;
-    const balanceProgress = journey && journey.initial_balance > 0
-        ? ((balance - journey.initial_balance) / journey.initial_balance * 100)
-        : 0;
+    const delta = balance - (baseRow?.end ?? 0);
 
     const [editing, setEditing] = useState(false);
     const [form, setForm] = useState({
@@ -99,7 +99,7 @@ const MyJourney = observer(({ loginid }: { loginid: string }) => {
         setForm(prev => ({ ...prev, [field]: value }));
     };
 
-    if (!journeyLoaded || !journey) {
+    if (!journeyLoaded || !journey || (loading && balance === 0)) {
         return (
             <div className='my-journey'>
                 <p className='my-journey__loading'>{localize('Loading journey data...')}</p>
@@ -107,60 +107,64 @@ const MyJourney = observer(({ loginid }: { loginid: string }) => {
         );
     }
 
-    const displayRow = row || baseRow;
-    const delta = balance - (baseRow?.start ?? 0);
+    const statusLabel = displayRow?.status === 'complete' ? localize('On Track') :
+        displayRow?.status === 'behind' ? localize('Below Target') :
+        displayRow?.status === 'missed' ? localize('Missed') : localize('Pending');
 
     return (
         <div className='my-journey'>
             <div className='my-journey__header'>
                 <div>
-                    <div className='my-journey__label-today'>{localize('Today')}</div>
+                    <div className='my-journey__label-today'>{localize('WHERE AM I GOING')}</div>
                     <h1 className='my-journey__title'>{localize('My Journey')}</h1>
-                    <p className='my-journey__subtitle'>{localize('Daily target tracking with live balance sync.')}</p>
+                    <p className='my-journey__subtitle'>{localize('Your overall trading progression and target tracking.')}</p>
                 </div>
             </div>
 
             <div className='my-journey__grid'>
                 <KPICard
                     label={localize('Starting Balance')}
-                    value={formatCurrency(baseRow?.start ?? 0, currency)}
-                    sub={localize('Expected today')}
+                    value={formatCurrency(journey.initial_balance, currency)}
+                    sub={localize('Journey baseline')}
                 />
                 <KPICard
-                    label={localize("Today's Profit Target")}
-                    value={`+${formatCurrency(baseRow?.profit ?? 0, currency)}`}
-                    sub={localize('Plan to secure')}
+                    label={localize('Target Balance')}
+                    value={formatCurrency(schedule[schedule.length - 1]?.end ?? 0, currency)}
+                    sub={localize('End of cycle goal')}
                     accent
                 />
                 <KPICard
-                    label={localize('Required %')}
-                    value={`${baseRow?.rate ?? 0}%`}
-                    sub={localize('Daily growth rate')}
-                />
-                <KPICard
-                    label={localize('Expected Balance')}
-                    value={formatCurrency(baseRow?.end ?? 0, currency)}
-                    sub={localize('End of day target')}
-                />
-                <KPICard
-                    label={localize('Live Balance')}
+                    label={localize('Current Balance')}
                     value={formatCurrency(balance, currency)}
-                    sub={delta >= 0 ? `+${formatCurrency(delta, currency)} vs target` : `${formatCurrency(delta, currency)} vs target`}
+                    sub={localize('Live from Deriv')}
                     live
                     highlight={delta >= 0}
                 />
                 <KPICard
-                    label={localize('30-Day Goal')}
-                    value={formatCurrency(schedule[schedule.length - 1]?.end ?? 0, currency)}
-                    sub={localize('Cycle end target')}
+                    label={localize('Current Day')}
+                    value={`${currentDay} / ${journey.cycle_length_days}`}
+                    sub={localize('Trading days elapsed')}
+                />
+                <KPICard
+                    label={localize('Total Days')}
+                    value={String(journey.cycle_length_days)}
+                    sub={localize('Cycle length')}
+                />
+                <KPICard
+                    label={localize('Journey Progress')}
+                    value={`${Math.round(progress)}%`}
+                    sub={statusLabel}
+                    accent
                 />
             </div>
 
             <div className='my-journey__progress'>
                 <div className='my-journey__progress-header'>
                     <div>
-                        <div className='my-journey__progress-label'>{localize('Cycle Progress')}</div>
-                        <div className='my-journey__progress-sub'>{localize('Day')} {currentDay} {localize('of')} {journey.cycle_length_days}</div>
+                        <div className='my-journey__progress-label'>{localize('Overall Progress')}</div>
+                        <div className='my-journey__progress-sub'>
+                            {localize('Day')} {currentDay} {localize('of')} {journey.cycle_length_days}
+                        </div>
                     </div>
                     <div className='my-journey__progress-pct'>{Math.round(progress)}%</div>
                 </div>
@@ -170,9 +174,12 @@ const MyJourney = observer(({ loginid }: { loginid: string }) => {
             </div>
 
             <div className='my-journey__status'>
-                <div className='my-journey__status-label'>{localize("Today's Progress")}</div>
-                <div className='my-journey__status-value'>
-                    {displayRow?.status === 'complete' ? localize('Complete') : displayRow?.status === 'behind' ? localize('Behind') : displayRow?.status === 'missed' ? localize('Missed') : localize('Pending')}
+                <div className='my-journey__status-label'>{localize("Today's Status")}</div>
+                <div className={classNames('my-journey__status-value', {
+                    'text-profit': displayRow?.status === 'complete',
+                    'text-loss': displayRow?.status === 'behind' || displayRow?.status === 'missed',
+                })}>
+                    {statusLabel}
                 </div>
             </div>
 
@@ -180,7 +187,7 @@ const MyJourney = observer(({ loginid }: { loginid: string }) => {
                 <button className='my-journey__edit-btn' onClick={() => setEditing(true)} type='button'>
                     {localize('Edit Journey')}
                 </button>
-                <button className='my-journey__edit-btn' onClick={handleReset} type='button' style={{ marginLeft: 8 }}>
+                <button className='my-journey__reset-btn' onClick={handleReset} type='button'>
                     {localize('Reset Journey')}
                 </button>
             </div>

@@ -239,6 +239,46 @@
     font-family: var(--brand-font-primary);
 }
 
+.master-schedule__generator-card {
+    background: var(--general-main-2);
+    border: 1px solid var(--border-normal);
+    border-radius: 12px;
+    padding: 24px;
+}
+
+.master-schedule__generator-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-normal);
+}
+
+.master-schedule__generator-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: var(--general-section-1);
+    color: var(--brand-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.master-schedule__generator-title {
+    font-size: 1.6rem;
+    font-weight: bold;
+    color: var(--text-prominent);
+    margin: 0;
+}
+
+.master-schedule__generator-sub {
+    font-size: 1.2rem;
+    color: var(--text-less-prominent);
+    margin-top: 2px;
+}
+
 .master-schedule__output {
     background: var(--general-main-2);
     border: 1px solid var(--border-normal);

@@ -5,17 +5,15 @@ import { observer } from 'mobx-react-lite';
 import { useStore } from '@/hooks/useStore';
 import { localize } from '@deriv-com/translations';
 import { buildSchedule, formatCurrency, getDefaultJourney, saveJourney } from './utils/calculations';
-import Dashboard from './components/Dashboard';
 import MyJourney from './components/MyJourney';
 import MasterSchedule from './components/MasterSchedule';
 import Performance from './components/Performance';
 import AccountInfo from './components/AccountInfo';
 import './tradepulse.scss';
 
-type TabKey = 'dashboard' | 'journey' | 'schedule' | 'performance' | 'account';
+type TabKey = 'journey' | 'schedule' | 'performance' | 'account';
 
 const tabs: { key: TabKey; label: string; icon: string }[] = [
-    { key: 'dashboard', label: 'Dashboard', icon: 'home' },
     { key: 'journey', label: 'My Journey', icon: 'compass' },
     { key: 'schedule', label: 'Master Schedule', icon: 'calendar-range' },
     { key: 'performance', label: 'Performance', icon: 'bar-chart-3' },
@@ -23,7 +21,7 @@ const tabs: { key: TabKey; label: string; icon: string }[] = [
 ];
 
 const TradePulse = observer(() => {
-    const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
+    const [activeTab, setActiveTab] = useState<TabKey>('journey');
     const store = useStore();
     const { client } = store;
     const loginid = client?.loginid ?? '';
@@ -183,7 +181,6 @@ const TradePulse = observer(() => {
                 </nav>
             </div>
             <div className='tradepulse__content'>
-                {activeTab === 'dashboard' && <Dashboard loginid={loginid} />}
                 {activeTab === 'journey' && <MyJourney loginid={loginid} />}
                 {activeTab === 'schedule' && <MasterSchedule loginid={loginid} />}
                 {activeTab === 'performance' && <Performance loginid={loginid} />}

@@ -1,15 +1,33 @@
 // @ts-nocheck — TradePulse component with known type gaps
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
 import { useStore } from '@/hooks/useStore';
 import { localize } from '@deriv-com/translations';
 import useTradePulseData from '../hooks/useTradePulseData';
+import { loadJourney, buildSchedule, formatCurrency } from '../utils/calculations';
 import './Performance.scss';
 
 const Performance = observer(() => {
-    const { todayStats, contractPerformance, currency, loading, error } = useTradePulseData();
-    const [filter, setFilter] = useState<'today' | '7d' | '30d' | 'all'>('all');
+    const { overallStats, currency, loading, error, dailyPnL, balance, loginid } = useTradePulseData();
+    const [filter, setFilter] = useState<'7d' | '30d' | 'all'>('all');
+    const [journey, setJourney] = useState<any>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        const fetchJourney = async () => {
+            if (!loginid) return;
+            const loaded = await loadJourney(loginid);
+            if (!cancelled) setJourney(loaded);
+        };
+        fetchJourney();
+        return () => { cancelled = true; };
+    }, [loginid]);
+
+    const schedule = useMemo(() => journey ? buildSchedule(journey) : [], [journey]);
+    const startingBalance = journey?.initial_balance ?? (balance - overallStats.total_profit);
+    const targetBalance = schedule.length > 0 ? schedule[schedule.length - 1].end : 0;
+    const currentBalance = balance;
 
     if (loading) {
         return (
@@ -27,89 +45,162 @@ const Performance = observer(() => {
         );
     }
 
+    const filteredPnL = useMemo(() => {
+        if (filter === 'all') return dailyPnL;
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - Number(filter.slice(0, -1)));
+        const cutoffStr = cutoff.toISOString().slice(0, 10);
+        return dailyPnL.filter(d => d.date >= cutoffStr);
+    }, [dailyPnL, filter]);
+
+    const winningDays = filteredPnL.filter(d => d.profit > 0).length;
+    const losingDays = filteredPnL.filter(d => d.profit < 0).length;
+    const netProfit = filteredPnL.reduce((s, d) => s + d.profit, 0);
+    const bestDay = filteredPnL.length > 0 ? filteredPnL.reduce((a, b) => b.profit > a.profit ? b : a) : null;
+    const worstDay = filteredPnL.length > 0 ? filteredPnL.reduce((a, b) => b.profit < a.profit ? b : a) : null;
+    const avgDaily = filteredPnL.length > 0 ? netProfit / filteredPnL.length : 0;
+    const winRate = filteredPnL.length > 0 ? (winningDays / filteredPnL.length) * 100 : 0;
+
+    const maxAbs = Math.max(...filteredPnL.map(d => Math.abs(d.profit)), 1);
+
     return (
         <div className='performance'>
             <div className='performance__header'>
                 <div>
                     <div className='performance__label'>{localize('Analytics')}</div>
                     <h1 className='performance__title'>{localize('Performance')}</h1>
-                    <p className='performance__subtitle'>{localize('Completed contracts grouped by contract type. Open positions are excluded.')}</p>
+                    <p className='performance__subtitle'>{localize('Daily trading performance and results.')}</p>
                 </div>
             </div>
 
             <div className='performance__section'>
                 <div className='performance__section-header'>
-                    <h3 className='performance__section-title'>{localize("Today's Stats")}</h3>
+                    <h3 className='performance__section-title'>{localize('Overview')}</h3>
+                    <div className='performance__filters'>
+                        <button className={classNames('performance__filter', { 'performance__filter--active': filter === '7d' })} onClick={() => setFilter('7d')}>7D</button>
+                        <button className={classNames('performance__filter', { 'performance__filter--active': filter === '30d' })} onClick={() => setFilter('30d')}>30D</button>
+                        <button className={classNames('performance__filter', { 'performance__filter--active': filter === 'all' })} onClick={() => setFilter('all')}>ALL</button>
+                    </div>
                 </div>
                 <div className='performance__stats-grid'>
-                    <StatCard label={localize('Total Trades')} value={String(todayStats.total_trades)} />
-                    <StatCard label={localize('Total Wins')} value={String(todayStats.winning_trades)} accent />
-                    <StatCard label={localize('Total Losses')} value={String(todayStats.losing_trades)} />
-                    <StatCard label={localize('Win Rate')} value={todayStats.win_rate !== null ? `${todayStats.win_rate.toFixed(1)}%` : '—'} accent />
-                    <StatCard label={localize('Net P/L')} value={formatCurrency(todayStats.total_profit, currency)} highlight={todayStats.total_profit >= 0} />
+                    <StatCard label={localize('Starting Balance')} value={formatCurrency(startingBalance, currency)} />
+                    <StatCard label={localize('Current Balance')} value={formatCurrency(currentBalance, currency)} highlight={currentBalance >= startingBalance} accent />
+                    <StatCard label={localize('Target')} value={formatCurrency(targetBalance, currency)} />
                 </div>
             </div>
 
             <div className='performance__section'>
                 <div className='performance__section-header'>
-                    <h3 className='performance__section-title'>{localize('Contract Performance')}</h3>
+                    <h3 className='performance__section-title'>{localize('Daily Performance')}</h3>
+                </div>
+                <div className='performance__chart-card'>
+                    {filteredPnL.length === 0 ? (
+                        <div className='performance__empty'>
+                            <div className='performance__empty-text'>{localize('No performance data yet')}</div>
+                            <div className='performance__empty-sub'>{localize('Trades will appear here automatically once connected.')}</div>
+                        </div>
+                    ) : (
+                        <div className='performance__chart'>
+                            <div className='performance__chart-bars'>
+                                {filteredPnL.map((d, i) => {
+                                    const heightPct = Math.max(2, (Math.abs(d.profit) / maxAbs) * 100);
+                                    const isProfit = d.profit >= 0;
+                                    const isLast = i === filteredPnL.length - 1;
+
+                                    return (
+                                        <div key={d.date} className={classNames('performance__bar-wrap', { 'performance__bar-wrap--last': isLast })}>
+                                            <div
+                                                className={classNames('performance__bar', {
+                                                    'performance__bar--profit': isProfit,
+                                                    'performance__bar--loss': !isProfit,
+                                                })}
+                                                style={{ height: `${heightPct}%` }}
+                                                title={`${d.date}: ${formatCurrency(d.profit, currency)} (${d.trades} trades)`}
+                                            />
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <div className='performance__chart-labels'>
+                                {filteredPnL.length <= 15 ? filteredPnL.map(d => (
+                                    <span key={d.date} className='performance__chart-label'>{new Date(d.date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                                )) : (
+                                    <>
+                                        <span className='performance__chart-label'>{new Date(filteredPnL[0]?.date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                                        <span className='performance__chart-label'>...</span>
+                                        <span className='performance__chart-label'>{new Date(filteredPnL[filteredPnL.length - 1]?.date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            <div className='performance__section'>
+                <div className='performance__section-header'>
+                    <h3 className='performance__section-title'>{localize('Summary')}</h3>
+                </div>
+                <div className='performance__stats-grid'>
+                    <StatCard label={localize('Winning Days')} value={String(winningDays)} accent />
+                    <StatCard label={localize('Losing Days')} value={String(losingDays)} />
+                    <StatCard label={localize('Net P/L')} value={formatCurrency(netProfit, currency)} highlight={netProfit >= 0} />
+                    <StatCard label={localize('Best Day')} value={bestDay ? formatCurrency(bestDay.profit, currency) : '—'} accent />
+                    <StatCard label={localize('Worst Day')} value={worstDay ? formatCurrency(worstDay.profit, currency) : '—'} />
+                    <StatCard label={localize('Win Rate')} value={`${winRate.toFixed(1)}%`} accent />
+                    <StatCard label={localize('Avg Daily P/L')} value={formatCurrency(avgDaily, currency)} highlight={avgDaily >= 0} />
+                </div>
+            </div>
+
+            <div className='performance__section'>
+                <div className='performance__section-header'>
+                    <h3 className='performance__section-title'>{localize('Daily Results')}</h3>
                 </div>
                 <div className='performance__card'>
                     <div className='overflow-x-auto'>
                         <table className='performance__table'>
                             <thead>
                                 <tr>
-                                    <th className='text-left'>{localize('Contract Type')}</th>
+                                    <th className='text-left'>{localize('Date')}</th>
                                     <th className='text-right'>{localize('Trades')}</th>
-                                    <th className='text-right'>{localize('Wins')}</th>
-                                    <th className='text-right'>{localize('Losses')}</th>
-                                    <th className='text-right'>{localize('Win %')}</th>
                                     <th className='text-right'>{localize('Net Profit')}</th>
-                                    <th className='text-right'>{localize('Avg Profit')}</th>
+                                    <th className='text-center'>{localize('Result')}</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {contractPerformance.length === 0 ? (
+                                {filteredPnL.length === 0 ? (
                                     <tr>
-                                        <td colSpan={7}>
+                                        <td colSpan={4}>
                                             <div className='performance__empty'>
-                                                <div className='performance__empty-icon'>
-                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                        <line x1="18" y1="20" x2="18" y2="10"></line>
-                                                        <line x1="12" y1="20" x2="12" y2="4"></line>
-                                                        <line x1="6" y1="20" x2="6" y2="14"></line>
-                                                    </svg>
-                                                </div>
                                                 <div className='performance__empty-text'>{localize('No completed contracts yet')}</div>
                                                 <div className='performance__empty-sub'>{localize('Trades will appear here automatically once connected.')}</div>
                                             </div>
                                         </td>
                                     </tr>
                                 ) : (
-                                    contractPerformance.map((g: any) => {
-                                        const winPct = g.trades ? (g.wins / g.trades * 100) : 0;
-                                        const avg = g.trades ? g.net / g.trades : 0;
-                                        const barColor = winPct >= 70 ? 'bg-emerald-500' : winPct >= 50 ? 'bg-amber-500' : 'bg-rose-500';
-                                        
+                                    filteredPnL.slice(-50).reverse().map((d, i) => {
+                                        const isProfit = d.profit >= 0;
+                                        const dateObj = new Date(d.date + 'T00:00:00');
+                                        const dateLabel = dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+
                                         return (
-                                            <tr key={g.type} className='performance__table-row'>
-                                                <td>
-                                                    <div className='font-semibold'>{typeLabel(g.type)}</div>
-                                                    <div className='performance__win-bar'>
-                                                        <div className={classNames('performance__win-fill', barColor)} style={{ width: `${Math.min(100, winPct)}%` }} />
-                                                    </div>
-                                                </td>
-                                                <td className='text-right mono'>{g.trades}</td>
-                                                <td className='text-right mono text-emerald-600 font-semibold'>{g.wins}</td>
-                                                <td className='text-right mono text-rose-600 font-semibold'>{g.losses}</td>
-                                                <td className='text-right mono font-semibold'>{winPct.toFixed(1)}%</td>
+                                            <tr key={`${d.date}-${i}`} className='performance__table-row'>
+                                                <td className='font-medium'>{dateLabel}</td>
+                                                <td className='text-right mono'>{d.trades}</td>
                                                 <td className={classNames('text-right mono font-semibold', {
-                                                    'text-emerald-600': g.net >= 0,
-                                                    'text-rose-600': g.net < 0,
+                                                    'text-profit': isProfit,
+                                                    'text-loss': !isProfit,
                                                 })}>
-                                                    {g.net >= 0 ? '+' : ''}{formatCurrency(g.net, currency)}
+                                                    {isProfit ? '+' : ''}{formatCurrency(d.profit, currency)}
                                                 </td>
-                                                <td className='text-right mono'>{avg >= 0 ? '+' : ''}{formatCurrency(avg, currency)}</td>
+                                                <td className='text-center'>
+                                                    <span className={classNames('chip', {
+                                                        'bg-emerald-50 text-emerald-700': isProfit,
+                                                        'bg-rose-50 text-rose-700': !isProfit,
+                                                    })}>
+                                                        {isProfit ? '↑ ' + localize('Profit') : '↓ ' + localize('Loss')}
+                                                    </span>
+                                                </td>
                                             </tr>
                                         );
                                     })
@@ -124,34 +215,10 @@ const Performance = observer(() => {
 });
 
 const StatCard = ({ label, value, accent, highlight }: { label: string; value: string; accent?: boolean; highlight?: boolean }) => (
-    <div className={classNames('stat-card', { 'stat-card--accent': accent })}>
-        <div className='stat-card__label'>{label}</div>
-        <div className={classNames('stat-card__value', { 'text-profit': highlight, 'text-loss': highlight === false })}>{value}</div>
+    <div className={classNames('performance__stat-card', { 'performance__stat-card--accent': accent })}>
+        <div className='performance__stat-label'>{label}</div>
+        <div className={classNames('performance__stat-value', { 'text-profit': highlight, 'text-loss': highlight === false })}>{value}</div>
     </div>
 );
-
-const typeLabel = (t: string) => {
-    const map: Record<string, string> = {
-        'DIGITOVER': 'Digit Over',
-        'DIGITUNDER': 'Digit Under',
-        'DIGITODD': 'Digit Odd',
-        'DIGITEVEN': 'Digit Even',
-        'DIGITMATCH': 'Digit Match',
-        'DIGITDIFF': 'Digit Differs',
-        'CALL': 'Rise',
-        'PUT': 'Fall',
-        'CALLPUT': 'Higher/Lower',
-        'higher': 'Higher',
-        'lower': 'Lower',
-        'ONETOUCH': 'Touch',
-        'NOTOUCH': 'No Touch',
-    };
-    return map[t] || t;
-};
-
-const formatCurrency = (value: number, currency: string): string => {
-    if (Math.abs(value) < 0.01) return `${currency} 0.00`;
-    return `${currency} ${value.toFixed(2)}`;
-};
 
 export default Performance;

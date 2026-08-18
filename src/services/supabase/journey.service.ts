@@ -97,17 +97,21 @@ export const journeyService = {
 
         if (!data || data.length === 0) return [];
 
-        return data.map((row) => ({
-            day: Number(row.day_number),
-            date: row.date,
-            start: Number(row.expected_start),
-            end: Number(row.expected_end),
-            profit: Number(row.expected_end) - Number(row.expected_start),
-            rate: 0,
-            actual: row.actual_balance != null ? Number(row.actual_balance) : null,
-            diff: row.actual_balance != null ? Number(row.actual_balance) - Number(row.expected_end) : null,
-            status: (row.status as ScheduleRow['status']) || 'pending',
-        }));
+        return data.map((row) => {
+            const expectedStart = Number(row.expected_start);
+            const expectedEnd = Number(row.expected_end);
+            return {
+                day: Number(row.day_number),
+                date: row.date,
+                start: expectedStart,
+                end: expectedEnd,
+                profit: expectedEnd - expectedStart,
+                rate: expectedStart > 0 ? ((expectedEnd - expectedStart) / expectedStart) * 100 : 0,
+                actual: row.actual_balance != null ? Number(row.actual_balance) : null,
+                diff: row.actual_balance != null ? Number(row.actual_balance) - expectedEnd : null,
+                status: (row.status as ScheduleRow['status']) || 'pending',
+            };
+        });
     },
 
     async saveJourneyDays(journeyId: string, journey: Journey, schedule: ScheduleRow[]): Promise<void> {
