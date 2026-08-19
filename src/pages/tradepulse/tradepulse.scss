@@ -506,9 +506,15 @@
     }
 }
 
-@media (min-width: 1280px) {
+@media (min-width: 1024px) {
     .tradepulse__summary-grid {
         grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+@media (min-width: 1280px) {
+    .tradepulse__summary-grid {
+        grid-template-columns: repeat(6, 1fr);
     }
 }
 

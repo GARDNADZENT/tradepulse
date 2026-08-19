@@ -5,6 +5,10 @@ import { useStore } from '@/hooks/useStore';
 import { localize } from '@deriv-com/translations';
 import useTradePulseData from '../hooks/useTradePulseData';
 import useTradePulseFetch from '../hooks/useTradePulseFetch';
+import {
+    loadJourney,
+    getDefaultJourney,
+} from '../utils/calculations';
 import './AccountInfo.scss';
 
 const AccountInfo = observer(() => {
@@ -15,25 +19,44 @@ const AccountInfo = observer(() => {
     const balance = client?.balance ? parseFloat(client.balance) : fetchedBalance;
     const currency = client?.currency ?? 'USD';
     const isVirtual = client?.is_virtual ?? false;
-    const accountType = isVirtual ? 'Demo' : 'Real';
 
     const { overallStats } = useTradePulseData();
 
-    const [accounts, setAccounts] = useState<any[]>([]);
-    const [currentAccount, setCurrentAccount] = useState<string | null>(null);
+    const [journey, setJourney] = useState<any>(null);
 
     useEffect(() => {
-        if (client?.all_accounts_balance) {
-            const accs = Object.entries(client.all_accounts_balance).map(([id, bal]: [string, any]) => ({
-                loginid: id,
-                balance: bal?.balance ?? 0,
-                currency: bal?.currency ?? currency,
-                is_virtual: !bal?.is_virtual ? false : true,
-            }));
-            setAccounts(accs);
-            setCurrentAccount(client.loginid);
-        }
-    }, [client?.all_accounts_balance, client?.loginid, currency]);
+        let cancelled = false;
+        const fetchJourney = async () => {
+            const loaded = await loadJourney(loginid);
+            if (!cancelled) {
+                setJourney(loaded ?? getDefaultJourney(loginid));
+            }
+        };
+        fetchJourney();
+        return () => { cancelled = true; };
+    }, [loginid]);
+
+    const totalTrades = overallStats.total_trades || 0;
+    const wins = overallStats.winning_trades || 0;
+    const losses = overallStats.losing_trades || 0;
+    const winRate = overallStats.win_rate || 0;
+    const netProfit = overallStats.total_profit || 0;
+    const avgProfit = overallStats.avg_win || 0;
+    const avgLoss = overallStats.avg_loss || 0;
+    const largestWin = overallStats.largest_win || 0;
+    const largestLoss = overallStats.largest_loss || 0;
+    const bestDay = overallStats.best_day;
+    const worstDay = overallStats.worst_day;
+    const mostTraded = overallStats.most_traded || 0;
+    const mostTradedContract = overallStats.most_traded_contract || '—';
+    const winStreak = overallStats.win_streak || 0;
+    const lossStreak = overallStats.loss_streak || 0;
+
+    const currentBalance = balance || 0;
+    const startingBalance = currentBalance - netProfit;
+    const journeyInitialBalance = Number(journey?.initial_balance || 0);
+    const roi = journeyInitialBalance > 0 ? (netProfit / journeyInitialBalance) * 100 : 0;
+    const accountPerformance = journeyInitialBalance > 0 ? (netProfit / journeyInitialBalance) * 100 : 0;
 
     if (loading && balance === 0) {
         return (
@@ -51,15 +74,6 @@ const AccountInfo = observer(() => {
         );
     }
 
-    const totalTrades = overallStats.total_trades || 0;
-    const wins = overallStats.winning_trades || 0;
-    const losses = overallStats.losing_trades || 0;
-    const winRate = overallStats.win_rate || 0;
-    const streakLabel = overallStats.win_streak > 0 ? `🔥 ${overallStats.win_streak} Wins` : overallStats.loss_streak > 0 ? `❄ ${overallStats.loss_streak} Losses` : '—';
-    const todayProfit = overallStats.total_profit || 0;
-    const currencyDisplay = overallStats.currency || currency;
-    const marketDisplay = 'Deriv Synthetic Indices';
-
     return (
         <div className='tradepulse__page fade-in'>
             <div className='tradepulse__section-header'>
@@ -72,13 +86,26 @@ const AccountInfo = observer(() => {
 
             <div className='tradepulse__summary-grid'>
                 <SummaryCard label={localize('Total Trades')} value={String(totalTrades)} icon='activity' />
-                <SummaryCard label={localize('Winning Trades')} value={String(wins)} icon='trophy' tone='emerald' />
-                <SummaryCard label={localize('Losing Trades')} value={String(losses)} icon='alert-triangle' tone='rose' />
-                <SummaryCard label={localize('Overall Win Rate')} value={`${winRate.toFixed(1)}%`} icon='percent' tone='brand' />
-                <SummaryCard label={localize('Current Streak')} value={streakLabel} icon='flame' tone='amber' />
-                <SummaryCard label={localize("Today's Profit")} value={`${todayProfit >= 0 ? '+' : ''}${formatCurrency(todayProfit, currencyDisplay)}`} icon='trending-up' tone={todayProfit >= 0 ? 'emerald' : 'rose'} />
-                <SummaryCard label={localize('Connected Account')} value={loginid} icon='user' tone='slate' mono />
-                <SummaryCard label={localize('Currency')} value={currencyDisplay} icon='coins' tone='slate' />
+                <SummaryCard label={localize('Wins')} value={String(wins)} icon='trophy' tone='emerald' />
+                <SummaryCard label={localize('Losses')} value={String(losses)} icon='alert-triangle' tone='rose' />
+                <SummaryCard label={localize('Win Rate')} value={`${winRate.toFixed(1)}%`} icon='percent' tone='brand' />
+                <SummaryCard label={localize('Net Profit')} value={`${netProfit >= 0 ? '+' : ''}${formatCurrency(netProfit, currency)}`} icon='trending-up' tone={netProfit >= 0 ? 'emerald' : 'rose'} mono />
+                <SummaryCard label={localize('Average Profit')} value={`${avgProfit >= 0 ? '+' : ''}${formatCurrency(avgProfit, currency)}`} icon='trending-up' tone={avgProfit >= 0 ? 'emerald' : 'rose'} mono />
+                <SummaryCard label={localize('Average Loss')} value={`${avgLoss >= 0 ? '+' : ''}${formatCurrency(avgLoss, currency)}`} icon='trending-down' tone={avgLoss >= 0 ? 'emerald' : 'rose'} mono />
+                <SummaryCard label={localize('Largest Win')} value={`+${formatCurrency(largestWin, currency)}`} icon='trending-up' tone='emerald' mono />
+                <SummaryCard label={localize('Largest Loss')} value={`${formatCurrency(largestLoss, currency)}`} icon='trending-down' tone='rose' mono />
+                <SummaryCard label={localize('Best Day')} value={bestDay ? `${bestDay.date} · +${formatCurrency(bestDay.profit, currency)}` : '—'} icon='trophy' tone='emerald' />
+                <SummaryCard label={localize('Worst Day')} value={worstDay ? `${worstDay.date} · ${formatCurrency(worstDay.profit, currency)}` : '—'} icon='alert-triangle' tone='rose' />
+                <SummaryCard label={localize('Most Traded')} value={String(mostTraded)} icon='activity' />
+                <SummaryCard label={localize('Most Traded Contract')} value={mostTradedContract || '—'} icon='bar-chart-3' tone='brand' />
+                <SummaryCard label={localize('Win Streak')} value={`${winStreak}`} icon='flame' tone='amber' />
+                <SummaryCard label={localize('Loss Streak')} value={`${lossStreak}`} icon='flame' tone='rose' />
+                <SummaryCard label={localize('Current Balance')} value={formatCurrency(currentBalance, currency)} icon='wallet' mono />
+                <SummaryCard label={localize('Starting Balance')} value={formatCurrency(startingBalance, currency)} icon='wallet' mono />
+                <SummaryCard label={localize('ROI')} value={`${roi.toFixed(2)}%`} icon='percent' tone={roi >= 0 ? 'emerald' : 'rose'} />
+                <SummaryCard label={localize('Journey Initial Balance')} value={formatCurrency(journeyInitialBalance, currency)} icon='flag' mono />
+                <SummaryCard label={localize('Total Profit/Loss')} value={`${netProfit >= 0 ? '+' : ''}${formatCurrency(netProfit, currency)}`} icon='trending-up' tone={netProfit >= 0 ? 'emerald' : 'rose'} mono />
+                <SummaryCard label={localize('Account Performance')} value={`${accountPerformance.toFixed(2)}%`} icon='bar-chart-3' tone={accountPerformance >= 0 ? 'emerald' : 'rose'} />
             </div>
 
             {/* Account details */}
@@ -123,45 +150,6 @@ const AccountInfo = observer(() => {
                                     </div>
                                 </div>
                             </div>
-
-                            {accounts.length > 1 && (
-                                <div className='tradepulse__account-block' style={{ gridColumn: '1 / -1' }}>
-                                    <div className='tradepulse__account-block-title'>{localize('All Accounts')}</div>
-                                    <div className='tradepulse__accounts-grid'>
-                                        {accounts.map((acc: any) => (
-                                            <div key={acc.loginid} className={`tradepulse__account-card ${acc.loginid === currentAccount ? 'tradepulse__account-card--active' : ''}`}>
-                                                <div className={`tradepulse__account-avatar ${!acc.is_virtual ? 'tradepulse__account-avatar--real' : 'tradepulse__account-avatar--demo'}`}>
-                                                    {!acc.is_virtual ? '🇺🇸' : 'D'}
-                                                </div>
-                                                <div className='tradepulse__account-info'>
-                                                    <div className='tradepulse__account-login'>{acc.loginid}</div>
-                                                    <div className='tradepulse__account-currency'>{acc.currency}</div>
-                                                </div>
-                                                <span className={`tradepulse__chip ${!acc.is_virtual ? 'tradepulse__chip--ontrack' : 'tradepulse__chip--pending'}`}>
-                                                    {!acc.is_virtual ? 'REAL' : 'DEMO'}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className='tradepulse__account-block' style={{ gridColumn: '1 / -1' }}>
-                                <div className='tradepulse__account-block-title'>{localize('Connection')}</div>
-                                <div className='tradepulse__account-rows'>
-                                    <div className='tradepulse__account-row'>
-                                        <span className='tradepulse__account-label'>{localize('Status')}</span>
-                                        <div className='flex items-center gap-2'>
-                                            <span className='w-2 h-2 rounded-full bg-emerald-500'></span>
-                                            <span className='text-sm font-semibold text-emerald-700'>{localize('Connected')}</span>
-                                        </div>
-                                    </div>
-                                    <div className='tradepulse__account-row'>
-                                        <span className='tradepulse__account-label'>{localize('WebSocket')}</span>
-                                        <span className='tradepulse__account-value mono text-xs'>wss://ws.derivws.com/websockets/v3</span>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -190,8 +178,12 @@ const SummaryCard = ({ label, value, icon, tone, mono }: {
                         {icon === 'percent' && <><line x1="19" y1="5" x2="5" y2="19"></line><circle cx="6.5" cy="6.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></>}
                         {icon === 'flame' && <><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></>}
                         {icon === 'trending-up' && <><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></>}
+                        {icon === 'trending-down' && <><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline><polyline points="17 18 23 18 23 12"></polyline></>}
                         {icon === 'user' && <><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></>}
                         {icon === 'coins' && <><circle cx="8" cy="8" r="6"></circle><path d="M18.09 10.37A6 6 0 1 1 10.34 16"></path><path d="M7 6h10"></path><path d="M7 10h10"></path></>}
+                        {icon === 'wallet' && <><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></>}
+                        {icon === 'flag' && <><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></>}
+                        {icon === 'bar-chart-3' && <><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></>}
                     </svg>
                 )}
             </div>
