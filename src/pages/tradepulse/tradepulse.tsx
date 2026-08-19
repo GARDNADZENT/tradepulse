@@ -1,7 +1,6 @@
 // @ts-nocheck
-import React, { useState, useEffect, useCallback } from 'react';
-import { TradePulseProvider, useTradePulse } from './TradePulseContext';
-import { useTradePulseApi } from './useTradePulseApi';
+import React, { useState, useEffect } from 'react';
+import { TradePulseProvider } from './TradePulseContext';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import Footer from './Footer';
@@ -21,11 +20,8 @@ const VIEW_TITLES: Record<string, string> = {
 };
 
 const TradePulseApp = () => {
-    const { isLoggedIn } = useTradePulse();
     const [hash, setHash] = useState(() => window.location.hash.replace('#', '') || 'dashboard');
     const [sidebarOpen, setSidebarOpen] = useState(false);
-
-    const { refreshAll, loadJourney } = useTradePulseApi();
 
     useEffect(() => {
         const onHashChange = () => {
@@ -35,13 +31,6 @@ const TradePulseApp = () => {
         window.addEventListener('hashchange', onHashChange);
         return () => window.removeEventListener('hashchange', onHashChange);
     }, []);
-
-    useEffect(() => {
-        if (isLoggedIn) {
-            refreshAll();
-            loadJourney();
-        }
-    }, [isLoggedIn]);
 
     const renderView = () => {
         switch (hash) {
@@ -54,16 +43,8 @@ const TradePulseApp = () => {
         }
     };
 
-    if (!isLoggedIn) {
-        return (
-            <div className='tradepulse__login-fallback' style={{ padding: 24 }}>
-                <p>Please log in to access TradePulse.</p>
-            </div>
-        );
-    }
-
     return (
-        <div style={{ display: 'flex', minHeight: '100vh' }}>
+        <div className='tradepulse' style={{ display: 'flex', minHeight: '100vh' }}>
             <Sidebar />
             {sidebarOpen && (
                 <div

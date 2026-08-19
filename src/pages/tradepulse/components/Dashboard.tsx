@@ -15,21 +15,18 @@ import {
     getDefaultJourney,
 } from '../utils/calculations';
 import useTradePulseData from '../hooks/useTradePulseData';
-import useTradePulseFetch from '../hooks/useTradePulseFetch';
 import './Dashboard.scss';
 
-const Dashboard = observer(({ loginid }: { loginid: string }) => {
+const Dashboard = observer(() => {
     const store = useStore();
     const { client } = store;
+    const loginid = client?.loginid ?? '—';
     const { connectionStatus } = useApiBase();
     const { data: activeAccount } = useActiveAccount({
         allBalanceData: client?.all_accounts_balance,
         directBalance: client?.balance,
     });
-    const { overallStats, todayStats, contractPerformance, currency } = useTradePulseData();
-    const { balance: fetchedBalance, loading } = useTradePulseFetch();
-
-    const balance = client?.balance ? parseFloat(client.balance) : (fetchedBalance || (activeAccount?.balance ? parseFloat(activeAccount.balance) : 0));
+    const { overallStats, todayStats, contractPerformance, currency, balance, loading } = useTradePulseData();
     const displayCurrency = client?.currency ?? currency ?? 'USD';
 
     const [journey, setJourney] = useState<Journey | null>(null);

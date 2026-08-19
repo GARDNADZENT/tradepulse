@@ -13,8 +13,6 @@ const Performance = observer(() => {
     const [filter, setFilter] = useState<'7d' | '30d' | 'all'>('all');
     const [journey, setJourney] = useState<any>(null);
 
-    console.log('[Performance] render start', { loading, error, hasOverallStats: !!overallStats, currency, balance, loginid });
-
     useEffect(() => {
         let cancelled = false;
         const fetchJourney = async () => {
@@ -23,7 +21,7 @@ const Performance = observer(() => {
                 const loaded = await loadJourney(loginid);
                 if (!cancelled) setJourney(loaded);
             } catch (e) {
-                console.error('[Performance] journey load error:', e);
+                // silent
             }
         };
         fetchJourney();
@@ -68,18 +66,6 @@ const Performance = observer(() => {
     const winRate = filteredPnL.length > 0 ? (winningDays / filteredPnL.length) * 100 : 0;
 
     const maxAbs = Math.max(...filteredPnL.map(d => Math.abs(d.profit)), 1);
-
-    console.log('[Performance] render return', {
-        filteredPnLLength: filteredPnL.length,
-        winningDays,
-        losingDays,
-        netProfit,
-        bestDay: bestDay ? bestDay.date : null,
-        worstDay: worstDay ? worstDay.date : null,
-        avgDaily,
-        winRate,
-        maxAbs,
-    });
 
     return (
         <div className='performance'>

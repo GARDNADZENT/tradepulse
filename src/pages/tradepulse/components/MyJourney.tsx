@@ -13,14 +13,14 @@ import {
     formatCurrency,
     getDefaultJourney,
 } from '../utils/calculations';
-import useTradePulseFetch from '../hooks/useTradePulseFetch';
+import useTradePulseData from '../hooks/useTradePulseData';
 import './MyJourney.scss';
 
-const MyJourney = observer(({ loginid }: { loginid: string }) => {
+const MyJourney = observer(() => {
     const store = useStore();
     const { client } = store;
-    const { balance: fetchedBalance, loading } = useTradePulseFetch();
-    const balance = client?.balance ? parseFloat(client.balance) : fetchedBalance;
+    const loginid = client?.loginid ?? '—';
+    const { balance, loading } = useTradePulseData();
     const currency = client?.currency ?? 'USD';
 
     const [journey, setJourney] = useState<any>(null);
