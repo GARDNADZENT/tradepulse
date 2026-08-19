@@ -1,27 +1,16 @@
 // @ts-nocheck
 import React, { useState, useEffect } from 'react';
 import { TradePulseProvider } from './TradePulseContext';
-import Sidebar from './Sidebar';
-import Header from './Header';
-import Footer from './Footer';
 import Dashboard from './components/Dashboard';
 import MasterSchedule from './components/MasterSchedule';
 import MyJourney from './components/MyJourney';
 import Performance from './components/Performance';
 import AccountInfo from './components/AccountInfo';
+import { localize } from '@deriv-com/translations';
 import './tradepulse.scss';
-
-const VIEW_TITLES: Record<string, string> = {
-    dashboard: 'Welcome back — capital preserved.',
-    schedule: 'Master Schedule — live',
-    journey: 'My Journey — your locked trading plan.',
-    performance: "Today's Performance",
-    account: 'Account — lifetime performance.',
-};
 
 const TradePulseApp = () => {
     const [hash, setHash] = useState(() => window.location.hash.replace('#', '') || 'dashboard');
-    const [sidebarOpen, setSidebarOpen] = useState(false);
 
     useEffect(() => {
         const onHashChange = () => {
@@ -34,7 +23,6 @@ const TradePulseApp = () => {
 
     const renderView = () => {
         switch (hash) {
-            case 'dashboard': return <Dashboard />;
             case 'schedule': return <MasterSchedule />;
             case 'journey': return <MyJourney />;
             case 'performance': return <Performance />;
@@ -44,23 +32,15 @@ const TradePulseApp = () => {
     };
 
     return (
-        <div className='tradepulse' style={{ display: 'flex', minHeight: '100vh' }}>
-            <Sidebar />
-            {sidebarOpen && (
-                <div
-                    className='tradepulse__sidebar-overlay tradepulse__sidebar-overlay--visible'
-                    onClick={() => setSidebarOpen(false)}
-                />
-            )}
-            <div className='tradepulse__main'>
-                <Header
-                    title={VIEW_TITLES[hash] || 'Dashboard'}
-                    onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-                />
-                <main className='tradepulse__content'>
-                    {renderView()}
-                </main>
-                <Footer />
+        <div className='tradepulse'>
+            <div className='tradepulse__subnav'>
+                <a href='#journey' className={`tradepulse__subnav-link${hash === 'journey' ? ' tradepulse__subnav-link--active' : ''}`}>{localize('My Journey')}</a>
+                <a href='#schedule' className={`tradepulse__subnav-link${hash === 'schedule' ? ' tradepulse__subnav-link--active' : ''}`}>{localize('Master Schedule')}</a>
+                <a href='#performance' className={`tradepulse__subnav-link${hash === 'performance' ? ' tradepulse__subnav-link--active' : ''}`}>{localize('Performance')}</a>
+                <a href='#account' className={`tradepulse__subnav-link${hash === 'account' ? ' tradepulse__subnav-link--active' : ''}`}>{localize('Account')}</a>
+            </div>
+            <div className='tradepulse__content'>
+                {renderView()}
             </div>
         </div>
     );

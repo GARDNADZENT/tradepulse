@@ -142,67 +142,43 @@
     z-index: 30;
 }
 
-/* ---------- Main Layout ---------- */
-.tradepulse__main {
-    flex: 1;
-    margin-left: 208px;
+/* ---------- Sub Navigation ---------- */
+.tradepulse__subnav {
     display: flex;
-    flex-direction: column;
-    min-width: 0;
-}
-
-.tradepulse__header {
-    position: sticky;
-    top: 0;
-    z-index: 30;
-    height: 48px;
-    padding: 0 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    background: rgba(15,23,42,.75);
-    backdrop-filter: blur(16px);
+    gap: 4px;
+    padding: 12px 16px 0;
     border-bottom: 1px solid var(--border-normal);
+    background: var(--general-main-1);
 }
 
-.tradepulse__header-toggle {
-    display: none;
-    padding: 4px;
-    border-radius: 6px;
-    background: none;
-    border: none;
-    color: var(--text-general);
-    cursor: pointer;
-}
-
-.tradepulse__header-title {
-    font-size: 1.2rem;
+.tradepulse__subnav-link {
+    padding: 10px 18px;
+    border-radius: 10px 10px 0 0;
+    font-size: 1.4rem;
     font-weight: 600;
-    color: var(--text-prominent);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.tradepulse__header-subtitle {
-    font-size: 0.9rem;
     color: var(--text-less-prominent);
+    text-decoration: none;
+    transition: background 0.2s ease, color 0.2s ease;
 }
 
+.tradepulse__subnav-link:hover {
+    color: var(--text-prominent);
+    background: var(--general-section-1);
+}
+
+.tradepulse__subnav-link--active {
+    color: var(--brand-primary);
+    background: var(--general-section-1);
+    border-bottom: 2px solid var(--brand-primary);
+}
+
+/* ---------- Content ---------- */
 .tradepulse__content {
     flex: 1;
-    padding: 16px;
-    animation: fadeIn 0.3s ease-out both;
-}
-
-.tradepulse__footer {
-    padding: 8px 16px;
-    border-top: 1px solid var(--border-normal);
-    font-size: 0.8rem;
-    color: var(--text-less-prominent);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    padding: 24px;
+    max-width: 1200px;
+    width: 100%;
+    margin: 0 auto;
 }
 
 /* ---------- Glass Card ---------- */
@@ -711,23 +687,17 @@
 
 /* ---------- Responsive ---------- */
 @media (max-width: 1024px) {
-    .tradepulse__sidebar {
-        transform: translateX(-100%);
+    .tradepulse__subnav {
+        gap: 2px;
+        padding: 10px 12px 0;
     }
 
-    .tradepulse__sidebar--open {
-        transform: translateX(0);
+    .tradepulse__subnav-link {
+        padding: 8px 12px;
+        font-size: 1.2rem;
     }
 
-    .tradepulse__sidebar-overlay--visible {
-        display: block;
-    }
-
-    .tradepulse__main {
-        margin-left: 0;
-    }
-
-    .tradepulse__header-toggle {
-        display: block;
+    .tradepulse__content {
+        padding: 16px;
     }
 }
