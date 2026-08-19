@@ -1,182 +1,95 @@
-// @ts-nocheck — TradePulse component with known type gaps
-import React, { useState, useMemo } from 'react';
-import classNames from 'classnames';
-import { useStore } from '@/hooks/useStore';
-import { localize } from '@deriv-com/translations';
-import { buildSchedule, formatCurrency } from './utils/calculations';
-import MyJourney from './components/MyJourney';
+// @ts-nocheck
+import React, { useState, useEffect, useCallback } from 'react';
+import { TradePulseProvider, useTradePulse } from './TradePulseContext';
+import { useTradePulseApi } from './useTradePulseApi';
+import Sidebar from './Sidebar';
+import Header from './Header';
+import Footer from './Footer';
+import Dashboard from './components/Dashboard';
 import MasterSchedule from './components/MasterSchedule';
+import MyJourney from './components/MyJourney';
+import Performance from './components/Performance';
+import AccountInfo from './components/AccountInfo';
 import './tradepulse.scss';
 
-type TabKey = 'journey' | 'schedule';
+const VIEW_TITLES: Record<string, string> = {
+    dashboard: 'Welcome back — capital preserved.',
+    schedule: 'Master Schedule — live',
+    journey: 'My Journey — your locked trading plan.',
+    performance: "Today's Performance",
+    account: 'Account — lifetime performance.',
+};
 
-const tabs: { key: TabKey; label: string; icon: string }[] = [
-    { key: 'journey', label: 'My Journey', icon: 'compass' },
-    { key: 'schedule', label: 'Master Schedule', icon: 'calendar-range' },
-];
+const TradePulseApp = () => {
+    const { isLoggedIn } = useTradePulse();
+    const [hash, setHash] = useState(() => window.location.hash.replace('#', '') || 'dashboard');
+    const [sidebarOpen, setSidebarOpen] = useState(false);
 
-const TradePulse = () => {
-    const [activeTab, setActiveTab] = useState<TabKey>('journey');
-    const store = useStore();
-    const { client } = store || {};
-    const loginid = client?.loginid ?? '';
-    const isLoggedIn = client?.is_logged_in ?? false;
+    const { refreshAll, loadJourney } = useTradePulseApi();
 
-    const preloginSchedule = useMemo(() => {
-        try {
-            const raw = localStorage.getItem('tradepulse_prelogin_schedule');
-            return raw ? JSON.parse(raw) : null;
-        } catch {
-            return null;
-        }
+    useEffect(() => {
+        const onHashChange = () => {
+            const h = window.location.hash.replace('#', '') || 'dashboard';
+            setHash(h);
+        };
+        window.addEventListener('hashchange', onHashChange);
+        return () => window.removeEventListener('hashchange', onHashChange);
     }, []);
 
-    if (!isLoggedIn || !loginid) {
+    useEffect(() => {
+        if (isLoggedIn) {
+            refreshAll();
+            loadJourney();
+        }
+    }, [isLoggedIn]);
+
+    const renderView = () => {
+        switch (hash) {
+            case 'dashboard': return <Dashboard />;
+            case 'schedule': return <MasterSchedule />;
+            case 'journey': return <MyJourney />;
+            case 'performance': return <Performance />;
+            case 'account': return <AccountInfo />;
+            default: return <Dashboard />;
+        }
+    };
+
+    if (!isLoggedIn) {
         return (
-            <div className='tradepulse'>
-                <div className='tradepulse__header'>
-                    <div className='tradepulse__brand'>
-                        <div className='tradepulse__logo'>
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-                            </svg>
-                        </div>
-                        <div>
-                            <div className='tradepulse__brand-name'>TradersPulse</div>
-                            <div className='tradepulse__brand-tag'>Capital-First Analytics</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div className='tradepulse__prelogin'>
-                    <div className='tradepulse__prelogin-card'>
-                        <h3 className='tradepulse__prelogin-title'>{localize('Master Schedule Planner')}</h3>
-                        <p className='tradepulse__prelogin-sub'>{localize('Set your trading goal to generate your complete trading plan.')}</p>
-                        <form onSubmit={(e) => {
-                            e.preventDefault();
-                            const schedule = buildSchedule({
-                                loginid: 'prelogin',
-                                initial_balance: Number((e.target as any).balance.value),
-                                cycle_length_days: Number((e.target as any).days.value),
-                                daily_target_pct: Number((e.target as any).rate.value),
-                                start_date: (e.target as any).start.value,
-                                created_at: new Date().toISOString(),
-                                updated_at: new Date().toISOString(),
-                            });
-                            localStorage.setItem('tradepulse_prelogin_schedule', JSON.stringify(schedule));
-                            window.location.reload();
-                        }} className='tradepulse__prelogin-form'>
-                            <div className='tradepulse__prelogin-grid'>
-                                <label className='tradepulse__field'>
-                                    <span className='tradepulse__label'>{localize('Initial Balance')}</span>
-                                    <div className='tradepulse__input-wrap'>
-                                        <span className='tradepulse__input-prefix'>$</span>
-                                        <input type='number' name='balance' className='tradepulse__input tradepulse__input--prefix' defaultValue={100} step='0.01' min='1' required />
-                                    </div>
-                                </label>
-                                <label className='tradepulse__field'>
-                                    <span className='tradepulse__label'>{localize('Trading Days')}</span>
-                                    <input type='number' name='days' className='tradepulse__input' defaultValue={30} min='1' max='365' required />
-                                </label>
-                                <label className='tradepulse__field'>
-                                    <span className='tradepulse__label'>{localize('Daily Growth Rate (%)')}</span>
-                                    <input type='number' name='rate' className='tradepulse__input' defaultValue={5} min='0.01' max='100' step='0.01' required />
-                                </label>
-                                <label className='tradepulse__field'>
-                                    <span className='tradepulse__label'>{localize('Cycle Start Date')}</span>
-                                    <input type='date' name='start' className='tradepulse__input' defaultValue={new Date().toISOString().slice(0, 10)} required />
-                                </label>
-                            </div>
-                            <button type='submit' className='tradepulse__prelogin-btn'>
-                                {localize('Generate Master Schedule')}
-                            </button>
-                        </form>
-                    </div>
-
-                    {preloginSchedule && (
-                        <div className='tradepulse__schedule-output'>
-                            <div className='tradepulse__schedule-header'>
-                                <h3 className='tradepulse__schedule-title'>{localize('Generated Schedule')}</h3>
-                                <p className='tradepulse__schedule-meta'>
-                                    {preloginSchedule.days} days · {preloginSchedule.rate}% daily · starting {formatCurrency(preloginSchedule.initial, 'USD')} · from {preloginSchedule.startDate}
-                                </p>
-                            </div>
-                            <div className='tradepulse__table-wrapper'>
-                                <table className='tradepulse__table'>
-                                    <thead>
-                                        <tr>
-                                            <th>{localize('Day')}</th>
-                                            <th className='text-right'>{localize('Expected Start')}</th>
-                                            <th className='text-right'>{localize('Expected End')}</th>
-                                            <th className='text-right'>{localize('Daily Profit Target')}</th>
-                                            <th className='text-right'>{localize('Required %')}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {preloginSchedule.rows.map((row: any) => (
-                                            <tr key={row.day} className='tradepulse__table-row'>
-                                                <td>
-                                                    <div>{localize('Day')} {row.day}</div>
-                                                    <div className='tradepulse__table-date'>{row.date}</div>
-                                                </td>
-                                                <td className='text-right mono'>{formatCurrency(row.start, 'USD')}</td>
-                                                <td className='text-right mono'>{formatCurrency(row.end, 'USD')}</td>
-                                                <td className='text-right mono font-semibold text-brand-700'>+{formatCurrency(row.profit, 'USD')}</td>
-                                                <td className='text-right mono'>{row.rate}%</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                            <div className='tradepulse__schedule-footer'>
-                                {localize('After logging in, your actual account balance will automatically be compared with the expected balance for each trading day.')}
-                            </div>
-                        </div>
-                    )}
-                </div>
+            <div className='tradepulse__login-fallback' style={{ padding: 24 }}>
+                <p>Please log in to access TradePulse.</p>
             </div>
         );
     }
 
     return (
-        <div className='tradepulse'>
-            <div className='tradepulse__header'>
-                <div className='tradepulse__brand'>
-                    <div className='tradepulse__logo'>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-                        </svg>
-                    </div>
-                    <div>
-                        <div className='tradepulse__brand-name'>TradersPulse</div>
-                        <div className='tradepulse__brand-tag'>Capital-First Analytics</div>
-                    </div>
-                </div>
-
-                <nav className='tradepulse__nav'>
-                    {tabs.map(tab => (
-                        <button
-                            key={tab.key}
-                            className={classNames('tradepulse__nav-item', {
-                                'tradepulse__nav-item--active': activeTab === tab.key,
-                            })}
-                            onClick={() => setActiveTab(tab.key)}
-                            type='button'
-                        >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className='tradepulse__nav-icon'>
-                                {tab.icon === 'compass' && <><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></>}
-                                {tab.icon === 'calendar-range' && <><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y1="10"></line></>}
-                            </svg>
-                            <span>{localize(tab.label)}</span>
-                        </button>
-                    ))}
-                </nav>
-            </div>
-            <div className='tradepulse__content'>
-                {activeTab === 'journey' && <MyJourney loginid={loginid} />}
-                {activeTab === 'schedule' && <MasterSchedule loginid={loginid} />}
+        <div style={{ display: 'flex', minHeight: '100vh' }}>
+            <Sidebar />
+            {sidebarOpen && (
+                <div
+                    className='tradepulse__sidebar-overlay tradepulse__sidebar-overlay--visible'
+                    onClick={() => setSidebarOpen(false)}
+                />
+            )}
+            <div className='tradepulse__main'>
+                <Header
+                    title={VIEW_TITLES[hash] || 'Dashboard'}
+                    onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+                />
+                <main className='tradepulse__content'>
+                    {renderView()}
+                </main>
+                <Footer />
             </div>
         </div>
+    );
+};
+
+const TradePulse = () => {
+    return (
+        <TradePulseProvider>
+            <TradePulseApp />
+        </TradePulseProvider>
     );
 };
 

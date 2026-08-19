@@ -1,191 +1,457 @@
 @import '@/components/shared/styles/_themes.scss';
 @import '@/components/shared/styles/_constants.scss';
 
+/* =========================================================
+   TRADERSPULSE — Design System
+   ========================================================= */
+
 .tradepulse {
-    max-width: 1200px;
-    margin: 0;
-    padding: 24px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--general-main-1);
+    color: var(--text-prominent);
 }
 
-.tradepulse__header {
-    margin-bottom: 24px;
+/* ---------- Sidebar ---------- */
+.tradepulse__sidebar {
+    width: 208px;
+    background: linear-gradient(180deg, rgba(15,23,42,.97) 0%, rgba(10,15,26,.97) 50%, rgba(15,23,42,.97) 100%);
+    backdrop-filter: blur(16px);
+    border-right: 1px solid var(--border-normal);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 40;
+    transition: transform 0.3s ease;
 }
 
-.tradepulse__brand {
+.tradepulse__sidebar-header {
+    height: 48px;
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 20px;
+    gap: 10px;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--border-normal);
 }
 
-.tradepulse__logo {
+.tradepulse__sidebar-logo {
     width: 36px;
     height: 36px;
-    border-radius: 10px;
-    background: linear-gradient(135deg, var(--brand-primary), var(--brand-primary));
-    color: #fff;
+    border-radius: 8px;
+    background: var(--general-section-1);
+    border: 1px solid var(--border-normal);
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 1px 2px rgba(15,23,42,.04), 0 8px 24px -12px rgba(15,23,42,.08);
+    overflow: hidden;
+    flex-shrink: 0;
 }
 
-.tradepulse__brand-name {
-    font-size: 1.3rem;
+.tradepulse__sidebar-logo img {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+}
+
+.tradepulse__sidebar-brand {
+    display: flex;
+    flex-direction: column;
+}
+
+.tradepulse__sidebar-brand-name {
+    font-size: 1.2rem;
     font-weight: 700;
     color: var(--text-prominent);
     letter-spacing: -0.01em;
     line-height: 1.2;
 }
 
-.tradepulse__brand-tag {
-    font-size: 0.7rem;
+.tradepulse__sidebar-brand-tag {
+    font-size: 0.65rem;
     color: var(--text-less-prominent);
     letter-spacing: 0.02em;
 }
 
-.tradepulse__nav {
+.tradepulse__sidebar-nav {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
     display: flex;
-    gap: 4px;
-    border-bottom: 1px solid var(--border-normal);
-    position: relative;
-    overflow-x: auto;
+    flex-direction: column;
+    gap: 2px;
 }
 
-.tradepulse__nav-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 16px;
-    font-size: 1.3rem;
+.tradepulse__sidebar-section {
+    padding: 8px 8px 4px;
+    font-size: 0.65rem;
+    font-weight: 600;
     color: var(--text-less-prominent);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.tradepulse__sidebar-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: var(--text-general);
+    text-decoration: none;
+    transition: all 0.15s ease;
     cursor: pointer;
-    position: relative;
-    transition: color 0.2s ease;
-    font-family: var(--brand-font-primary);
-    white-space: nowrap;
     background: none;
     border: none;
+    width: 100%;
+    text-align: left;
 }
 
-.tradepulse__nav-item:hover {
-    color: var(--text-general);
+.tradepulse__sidebar-link:hover {
+    background: rgba(148,163,184,.06);
+    color: var(--text-prominent);
 }
 
-.tradepulse__nav-item--active {
+.tradepulse__sidebar-link--active {
+    background: linear-gradient(90deg, rgba(99,102,241,.12) 0%, rgba(99,102,241,.04) 100%);
     color: var(--brand-primary);
+    border-right: 2px solid var(--brand-primary);
     font-weight: 600;
 }
 
-.tradepulse__nav-item--active::after {
-    content: '';
-    position: absolute;
-    left: 12px;
-    right: 12px;
-    bottom: -1px;
-    height: 2px;
-    background: var(--brand-primary);
-    border-radius: 2px 2px 0 0;
+.tradepulse__sidebar-link--active svg {
+    color: var(--brand-primary);
 }
 
-.tradepulse__nav-icon {
+.tradepulse__sidebar-icon {
     width: 16px;
     height: 16px;
     flex-shrink: 0;
 }
 
+.tradepulse__sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 30;
+}
+
+/* ---------- Main Layout ---------- */
+.tradepulse__main {
+    flex: 1;
+    margin-left: 208px;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.tradepulse__header {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    height: 48px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(15,23,42,.75);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border-normal);
+}
+
+.tradepulse__header-toggle {
+    display: none;
+    padding: 4px;
+    border-radius: 6px;
+    background: none;
+    border: none;
+    color: var(--text-general);
+    cursor: pointer;
+}
+
+.tradepulse__header-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text-prominent);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tradepulse__header-subtitle {
+    font-size: 0.9rem;
+    color: var(--text-less-prominent);
+}
+
 .tradepulse__content {
+    flex: 1;
+    padding: 16px;
     animation: fadeIn 0.3s ease-out both;
 }
 
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(4px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.tradepulse__empty {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 400px;
-}
-
-.tradepulse__empty-text {
+.tradepulse__footer {
+    padding: 8px 16px;
+    border-top: 1px solid var(--border-normal);
+    font-size: 0.8rem;
     color: var(--text-less-prominent);
-    font-size: 1.6rem;
-}
-
-/* Pre-login */
-.tradepulse__prelogin {
     display: flex;
-    flex-direction: column;
-    gap: 24px;
+    justify-content: space-between;
+    align-items: center;
 }
 
-.tradepulse__prelogin-card {
+/* ---------- Glass Card ---------- */
+.tradepulse__glass-card {
+    background: linear-gradient(180deg, rgba(30,41,59,.6) 0%, rgba(15,23,42,.4) 100%);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border-normal);
+    border-radius: 12px;
+    padding: 16px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.tradepulse__glass-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px -8px rgba(0,0,0,.3);
+    border-color: rgba(148,163,184,.15);
+}
+
+.tradepulse__glass-card--accent-green { border-left: 3px solid #10b981; }
+.tradepulse__glass-card--accent-blue { border-left: 3px solid #3b82f6; }
+.tradepulse__glass-card--accent-purple { border-left: 3px solid #8b5cf6; }
+.tradepulse__glass-card--accent-orange { border-left: 3px solid #f59e0b; }
+.tradepulse__glass-card--accent-red { border-left: 3px solid #ef4444; }
+
+/* ---------- KPI Grid ---------- */
+.tradepulse__kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+}
+
+.tradepulse__kpi-card {
     background: var(--general-main-2);
     border: 1px solid var(--border-normal);
-    border-radius: 8px;
-    padding: 24px;
-}
-
-.tradepulse__prelogin-title {
-    font-size: 1.6rem;
-    font-weight: bold;
-    color: var(--text-prominent);
-    margin: 0 0 4px 0;
-}
-
-.tradepulse__prelogin-sub {
-    font-size: 1.2rem;
-    color: var(--text-less-prominent);
-    margin: 0 0 16px 0;
-}
-
-.tradepulse__prelogin-form {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-}
-
-.tradepulse__prelogin-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 20px;
-}
-
-.tradepulse__field {
+    border-radius: 10px;
+    padding: 14px;
     display: flex;
     flex-direction: column;
     gap: 6px;
 }
 
-.tradepulse__label {
+.tradepulse__kpi-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-less-prominent);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.tradepulse__kpi-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--text-prominent);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.tradepulse__kpi-sub {
+    font-size: 0.8rem;
+    color: var(--text-less-prominent);
+}
+
+/* ---------- Progress Bar ---------- */
+.tradepulse__progress {
+    margin-top: 12px;
+}
+
+.tradepulse__progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.tradepulse__progress-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-prominent);
+}
+
+.tradepulse__progress-sub {
+    font-size: 0.8rem;
+    color: var(--text-less-prominent);
+}
+
+.tradepulse__progress-pct {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--brand-primary);
+}
+
+.tradepulse__progress-bar {
+    height: 8px;
+    background: var(--general-section-1);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.tradepulse__progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%);
+    border-radius: 999px;
+    transition: width 0.5s ease;
+}
+
+/* ---------- Table ---------- */
+.tradepulse__table-wrapper {
+    overflow-x: auto;
+}
+
+.tradepulse__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 1.1rem;
+}
+
+.tradepulse__table th,
+.tradepulse__table td {
+    text-align: left;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-normal);
+    white-space: nowrap;
+}
+
+.tradepulse__table th {
+    background: var(--general-section-1);
+    color: var(--text-less-prominent);
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.tradepulse__table-row:hover {
+    background: rgba(148,163,184,.04);
+}
+
+.tradepulse__table-row--complete {
+    background: rgba(16, 185, 129, 0.04);
+}
+
+.tradepulse__table-row--behind {
+    background: rgba(239, 68, 68, 0.04);
+}
+
+.tradepulse__table-row--today {
+    background: rgba(99, 102, 241, 0.04);
+}
+
+/* ---------- Chip / Badge ---------- */
+.tradepulse__chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.tradepulse__chip--ontrack {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.tradepulse__chip--below {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.tradepulse__chip--pending {
+    background: rgba(148, 163, 184, 0.1);
+    color: #94a3b8;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+/* ---------- Buttons ---------- */
+.tradepulse__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 1.2rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: var(--brand-font-primary);
+    border: none;
+}
+
+.tradepulse__btn--primary {
+    background: var(--brand-primary);
+    color: #fff;
+}
+
+.tradepulse__btn--primary:hover {
+    opacity: 0.9;
+    box-shadow: 0 4px 6px rgba(15,23,42,.04), 0 20px 40px -20px rgba(15,23,42,.12);
+}
+
+.tradepulse__btn--secondary {
+    background: transparent;
+    color: var(--text-prominent);
+    border: 1px solid var(--border-normal);
+}
+
+.tradepulse__btn--secondary:hover {
+    background: var(--general-section-1);
+}
+
+.tradepulse__btn--danger {
+    background: transparent;
+    color: #ef4444;
+    border: 1px solid #ef4444;
+}
+
+.tradepulse__btn--danger:hover {
+    background: #ef4444;
+    color: #fff;
+}
+
+.tradepulse__btn--ghost {
+    background: transparent;
+    color: var(--text-general);
+    border: none;
+    padding: 4px 8px;
+}
+
+.tradepulse__btn--ghost:hover {
+    background: var(--general-section-1);
+}
+
+/* ---------- Form ---------- */
+.tradepulse__form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.tradepulse__form-label {
     font-size: 1.1rem;
     font-weight: 600;
     color: var(--text-less-prominent);
 }
 
-.tradepulse__input-wrap {
-    position: relative;
-}
-
-.tradepulse__input-prefix {
-    position: absolute;
-    left: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--text-less-prominent);
-    font-size: 1.3rem;
-}
-
-.tradepulse__input {
+.tradepulse__form-input {
     width: 100%;
     padding: 10px 12px;
     border: 1px solid var(--border-normal);
@@ -198,123 +464,270 @@
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.tradepulse__input:focus {
+.tradepulse__form-input:focus {
     border-color: var(--brand-primary);
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
-.tradepulse__input--prefix {
+.tradepulse__form-input--prefix {
     padding-left: 28px;
 }
 
-.tradepulse__prelogin-btn {
-    padding: 12px 24px;
-    background: var(--brand-primary);
-    color: #fff;
-    border: none;
-    border-radius: 8px;
+.tradepulse__input-prefix {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-less-prominent);
     font-size: 1.3rem;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: var(--brand-font-primary);
-    align-self: flex-end;
-    display: inline-flex;
+    pointer-events: none;
+}
+
+/* ---------- Modal ---------- */
+.tradepulse__modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
+    z-index: 50;
+    display: flex;
     align-items: center;
-    gap: 8px;
-    transition: background 0.2s ease, box-shadow 0.2s ease;
+    justify-content: center;
+    padding: 16px;
 }
 
-.tradepulse__prelogin-btn:hover {
-    opacity: 0.9;
-    box-shadow: 0 4px 6px rgba(15,23,42,.04), 0 20px 40px -20px rgba(15,23,42,.12);
-}
-
-.tradepulse__schedule-output {
+.tradepulse__modal {
     background: var(--general-main-2);
     border: 1px solid var(--border-normal);
-    border-radius: 12px;
-    overflow: hidden;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 480px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 40px -20px rgba(0,0,0,.3);
 }
 
-.tradepulse__schedule-header {
+.tradepulse__modal-header {
     padding: 20px 24px;
     border-bottom: 1px solid var(--border-normal);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
 }
 
-.tradepulse__schedule-title {
-    font-size: 1.6rem;
-    font-weight: bold;
+.tradepulse__modal-title {
+    font-size: 1.4rem;
+    font-weight: 700;
     color: var(--text-prominent);
     margin: 0;
 }
 
-.tradepulse__schedule-meta {
+.tradepulse__modal-subtitle {
     font-size: 1.1rem;
     color: var(--text-less-prominent);
     margin: 4px 0 0 0;
 }
 
-.tradepulse__table-wrapper {
-    overflow-x: auto;
+.tradepulse__modal-body {
+    padding: 20px 24px;
 }
 
-.tradepulse__table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 1.2rem;
+.tradepulse__modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border-normal);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
 }
 
-.tradepulse__table th,
-.tradepulse__table td {
-    text-align: left;
-    padding: 14px 20px;
-    border-bottom: 1px solid var(--border-normal);
-    white-space: nowrap;
-}
-
-.tradepulse__table th {
+/* ---------- Account Card ---------- */
+.tradepulse__account-card {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 10px;
     background: var(--general-section-1);
-    color: var(--text-less-prominent);
+    border: 1px solid var(--border-normal);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    max-width: 100%;
+}
+
+.tradepulse__account-card:hover {
+    border-color: rgba(148,163,184,.2);
+}
+
+.tradepulse__account-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.tradepulse__account-badge--real {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.tradepulse__account-badge--demo {
+    background: rgba(56, 189, 248, 0.1);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.2);
+}
+
+/* ---------- Dropdown ---------- */
+.tradepulse__dropdown {
+    position: absolute;
+    right: 16px;
+    top: 52px;
+    width: 256px;
+    max-width: calc(100vw - 32px);
+    max-height: 70vh;
+    background: var(--general-main-2);
+    border: 1px solid var(--border-normal);
+    border-radius: 12px;
+    box-shadow: 0 20px 40px -20px rgba(0,0,0,.3);
+    z-index: 60;
+    overflow: hidden;
+}
+
+.tradepulse__dropdown-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-normal);
+    font-size: 0.75rem;
     font-weight: 600;
-    font-size: 1rem;
+    color: var(--text-less-prominent);
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
 
-.tradepulse__table-row:hover {
-    background: rgba(99, 102, 241, 0.03);
+.tradepulse__dropdown-list {
+    max-height: 320px;
+    overflow-y: auto;
 }
 
-.tradepulse__table-date {
-    font-size: 1rem;
-    color: var(--text-less-prominent);
-    margin-top: 2px;
+.tradepulse__dropdown-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-normal);
+    background: none;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease;
 }
 
-.tradepulse__schedule-footer {
-    padding: 16px 24px;
-    background: var(--general-section-1);
+.tradepulse__dropdown-item:hover {
+    background: rgba(148,163,184,.06);
+}
+
+.tradepulse__dropdown-item--active {
+    background: rgba(99,102,241,.06);
+}
+
+.tradepulse__dropdown-footer {
+    padding: 12px 16px;
     border-top: 1px solid var(--border-normal);
-    font-size: 1.1rem;
-    color: var(--text-less-prominent);
+    background: rgba(15,23,42,.2);
 }
 
+/* ---------- Animations ---------- */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.pulse-dot {
+    position: relative;
+    display: inline-block;
+}
+
+.pulse-dot::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 999px;
+    background: currentColor;
+    opacity: 0.4;
+    animation: pulse 1.6s ease-out infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(0.6); opacity: 0.6; }
+    100% { transform: scale(1.8); opacity: 0; }
+}
+
+.progress-bar {
+    background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%);
+}
+
+.glass {
+    background: rgba(15,23,42,.75);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(148,163,184,.08);
+}
+
+.glass-card {
+    background: linear-gradient(180deg, rgba(30,41,59,.6) 0%, rgba(15,23,42,.4) 100%);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(148,163,184,.08);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.glass-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px -8px rgba(0,0,0,.3);
+    border-color: rgba(148,163,184,.15);
+}
+
+/* ---------- Scrollbar ---------- */
+.scrollbar-thin::-webkit-scrollbar {
+    height: 5px;
+    width: 5px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+    background: #1e293b;
+    border-radius: 999px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* ---------- Utility ---------- */
+.mono {
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* ---------- Responsive ---------- */
 @media (max-width: 1024px) {
-    .tradepulse__prelogin-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-@media (max-width: 640px) {
-    .tradepulse__prelogin-grid {
-        grid-template-columns: 1fr;
+    .tradepulse__sidebar {
+        transform: translateX(-100%);
     }
 
-    .tradepulse__nav-item span {
-        display: none;
+    .tradepulse__sidebar--open {
+        transform: translateX(0);
     }
 
-    .tradepulse__nav-item {
-        padding: 12px;
+    .tradepulse__sidebar-overlay--visible {
+        display: block;
+    }
+
+    .tradepulse__main {
+        margin-left: 0;
+    }
+
+    .tradepulse__header-toggle {
+        display: block;
     }
 }
