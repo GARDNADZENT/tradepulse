@@ -53,15 +53,21 @@ const MyJourney = observer(() => {
 
     const isConnected = connectionStatus === 'opened' || connectionStatus === 'OPENED';
 
+    const { overallStats } = useTradePulseData();
+    const totalTrades = overallStats.total_trades || 0;
+    const winRate = overallStats.win_rate || 0;
+    const streakLabel = overallStats.win_streak > 0 ? `🔥 ${overallStats.win_streak} Wins` : overallStats.loss_streak > 0 ? `❄ ${overallStats.loss_streak} Losses` : '—';
+    const todayProfit = overallStats.total_profit || 0;
+
     if (!journeyLoaded || !journey || (loading && balance === 0)) {
         return (
-            <div className='tradepulse__section'>
+            <div className='tradepulse__page'>
                 <div className='tradepulse__section-header'>
                     <div>
                         <div className='tradepulse__section-brand'>{localize('Today')}</div>
                         <h2 className='tradepulse__section-title'>{localize("Today's Target")}</h2>
                     </div>
-                    <div className='tradepulse__live'>
+                    <div className='tradepulse__live-indicator'>
                         <span className='tradepulse__live-dot'></span>
                         <span>{localize('Waiting for connection')}</span>
                     </div>
@@ -72,15 +78,16 @@ const MyJourney = observer(() => {
     }
 
     return (
-        <div className='tradepulse'>
+        <div className='tradepulse__page fade-in'>
             {/* Today's Target */}
-            <div className='tradepulse__section fade-in'>
+            <section className='tradepulse__section'>
                 <div className='tradepulse__section-header'>
                     <div>
                         <div className='tradepulse__section-brand'>{localize('Today')}</div>
                         <h2 className='tradepulse__section-title'>{localize("Today's Target")}</h2>
+                        <p className='tradepulse__section-subtitle'>{localize('Track your daily progress against the plan.')}</p>
                     </div>
-                    <div className='tradepulse__live'>
+                    <div className='tradepulse__live-indicator'>
                         <span className={`tradepulse__live-dot${isConnected ? ' tradepulse__live-dot--active' : ''}`}></span>
                         <span>{isConnected ? localize('Live') : localize('Waiting for connection')}</span>
                     </div>
@@ -102,7 +109,7 @@ const MyJourney = observer(() => {
                     <KPICard label={localize('30-Day Goal')} value={formatCurrency(schedule[schedule.length - 1]?.end ?? 0, currency)} icon='flag' />
                 </div>
 
-                <div className='tradepulse__progress'>
+                <div className='tradepulse__progress-card'>
                     <div className='tradepulse__progress-header'>
                         <div>
                             <div className='tradepulse__progress-label'>{localize('Cycle Progress')}</div>
@@ -114,30 +121,17 @@ const MyJourney = observer(() => {
                         <div className='tradepulse__progress-fill' style={{ width: `${progress}%` }} />
                     </div>
                 </div>
-            </div>
+            </section>
 
-            {/* Account Summary */}
-            <div className='tradepulse__section fade-in'>
-                <div className='tradepulse__section-header'>
-                    <div>
-                        <div className='tradepulse__section-brand'>{localize('Overview')}</div>
-                        <h2 className='tradepulse__section-title'>{localize('Account Summary')}</h2>
-                    </div>
+            {/* Quick Summary */}
+            <section className='tradepulse__section'>
+                <div className='tradepulse__summary-grid'>
+                    <SummaryCard label={localize('Total Trades')} value={String(totalTrades)} icon='activity' />
+                    <SummaryCard label={localize('Win Rate')} value={`${winRate.toFixed(1)}%`} icon='trophy' accent />
+                    <SummaryCard label={localize('Streak')} value={streakLabel} icon='flame' />
+                    <SummaryCard label={localize("Today's Profit")} value={`${todayProfit >= 0 ? '+' : ''}${formatCurrency(todayProfit, currency)}`} icon='trending-up' highlight={todayProfit >= 0} />
                 </div>
-                <div className='tradepulse__status-grid'>
-                    <StatusCard label={localize('Starting Balance')} value={formatCurrency(journey.initial_balance, currency)} icon='wallet' />
-                    <StatusCard label={localize('Target Balance')} value={formatCurrency(schedule[schedule.length - 1]?.end ?? 0, currency)} icon='flag' accent />
-                    <StatusCard label={localize('Current Balance')} value={formatCurrency(balance, currency)} icon='activity' live highlight={delta >= 0} />
-                    <StatusCard label={localize('Current Day')} value={`${currentDay} / ${journey.cycle_length_days}`} icon='calendar' />
-                    <StatusCard label={localize('Total Days')} value={String(journey.cycle_length_days)} icon='hash' />
-                    <StatusCard label={localize('Journey Progress')} value={`${Math.round(progress)}%`} icon='trending-up' accent />
-                    <StatusCard
-                        label={localize('Status')}
-                        value={displayRow.status === 'complete' ? localize('On Track') : displayRow.status === 'behind' ? localize('Below Target') : displayRow.status === 'missed' ? localize('Missed') : localize('Pending')}
-                        icon='check-circle'
-                    />
-                </div>
-            </div>
+            </section>
         </div>
     );
 });
@@ -150,58 +144,48 @@ const KPICard = ({ label, value, sub, icon, accent, live, highlight }: {
     accent?: boolean;
     live?: boolean;
     highlight?: boolean;
-}) => {
-    const iconColor = accent ? 'text-brand-500' : 'text-slate-400';
-    return (
-        <div className='tradepulse__kpi-card'>
-            <div className='tradepulse__kpi-header'>
-                <span className='tradepulse__kpi-label'>{label}</span>
-                {icon && (
-                    <svg className={`tradepulse__kpi-icon ${live ? 'text-emerald-500' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        {icon === 'wallet' && <><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></>}
-                        {icon === 'target' && <><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></>}
-                        {icon === 'percent' && <><line x1="19" y1="5" x2="5" y2="19"></line><circle cx="6.5" cy="6.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></>}
-                        {icon === 'trending-up' && <><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></>}
-                        {icon === 'activity' && <><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></>}
-                        {icon === 'flag' && <><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></>}
-                    </svg>
-                )}
-            </div>
-            <div className={`tradepulse__kpi-value ${live ? 'text-emerald-600' : highlight ? 'text-emerald-600' : accent ? 'text-brand-700' : 'text-slate-900'}`}>{value}</div>
-            {sub && <div className='tradepulse__kpi-sub'>{sub}</div>}
+}) => (
+    <div className='tradepulse__kpi-card'>
+        <div className='tradepulse__kpi-header'>
+            <span className='tradepulse__kpi-label'>{label}</span>
+            {icon && (
+                <svg className='tradepulse__kpi-icon' viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    {icon === 'wallet' && <><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></>}
+                    {icon === 'target' && <><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></>}
+                    {icon === 'percent' && <><line x1="19" y1="5" x2="5" y2="19"></line><circle cx="6.5" cy="6.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></>}
+                    {icon === 'trending-up' && <><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></>}
+                    {icon === 'activity' && <><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></>}
+                    {icon === 'flag' && <><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></>}
+                </svg>
+            )}
         </div>
-    );
-};
+        <div className={`tradepulse__kpi-value ${live ? 'tradepulse__kpi-value--live' : highlight ? 'tradepulse__kpi-value--profit' : accent ? 'tradepulse__kpi-value--brand' : ''}`}>{value}</div>
+        {sub && <div className='tradepulse__kpi-sub'>{sub}</div>}
+    </div>
+);
 
-const StatusCard = ({ label, value, icon, accent, live, highlight }: {
+const SummaryCard = ({ label, value, icon, accent, highlight }: {
     label: string;
     value: string;
     icon?: string;
     accent?: boolean;
-    live?: boolean;
     highlight?: boolean;
-}) => {
-    const iconColor = accent ? 'text-brand-500' : live ? 'text-emerald-500' : 'text-slate-400';
-    return (
-        <div className='tradepulse__status-card'>
-            <div className='tradepulse__status-header'>
-                <span className='tradepulse__status-label'>{label}</span>
-                {icon && (
-                    <svg className={`tradepulse__status-icon ${iconColor}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        {icon === 'wallet' && <><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></>}
-                        {icon === 'flag' && <><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></>}
-                        {icon === 'activity' && <><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></>}
-                        {icon === 'calendar' && <><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></>}
-                        {icon === 'hash' && <><line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line></>}
-                        {icon === 'trending-up' && <><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></>}
-                        {icon === 'check-circle' && <><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></>}
-                    </svg>
-                )}
-            </div>
-            <div className={`tradepulse__status-value ${live ? 'text-emerald-600' : highlight ? 'text-emerald-600' : accent ? 'text-brand-700' : 'text-slate-900'}`}>{value}</div>
+}) => (
+    <div className='tradepulse__summary-card'>
+        <div className='tradepulse__summary-header'>
+            <span className='tradepulse__summary-label'>{label}</span>
+            {icon && (
+                <svg className='tradepulse__summary-icon' viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    {icon === 'activity' && <><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></>}
+                    {icon === 'trophy' && <><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></>}
+                    {icon === 'flame' && <><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></>}
+                    {icon === 'trending-up' && <><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></>}
+                </svg>
+            )}
         </div>
-    );
-};
+        <div className={`tradepulse__summary-value ${highlight ? 'tradepulse__summary-value--profit' : accent ? 'tradepulse__summary-value--brand' : ''}`}>{value}</div>
+    </div>
+);
 
 const formatCurrency = (value: number, currency: string): string => {
     if (Math.abs(value) < 0.01) return `${currency} 0.00`;

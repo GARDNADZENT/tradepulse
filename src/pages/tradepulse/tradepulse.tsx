@@ -9,20 +9,21 @@ import { localize } from '@deriv-com/translations';
 import './tradepulse.scss';
 
 const TradePulseApp = () => {
-    const [hash, setHash] = useState(() => window.location.hash.replace('#', '') || 'journey');
-    const [connection, setConnection] = useState<'connected' | 'disconnected' | 'error'>('disconnected');
+    const [activeTab, setActiveTab] = useState('journey');
 
     useEffect(() => {
         const onHashChange = () => {
-            const h = window.location.hash.replace('#', '') || 'journey';
-            setHash(h);
+            const hash = window.location.hash.replace('#', '');
+            if (['journey', 'schedule', 'performance', 'account'].includes(hash)) {
+                setActiveTab(hash);
+            }
         };
         window.addEventListener('hashchange', onHashChange);
         return () => window.removeEventListener('hashchange', onHashChange);
     }, []);
 
     const renderView = () => {
-        switch (hash) {
+        switch (activeTab) {
             case 'schedule': return <MasterSchedule />;
             case 'performance': return <Performance />;
             case 'account': return <AccountInfo />;
@@ -30,12 +31,6 @@ const TradePulseApp = () => {
             default: return <MyJourney />;
         }
     };
-
-    const connectionClass = connection === 'connected'
-        ? 'tradepulse__connection tradepulse__connection--connected'
-        : connection === 'error'
-            ? 'tradepulse__connection tradepulse__connection--error'
-            : 'tradepulse__connection';
 
     return (
         <div className='tradepulse'>
@@ -53,49 +48,82 @@ const TradePulseApp = () => {
                         </div>
                     </div>
 
-                    <nav className='tradepulse__subnav'>
-                        <a href='#journey' className={`tradepulse__subnav-link${hash === 'journey' ? ' tradepulse__subnav-link--active' : ''}`}>
-                            <svg className='tradepulse__subnav-icon' viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <div className='tradepulse__spacer'></div>
+
+                    <nav className='tradepulse__desktop-tabs'>
+                        <button className={`tradepulse__tab-btn${activeTab === 'journey' ? ' tradepulse__tab-btn--active' : ''}`} onClick={() => { setActiveTab('journey'); window.location.hash = 'journey'; }}>
+                            <svg className='tradepulse__tab-icon' viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <circle cx="12" cy="12" r="10"></circle>
                                 <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
                             </svg>
-                            <span>{localize('My Journey')}</span>
-                        </a>
-                        <a href='#schedule' className={`tradepulse__subnav-link${hash === 'schedule' ? ' tradepulse__subnav-link--active' : ''}`}>
-                            <svg className='tradepulse__subnav-icon' viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            {localize('My Journey')}
+                        </button>
+                        <button className={`tradepulse__tab-btn${activeTab === 'schedule' ? ' tradepulse__tab-btn--active' : ''}`} onClick={() => { setActiveTab('schedule'); window.location.hash = 'schedule'; }}>
+                            <svg className='tradepulse__tab-icon' viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
                                 <line x1="16" y1="2" x2="16" y2="6"></line>
                                 <line x1="8" y1="2" x2="8" y2="6"></line>
                                 <line x1="3" y1="10" x2="21" y2="10"></line>
                             </svg>
-                            <span>{localize('Master Schedule')}</span>
-                        </a>
-                        <a href='#performance' className={`tradepulse__subnav-link${hash === 'performance' ? ' tradepulse__subnav-link--active' : ''}`}>
-                            <svg className='tradepulse__subnav-icon' viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            {localize('Master Schedule')}
+                        </button>
+                        <button className={`tradepulse__tab-btn${activeTab === 'performance' ? ' tradepulse__tab-btn--active' : ''}`} onClick={() => { setActiveTab('performance'); window.location.hash = 'performance'; }}>
+                            <svg className='tradepulse__tab-icon' viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <line x1="18" y1="20" x2="18" y2="10"></line>
                                 <line x1="12" y1="20" x2="12" y2="4"></line>
                                 <line x1="6" y1="20" x2="6" y2="14"></line>
                             </svg>
-                            <span>{localize('Performance')}</span>
-                        </a>
-                        <a href='#account' className={`tradepulse__subnav-link${hash === 'account' ? ' tradepulse__subnav-link--active' : ''}`}>
-                            <svg className='tradepulse__subnav-icon' viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            {localize('Performance')}
+                        </button>
+                        <button className={`tradepulse__tab-btn${activeTab === 'account' ? ' tradepulse__tab-btn--active' : ''}`} onClick={() => { setActiveTab('account'); window.location.hash = 'account'; }}>
+                            <svg className='tradepulse__tab-icon' viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path>
                                 <path d="M3 12v5a2 2 0 0 0 2 2h16v-5"></path>
                                 <path d="M18 12a2 2 0 0 1 0 4"></path>
                             </svg>
-                            <span>{localize('Account')}</span>
-                        </a>
+                            {localize('Account')}
+                        </button>
                     </nav>
-
-                    <div className={connectionClass}>
-                        <span className='tradepulse__connection-dot'></span>
-                        <span>{connection === 'connected' ? localize('Live') : connection === 'error' ? localize('Error') : localize('Disconnected')}</span>
-                    </div>
                 </div>
             </header>
 
-            <main className='tradepulse__content'>
+            {/* Mobile bottom nav */}
+            <nav className='tradepulse__bottom-nav'>
+                <button className={`tradepulse__bottom-nav-btn${activeTab === 'journey' ? ' tradepulse__bottom-nav-btn--active' : ''}`} onClick={() => { setActiveTab('journey'); window.location.hash = 'journey'; }}>
+                    <svg className='tradepulse__bottom-nav-icon' viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+                    </svg>
+                    {localize('Journey')}
+                </button>
+                <button className={`tradepulse__bottom-nav-btn${activeTab === 'schedule' ? ' tradepulse__bottom-nav-btn--active' : ''}`} onClick={() => { setActiveTab('schedule'); window.location.hash = 'schedule'; }}>
+                    <svg className='tradepulse__bottom-nav-icon' viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                    {localize('Schedule')}
+                </button>
+                <button className={`tradepulse__bottom-nav-btn${activeTab === 'performance' ? ' tradepulse__bottom-nav-btn--active' : ''}`} onClick={() => { setActiveTab('performance'); window.location.hash = 'performance'; }}>
+                    <svg className='tradepulse__bottom-nav-icon' viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="20" x2="18" y2="10"></line>
+                        <line x1="12" y1="20" x2="12" y2="4"></line>
+                        <line x1="6" y1="20" x2="6" y2="14"></line>
+                    </svg>
+                    {localize('Performance')}
+                </button>
+                <button className={`tradepulse__bottom-nav-btn${activeTab === 'account' ? ' tradepulse__bottom-nav-btn--active' : ''}`} onClick={() => { setActiveTab('account'); window.location.hash = 'account'; }}>
+                    <svg className='tradepulse__bottom-nav-icon' viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path>
+                        <path d="M3 12v5a2 2 0 0 0 2 2h16v-5"></path>
+                        <path d="M18 12a2 2 0 0 1 0 4"></path>
+                    </svg>
+                    {localize('Account')}
+                </button>
+            </nav>
+
+            <main className='tradepulse__main'>
                 {renderView()}
             </main>
         </div>

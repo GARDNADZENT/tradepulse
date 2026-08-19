@@ -83,7 +83,7 @@ const MasterSchedule = observer(() => {
 
     if (!journeyLoaded || !journey || (loading && balance === 0)) {
         return (
-            <div className='tradepulse__section'>
+            <div className='tradepulse__page'>
                 <div className='tradepulse__card'>
                     <div className='tradepulse__card-header'>
                         <div className='tradepulse__section-brand'>{localize('Planning')}</div>
@@ -99,9 +99,9 @@ const MasterSchedule = observer(() => {
     }
 
     return (
-        <div className='tradepulse'>
+        <div className='tradepulse__page fade-in'>
             {/* Schedule Setup */}
-            <div className='tradepulse__section fade-in'>
+            <section className='tradepulse__section'>
                 <div className='tradepulse__card'>
                     <div className='tradepulse__card-header'>
                         <div className='tradepulse__section-brand'>
@@ -115,16 +115,17 @@ const MasterSchedule = observer(() => {
                         </div>
                         <h2 className='tradepulse__section-title'>{localize('Master Schedule')}</h2>
                         <p className='tradepulse__section-subtitle'>{localize('Set your trading goal to automatically generate your complete trading plan.')}</p>
+                        <div className='tradepulse__card-meta'>Compound growth model</div>
                     </div>
                     <div className='tradepulse__card-body'>
                         <form onSubmit={e => { e.preventDefault(); handleGenerate(); }} className='tradepulse__form-grid'>
                             <div className='tradepulse__form-group'>
                                 <label className='tradepulse__form-label'>{localize('Initial Balance')}</label>
-                                <div className='relative'>
+                                <div className='tradepulse__input-wrap'>
                                     <span className='tradepulse__input-prefix'>$</span>
                                     <input
                                         type='number'
-                                        className='tradepulse__form-input tradepulse__form-input--prefix'
+                                        className='tradepulse__form-input'
                                         value={form.initial_balance}
                                         onChange={e => updateField('initial_balance', e.target.value)}
                                         min='1'
@@ -168,7 +169,7 @@ const MasterSchedule = observer(() => {
                                     required
                                 />
                             </div>
-                            <div className='tradepulse__form-group' style={{ gridColumn: '1 / -1' }}>
+                            <div className='tradepulse__form-actions'>
                                 <button type='submit' className='tradepulse__btn tradepulse__btn--primary' disabled={isGenerating}>
                                     {isGenerating ? localize('Generating...') : localize('Generate Master Schedule')}
                                 </button>
@@ -176,19 +177,19 @@ const MasterSchedule = observer(() => {
                         </form>
                     </div>
                 </div>
-            </div>
+            </section>
 
             {/* Generated Schedule */}
             {schedule.length > 0 && (
-                <div className='tradepulse__section fade-in'>
+                <section className='tradepulse__section fade-in'>
                     <div className='tradepulse__card'>
                         <div className='tradepulse__card-header'>
-                            <h3 className='tradepulse__section-title' style={{ fontSize: '1.1rem' }}>{localize('Generated Schedule')}</h3>
-                            <p className='text-xs text-slate-500 mt-1'>
+                            <h3 className='tradepulse__section-title'>{localize('Generated Schedule')}</h3>
+                            <p className='tradepulse__section-subtitle'>
                                 {schedule.length} {localize('days')} · {schedule[0].rate}% {localize('daily')} · {localize('starting')} {formatCurrency(schedule[0].start, currency)} · {localize('from')} {schedule[0].date}
                             </p>
                         </div>
-                        <div className='tradepulse__table-wrapper scrollbar-thin'>
+                        <div className='tradepulse__table-wrapper'>
                             <table className='tradepulse__table'>
                                 <thead>
                                     <tr>
@@ -215,7 +216,7 @@ const MasterSchedule = observer(() => {
                                             <tr key={row.day} className={isToday ? 'tradepulse__table-row--today' : ''}>
                                                 <td className='font-medium'>
                                                     <div>{localize('Day')} {row.day}</div>
-                                                    <div className='text-[11px] text-slate-500 mono'>{row.date}</div>
+                                                    <div className='tradepulse__table-mono'>{row.date}</div>
                                                 </td>
                                                 <td className='text-right mono text-slate-700'>{formatCurrency(row.start, currency)}</td>
                                                 <td className='text-right mono text-slate-700'>{formatCurrency(row.end, currency)}</td>
@@ -229,7 +230,6 @@ const MasterSchedule = observer(() => {
                                                 </td>
                                                 <td className='text-center'>
                                                     <span className={`tradepulse__chip ${statusClass}`}>
-                                                        {isToday && status === 'pending' && <span className='tradepulse__chip tradepulse__chip--today'>{localize('Today')}</span>}
                                                         {statusLabel}
                                                     </span>
                                                 </td>
@@ -239,11 +239,11 @@ const MasterSchedule = observer(() => {
                                 </tbody>
                             </table>
                         </div>
-                        <div className='px-6 sm:px-8 py-5 bg-slate-50/60 border-t border-slate-100 text-xs text-slate-600 leading-relaxed'>
+                        <div className='tradepulse__card-footer'>
                             {localize('Your master schedule is generated from the goal you set above. Your actual account balance will automatically be compared with the expected balance for each trading day.')}
                         </div>
                     </div>
-                </div>
+                </section>
             )}
         </div>
     );
