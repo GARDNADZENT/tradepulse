@@ -2,8 +2,6 @@ import type { Journey, JourneyDay, ScheduleStatus, ScheduleRow } from '@/pages/t
 import { addComma, getDecimalPlaces } from '@/components/shared';
 import { journeyService } from '@/services/supabase/journey.service';
 
-export const getJourneyStorageKey = (loginid: string) => `tradepulse_journey_${loginid}`;
-
 export const getDefaultJourney = (loginid: string): Journey => ({
     loginid,
     initial_balance: 0,
@@ -17,39 +15,16 @@ export const getDefaultJourney = (loginid: string): Journey => ({
 export const loadJourney = async (loginid: string): Promise<Journey | null> => {
     const supabaseJourney = await journeyService.loadJourney(loginid);
     if (supabaseJourney) {
-        localStorage.setItem(getJourneyStorageKey(loginid), JSON.stringify(supabaseJourney));
         return supabaseJourney;
     }
-
-    try {
-        const raw = localStorage.getItem(getJourneyStorageKey(loginid));
-        if (!raw) return null;
-        const parsed = JSON.parse(raw) as Journey;
-        if (!parsed.initial_balance || !parsed.cycle_length_days || !parsed.start_date) {
-            return null;
-        }
-        return parsed;
-    } catch {
-        return null;
-    }
+    return null;
 };
 
 export const loadJourneySync = (loginid: string): Journey | null => {
-    try {
-        const raw = localStorage.getItem(getJourneyStorageKey(loginid));
-        if (!raw) return null;
-        const parsed = JSON.parse(raw) as Journey;
-        if (!parsed.initial_balance || !parsed.cycle_length_days || !parsed.start_date) {
-            return null;
-        }
-        return parsed;
-    } catch {
-        return null;
-    }
+    return null;
 };
 
 export const saveJourney = async (loginid: string, journey: Journey) => {
-    localStorage.setItem(getJourneyStorageKey(loginid), JSON.stringify(journey));
     const saved = await journeyService.saveJourney(loginid, journey);
     if (saved?.id) {
         const schedule = buildSchedule(journey);
