@@ -224,8 +224,8 @@
 }
 
 .tradepulse__subnav-btn:hover {
-    color: rgba(30, 41, 59, .6);
-    background: rgba(15, 23, 42, .4);
+    color: var(--tp-text-primary);
+    background: var(--tp-surface);
 }
 
 .tradepulse__subnav-btn--active {
@@ -276,7 +276,7 @@
 .tradepulse__modal-title {
     font-size: 1.1rem;
     font-weight: 700;
-    color: rgba(30, 41, 59, .6);
+    color: var(--tp-text-primary);
     margin: 0;
 }
 
@@ -409,7 +409,7 @@
 .tradepulse__section-title {
     font-size: 1.75rem;
     font-weight: 700;
-    color: rgba(30, 41, 59, .6);
+    color: var(--tp-text-primary);
     letter-spacing: -0.01em;
     margin: 0;
 }
@@ -429,7 +429,7 @@
 
 /* ---------- Card ---------- */
 .tradepulse__card {
-    background: rgba(30, 41, 59, .4);
+    background: var(--tp-surface);
     border: 1px solid rgba(148, 163, 184, .08);
     border-radius: 20px;
     box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px -12px rgba(15, 23, 42, .12);
@@ -459,7 +459,7 @@
 
 .tradepulse__card-footer {
     padding: 20px 28px;
-    background: rgba(15, 23, 42, .4);
+    background: var(--tp-surface);
     border-top: 1px solid rgba(148, 163, 184, .08);
     font-size: 0.8rem;
     color: #94a3b8;
@@ -493,7 +493,7 @@
 }
 
 .tradepulse__kpi-card {
-    background: rgba(30, 41, 59, .4);
+    background: var(--tp-surface);
     border: 1px solid rgba(148, 163, 184, .08);
     border-radius: 16px;
     box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px -12px rgba(15, 23, 42, .12);
@@ -531,9 +531,9 @@
 }
 
 .tradepulse__kpi-value {
-    font-size: 1.75rem;
+    font-size: 2rem;
     font-weight: 700;
-    color: rgba(30, 41, 59, .6);
+    color: var(--tp-text-primary);
     font-family: 'JetBrains Mono', monospace;
     letter-spacing: -0.02em;
 }
@@ -557,7 +557,7 @@
 
 /* ---------- Progress ---------- */
 .tradepulse__progress-card {
-    background: rgba(30, 41, 59, .4);
+    background: var(--tp-surface);
     border: 1px solid rgba(148, 163, 184, .08);
     border-radius: 16px;
     box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px -12px rgba(15, 23, 42, .12);
@@ -585,7 +585,7 @@
 .tradepulse__progress-pct {
     font-size: 1.5rem;
     font-weight: 700;
-    color: rgba(30, 41, 59, .6);
+    color: var(--tp-text-primary);
     font-family: 'JetBrains Mono', monospace;
 }
 
@@ -668,7 +668,7 @@
 }
 
 .tradepulse__summary-card {
-    background: rgba(30, 41, 59, .4);
+    background: var(--tp-surface);
     border: 1px solid rgba(148, 163, 184, .08);
     border-radius: 16px;
     box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px -12px rgba(15, 23, 42, .12);
@@ -708,7 +708,7 @@
 .tradepulse__summary-value {
     font-size: 1.25rem;
     font-weight: 700;
-    color: rgba(30, 41, 59, .6);
+    color: var(--tp-text-primary);
     font-family: 'JetBrains Mono', monospace;
 }
 
@@ -914,7 +914,7 @@
 }
 
 .tradepulse__btn--secondary:hover {
-    background: rgba(15, 23, 42, .4);
+    background: var(--tp-surface);
 }
 
 .tradepulse__btn--danger {
@@ -935,8 +935,8 @@
 }
 
 .tradepulse__btn--ghost:hover {
-    background: rgba(15, 23, 42, .4);
-    color: rgba(30, 41, 59, .6);
+    background: var(--tp-surface);
+    color: var(--tp-text-primary);
 }
 
 /* ---------- Account Page ---------- */
@@ -953,7 +953,7 @@
 }
 
 .tradepulse__account-block {
-    background: rgba(30, 41, 59, .4);
+    background: var(--tp-surface);
     border: 1px solid rgba(148, 163, 184, .08);
     border-radius: 16px;
     box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px -12px rgba(15, 23, 42, .12);
@@ -1011,7 +1011,7 @@
     padding: 12px;
     border-radius: 12px;
     border: 1px solid rgba(148, 163, 184, .1);
-    background: rgba(30, 41, 59, .4);
+    background: var(--tp-surface);
     transition: all .2s ease;
 }
 
@@ -1050,7 +1050,7 @@
 .tradepulse__account-login {
     font-size: 0.85rem;
     font-weight: 600;
-    color: rgba(30, 41, 59, .6);
+    color: var(--tp-text-primary);
     font-family: 'JetBrains Mono', monospace;
 }
 

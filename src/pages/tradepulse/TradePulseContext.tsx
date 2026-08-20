@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { useStore } from '@/hooks/useStore';
 import { loadJourney, normalizeJourneyDays } from './utils/calculations';
 
 interface Account {
@@ -107,11 +108,16 @@ export const useTradePulse = () => {
 };
 
 export const TradePulseProvider = ({ children }: { children: ReactNode }) => {
+    const store = useStore();
+    const storeClient = store.client;
+    const initialLoginid = storeClient?.loginid ?? null;
+    const initialAccounts = storeClient?.accounts ?? [];
+
     const [state, setState] = useState<TradePulseState>({
         isLoggedIn: false,
         token: null,
-        accounts: [],
-        currentAccount: null,
+        accounts: initialAccounts.length > 0 ? initialAccounts : [],
+        currentAccount: initialLoginid,
         schedule: null,
         todayDay: 0,
         contracts: [],
@@ -124,6 +130,12 @@ export const TradePulseProvider = ({ children }: { children: ReactNode }) => {
         journeyError: null,
         journeyModalOpen: false,
     });
+
+    useEffect(() => {
+        if (initialLoginid && !state.currentAccount) {
+            setState(prev => ({ ...prev, currentAccount: initialLoginid }));
+        }
+    }, [initialLoginid, state.currentAccount]);
 
     const setPartial = useCallback((updates: Partial<TradePulseState>) => {
         setState(prev => ({ ...prev, ...updates }));

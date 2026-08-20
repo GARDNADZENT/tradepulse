@@ -1,6 +1,7 @@
 // @ts-nocheck — TradePulse component with known type gaps
 import React, { useState } from 'react';
 import { observer } from 'mobx-react-lite';
+import { useStore } from '@/hooks/useStore';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useTradePulse } from '../TradePulseContext';
 import { localize } from '@deriv-com/translations';
@@ -15,6 +16,8 @@ import useTradePulseFetch from '../hooks/useTradePulseFetch';
 import './MyJourney.scss';
 
 const MyJourney = observer(() => {
+    const store = useStore();
+    const storeLoginid = store.client?.loginid ?? null;
     const { connectionStatus } = useApiBase();
     const { balance: fetchedBalance, loading } = useTradePulseFetch();
     const balance = fetchedBalance;
@@ -44,8 +47,9 @@ const MyJourney = observer(() => {
 
     const handleLockJourney = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        if (!currentAccount) {
-            console.error('No account selected');
+        const loginid = currentAccount || storeLoginid;
+        if (!loginid) {
+            alert('No account selected. Please log in first.');
             return;
         }
         setIsLocking(true);
@@ -56,8 +60,8 @@ const MyJourney = observer(() => {
         const start_date = (form.elements.namedItem('j-start') as HTMLInputElement).value;
 
         try {
-            await saveJourney(currentAccount, {
-                loginid: currentAccount,
+            await saveJourney(loginid, {
+                loginid,
                 initial_balance,
                 daily_target_pct,
                 cycle_length_days,
@@ -69,6 +73,7 @@ const MyJourney = observer(() => {
             setShowJourneyModal(false);
         } catch (err) {
             console.error('Lock journey failed:', err);
+            alert(err instanceof Error ? err.message : 'Failed to lock journey');
         } finally {
             setIsLocking(false);
         }
