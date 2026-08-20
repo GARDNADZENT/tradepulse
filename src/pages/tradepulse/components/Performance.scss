@@ -1,10 +1,30 @@
+/* TradePulse dark theme overrides */
+:root {
+    --text-prominent: #f1f5f9;
+    --text-less-prominent: #94a3b8;
+    --text-loss-danger: #fca5a5;
+    --general-main-2: rgba(30, 41, 59, .4);
+    --general-section-1: rgba(30, 41, 59, .6);
+    --border-normal: rgba(148, 163, 184, .08);
+}
+
 @import '@/components/shared/styles/_themes.scss';
 @import '@/components/shared/styles/_constants.scss';
+
+/* TradePulse dark theme overrides */
+:root {
+    --text-prominent: #f1f5f9;
+    --text-less-prominent: #94a3b8;
+    --text-loss-danger: #fca5a5;
+    --general-main-2: rgba(30, 41, 59, .4);
+    --general-section-1: rgba(30, 41, 59, .6);
+    --border-normal: rgba(148, 163, 184, .08);
+}
 
 .performance {
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 32px;
 }
 
 .performance__loading {
@@ -211,11 +231,11 @@
 }
 
 .performance__bar--profit {
-    background: linear-gradient(180deg, #10b981, #059669);
+    background: linear-gradient(180deg, #34d399, #059669);
 }
 
 .performance__bar--loss {
-    background: linear-gradient(180deg, #ef4444, #b91c1c);
+    background: linear-gradient(180deg, #fca5a5, #b91c1c);
 }
 
 .performance__chart-labels {
@@ -285,6 +305,39 @@
 
 .performance__table-row:hover {
     background: rgba(99, 102, 241, 0.03);
+}
+
+.tradepulse__win-fill--high {
+    background: #34d399;
+}
+
+.tradepulse__win-fill--mid {
+    background: #fbbf24;
+}
+
+.tradepulse__win-fill--low {
+    background: #fca5a5;
+}
+
+.tradepulse__text-success {
+    color: #34d399;
+}
+
+.tradepulse__text-danger {
+    color: #fca5a5;
+}
+
+.tradepulse__table-name {
+    font-weight: 600;
+    color: #e2e8f0;
+}
+
+.tradepulse__table-right {
+    text-align: right;
+}
+
+.tradepulse__table-bold {
+    font-weight: 600;
 }
 
 @media (max-width: 768px) {

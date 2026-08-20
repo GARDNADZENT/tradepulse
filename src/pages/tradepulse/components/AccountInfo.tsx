@@ -61,14 +61,20 @@ const AccountInfo = observer(() => {
     if (loading && balance === 0) {
         return (
             <div className='tradepulse__page'>
-                <div className='tradepulse__card'>
-                    <div className='tradepulse__card-header'>
+                <div className='tradepulse__section-header'>
+                    <div>
                         <div className='tradepulse__section-brand'>{localize('Overview')}</div>
                         <h2 className='tradepulse__section-title'>{localize('Account Summary')}</h2>
+                        <p className='tradepulse__section-subtitle'>{localize('Complete view of your trading activity and account details.')}</p>
                     </div>
-                    <div className='tradepulse__card-body'>
-                        <p className='text-sm text-slate-500'>{localize('Loading account details...')}</p>
-                    </div>
+                </div>
+                <div className='tradepulse__summary-grid'>
+                    {[...Array(6)].map((_, i) => (
+                        <div key={i} className='tradepulse__summary-card'>
+                            <div className='tradepulse__skeleton tradepulse__skeleton-text tradepulse__skeleton-text--short'></div>
+                            <div className='tradepulse__skeleton tradepulse__skeleton-title'></div>
+                        </div>
+                    ))}
                 </div>
             </div>
         );
@@ -146,7 +152,7 @@ const AccountInfo = observer(() => {
                                 <div className='tradepulse__account-rows'>
                                     <div className='tradepulse__account-row'>
                                         <span className='tradepulse__account-label'>{localize('Current Balance')}</span>
-                                        <span className='tradepulse__account-value mono text-emerald-700 font-semibold'>{formatCurrency(balance, currency)}</span>
+                                        <span className='tradepulse__account-value mono tradepulse__text-success'>{formatCurrency(balance, currency)}</span>
                                     </div>
                                 </div>
                             </div>
@@ -165,7 +171,7 @@ const SummaryCard = ({ label, value, icon, tone, mono }: {
     tone?: string;
     mono?: boolean;
 }) => {
-    const iconColor = tone === 'emerald' ? 'text-emerald-500' : tone === 'rose' ? 'text-rose-500' : tone === 'brand' ? 'text-brand-500' : tone === 'amber' ? 'text-amber-500' : 'text-slate-400';
+    const iconColor = tone === 'emerald' ? 'tradepulse__text-success' : tone === 'rose' ? 'tradepulse__text-danger' : tone === 'brand' ? 'tradepulse__text-brand' : tone === 'amber' ? 'tradepulse__text-warning' : 'tradepulse__text-muted';
     return (
         <div className='tradepulse__summary-card'>
             <div className='tradepulse__summary-header'>

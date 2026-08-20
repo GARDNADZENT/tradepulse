@@ -91,7 +91,7 @@ const MasterSchedule = observer(() => {
                         <p className='tradepulse__section-subtitle'>{localize('Set your trading goal to automatically generate your complete trading plan.')}</p>
                     </div>
                     <div className='tradepulse__card-body'>
-                        <p className='text-sm text-slate-500'>{localize('Loading schedule...')}</p>
+                        <p className='tradepulse__text-muted'>{localize('Loading schedule...')}</p>
                     </div>
                 </div>
             </div>
@@ -193,14 +193,14 @@ const MasterSchedule = observer(() => {
                             <table className='tradepulse__table'>
                                 <thead>
                                     <tr>
-                                        <th className='text-left'>{localize('Day')}</th>
-                                        <th className='text-right'>{localize('Expected Start')}</th>
-                                        <th className='text-right'>{localize('Expected End')}</th>
-                                        <th className='text-right'>{localize('Daily Profit Target')}</th>
-                                        <th className='text-right'>{localize('Required %')}</th>
-                                        <th className='text-right'>{localize('Actual Balance')}</th>
-                                        <th className='text-right'>{localize('Difference')}</th>
-                                        <th className='text-center'>{localize('Status')}</th>
+                                        <th className='tradepulse__table-left'>{localize('Day')}</th>
+                                        <th className='tradepulse__table-right'>{localize('Expected Start')}</th>
+                                        <th className='tradepulse__table-right'>{localize('Expected End')}</th>
+                                        <th className='tradepulse__table-right'>{localize('Daily Profit Target')}</th>
+                                        <th className='tradepulse__table-right'>{localize('Required %')}</th>
+                                        <th className='tradepulse__table-right'>{localize('Actual Balance')}</th>
+                                        <th className='tradepulse__table-right'>{localize('Difference')}</th>
+                                        <th className='tradepulse__table-center'>{localize('Status')}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -214,21 +214,21 @@ const MasterSchedule = observer(() => {
 
                                         return (
                                             <tr key={row.day} className={isToday ? 'tradepulse__table-row--today' : ''}>
-                                                <td className='font-medium'>
+                                                <td className='tradepulse__table-name'>
                                                     <div>{localize('Day')} {row.day}</div>
                                                     <div className='tradepulse__table-mono'>{row.date}</div>
                                                 </td>
-                                                <td className='text-right mono text-slate-700'>{formatCurrency(row.start, currency)}</td>
-                                                <td className='text-right mono text-slate-700'>{formatCurrency(row.end, currency)}</td>
-                                                <td className='text-right mono text-brand-700 font-semibold'>+{formatCurrency(row.profit, currency)}</td>
-                                                <td className='text-right mono text-slate-700'>{row.rate}%</td>
-                                                <td className={`text-right mono font-semibold ${computed.actual != null && computed.actual >= row.end ? 'text-emerald-600' : computed.actual != null ? 'text-rose-600' : 'text-slate-400'}`}>
+                                                <td className='tradepulse__table-right tradepulse__table-mono'>{formatCurrency(row.start, currency)}</td>
+                                                <td className='tradepulse__table-right tradepulse__table-mono'>{formatCurrency(row.end, currency)}</td>
+                                                <td className='tradepulse__table-right tradepulse__table-mono tradepulse__table-brand'>+{formatCurrency(row.profit, currency)}</td>
+                                                <td className='tradepulse__table-right tradepulse__table-mono'>{row.rate}%</td>
+                                                <td className={`tradepulse__table-right tradepulse__table-mono tradepulse__table-bold ${computed.actual != null && computed.actual >= row.end ? 'tradepulse__text-success' : computed.actual != null ? 'tradepulse__text-danger' : 'tradepulse__text-muted'}`}>
                                                     {computed.actual != null ? formatCurrency(computed.actual, currency) : '—'}
                                                 </td>
-                                                <td className={`text-right mono font-semibold ${computed.diff == null ? 'text-slate-400' : computed.diff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                <td className={`tradepulse__table-right tradepulse__table-mono tradepulse__table-bold ${computed.diff == null ? 'tradepulse__text-muted' : computed.diff >= 0 ? 'tradepulse__text-success' : 'tradepulse__text-danger'}`}>
                                                     {computed.diff != null ? `${computed.diff >= 0 ? '+' : ''}${formatCurrency(computed.diff, currency)}` : '—'}
                                                 </td>
-                                                <td className='text-center'>
+                                                <td className='tradepulse__table-center'>
                                                     <span className={`tradepulse__chip ${statusClass}`}>
                                                         {statusLabel}
                                                     </span>

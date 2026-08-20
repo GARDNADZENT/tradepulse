@@ -4,6 +4,9 @@ import { sendViaNewSystemWithPromise } from '@/auth/NewDerivAuth';
 import { useStore } from '@/hooks/useStore';
 import type { PerformanceStats, DailyPnL } from '@/pages/tradepulse/types';
 
+const fetchCache = new Map<string, { promise: Promise<any>; timestamp: number }>();
+const CACHE_TTL = 30000;
+
 const useTradePulseFetch = () => {
     const { client } = useStore();
     const loginid = client?.loginid ?? '';
@@ -28,11 +31,16 @@ const useTradePulseFetch = () => {
 
         const waitForSocket = () => {
             return new Promise<void>((resolve) => {
+                let attempts = 0;
+                const maxAttempts = 20;
                 const check = () => {
                     if (window._newSystemWS?.readyState === WebSocket.OPEN) {
                         resolve();
+                    } else if (attempts++ >= maxAttempts) {
+                        console.warn('[useTradePulseFetch] socket not ready after 4s, proceeding anyway');
+                        resolve();
                     } else {
-                        setTimeout(check, 500);
+                        setTimeout(check, 200);
                     }
                 };
                 check();
@@ -49,16 +57,27 @@ const useTradePulseFetch = () => {
 
                 console.log('[useTradePulseFetch] socket ready, fetching data...');
 
-                const [profitTableRes, balanceRes] = await Promise.all([
-                    sendViaNewSystemWithPromise({ profit_table: 1, description: 1, limit: 500 }).catch((err) => {
+                const cacheKey = `profit_table_${loginid}`;
+                const now = Date.now();
+                const cached = fetchCache.get(cacheKey);
+                let profitTablePromise: Promise<any>;
+                if (cached && now - cached.timestamp < CACHE_TTL) {
+                    profitTablePromise = cached.promise;
+                } else {
+                    const promise = sendViaNewSystemWithPromise({ profit_table: 1, description: 1, limit: 500 }).catch((err) => {
                         console.warn('[TradePulse] profit_table fetch failed:', err);
                         return null;
-                    }),
-                    sendViaNewSystemWithPromise({ balance: 1 }).catch((err) => {
-                        console.warn('[TradePulse] balance fetch failed:', err);
-                        return null;
-                    }),
-                ]);
+                    });
+                    fetchCache.set(cacheKey, { promise, timestamp: now });
+                    profitTablePromise = promise;
+                }
+
+                const balancePromise = sendViaNewSystemWithPromise({ balance: 1 }).catch((err) => {
+                    console.warn('[TradePulse] balance fetch failed:', err);
+                    return null;
+                });
+
+                const [profitTableRes, balanceRes] = await Promise.all([profitTablePromise, balancePromise]);
 
                 if (cancelled) return;
 
@@ -109,7 +128,6 @@ const useTradePulseFetch = () => {
                 if (!cancelled) setLoading(false);
             }
 
-            // Refresh balance every 5 seconds like the old project
             balanceInterval = setInterval(async () => {
                 if (cancelled) return;
                 try {

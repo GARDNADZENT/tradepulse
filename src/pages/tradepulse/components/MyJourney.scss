@@ -1,10 +1,22 @@
+/* TradePulse dark theme overrides */
+:root {
+    --text-prominent: #f1f5f9;
+    --text-less-prominent: #94a3b8;
+    --text-profit-success: #34d399;
+    --text-loss-danger: #fca5a5;
+    --general-main-2: rgba(30, 41, 59, .4);
+    --general-section-1: rgba(30, 41, 59, .6);
+    --border-normal: rgba(148, 163, 184, .08);
+    --transparent-success: rgba(16, 185, 129, .1);
+}
+
 @import '@/components/shared/styles/_themes.scss';
 @import '@/components/shared/styles/_constants.scss';
 
 .my-journey {
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 32px;
 }
 
 .my-journey__header {
@@ -34,7 +46,7 @@
 
 .my-journey__grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(2, 1fr);
     gap: 16px;
 }
 
