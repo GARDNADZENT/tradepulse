@@ -8,8 +8,10 @@ const isMissingColumnError = (error: { message?: string; code?: string } | null)
 };
 
 export const journeyService = {
-    async loadJourney(loginid: string): Promise<(Journey & { id?: string }) | null> {
-        if (!supabase) return null;
+    async loadJourney(loginid: string): Promise<(Journey & { id?: string })> {
+        if (!supabase) {
+            throw new Error('Supabase client not initialized. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY environment variables.');
+        }
 
         const { data, error } = await supabase
             .from('journeys')
@@ -19,14 +21,17 @@ export const journeyService = {
 
         if (error) {
             if (isMissingColumnError(error)) {
-                console.warn('[Supabase] journeys table is missing expected columns. Run supabase/journeys-table.sql in Supabase SQL Editor.');
-            } else {
-                console.error('Supabase loadJourney error:', error);
+                const msg = 'journeys table is missing expected columns. Run supabase/journeys-table.sql in Supabase SQL Editor.';
+                console.error('[Supabase]', msg, error);
+                throw new Error(msg);
             }
-            return null;
+            console.error('Supabase loadJourney error:', error);
+            throw new Error(`Supabase error: ${error.message || JSON.stringify(error)}`);
         }
 
-        if (!data) return null;
+        if (!data) {
+            throw new Error('No journey found for this account.');
+        }
 
         return {
             id: data.id,
@@ -40,8 +45,10 @@ export const journeyService = {
         };
     },
 
-    async saveJourney(loginid: string, journey: Journey): Promise<(Journey & { id?: string }) | null> {
-        if (!supabase) return null;
+    async saveJourney(loginid: string, journey: Journey): Promise<(Journey & { id?: string })> {
+        if (!supabase) {
+            throw new Error('Supabase client not initialized. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY environment variables.');
+        }
 
         const { data, error } = await supabase
             .from('journeys')
@@ -58,11 +65,16 @@ export const journeyService = {
 
         if (error) {
             if (isMissingColumnError(error)) {
-                console.warn('[Supabase] journeys table is missing expected columns. Run supabase/journeys-table.sql in Supabase SQL Editor.');
-            } else {
-                console.error('Supabase saveJourney error:', error);
+                const msg = 'journeys table is missing expected columns. Run supabase/journeys-table.sql in Supabase SQL Editor.';
+                console.error('[Supabase]', msg, error);
+                throw new Error(msg);
             }
-            return null;
+            console.error('Supabase saveJourney error:', error);
+            throw new Error(`Supabase error: ${error.message || JSON.stringify(error)}`);
+        }
+
+        if (!data) {
+            throw new Error('Supabase returned no data after upsert.');
         }
 
         return {
@@ -88,11 +100,12 @@ export const journeyService = {
 
         if (error) {
             if (isMissingColumnError(error)) {
-                console.warn('[Supabase] journey_days table is missing expected columns. Run supabase/journeys-table.sql in Supabase SQL Editor.');
-            } else {
-                console.error('Supabase loadJourneyDays error:', error);
+                const msg = 'journey_days table is missing expected columns. Run supabase/journeys-table.sql in Supabase SQL Editor.';
+                console.error('[Supabase]', msg, error);
+                throw new Error(msg);
             }
-            return [];
+            console.error('Supabase loadJourneyDays error:', error);
+            throw new Error(`Supabase error: ${error.message || JSON.stringify(error)}`);
         }
 
         if (!data || data.length === 0) return [];
@@ -134,10 +147,12 @@ export const journeyService = {
 
         if (error) {
             if (isMissingColumnError(error)) {
-                console.warn('[Supabase] journey_days table is missing expected columns. Run supabase/journeys-table.sql in Supabase SQL Editor.');
-            } else {
-                console.error('Supabase saveJourneyDays error:', error);
+                const msg = 'journey_days table is missing expected columns. Run supabase/journeys-table.sql in Supabase SQL Editor.';
+                console.error('[Supabase]', msg, error);
+                throw new Error(msg);
             }
+            console.error('Supabase saveJourneyDays error:', error);
+            throw new Error(`Supabase error: ${error.message || JSON.stringify(error)}`);
         }
     },
 

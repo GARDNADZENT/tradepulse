@@ -37,21 +37,22 @@ export const normalizeJourneyDays = (rawDays: any[] | null | undefined, rate: nu
 };
 
 export const loadJourney = async (loginid: string): Promise<{ journey: Journey | null; schedule: { initial: number; days: number; rate: number; startDate: string; rows: ScheduleRow[] } | null }> => {
-    const supabaseJourney = await journeyService.loadJourney(loginid);
-    if (!supabaseJourney) {
+    try {
+        const supabaseJourney = await journeyService.loadJourney(loginid);
+        const days = await journeyService.loadJourneyDays(supabaseJourney.id);
+        const schedule = {
+            initial: supabaseJourney.initial_balance,
+            days: supabaseJourney.cycle_length_days,
+            rate: supabaseJourney.daily_target_pct,
+            startDate: supabaseJourney.start_date,
+            rows: normalizeJourneyDays(days, supabaseJourney.daily_target_pct),
+        };
+
+        return { journey: supabaseJourney, schedule };
+    } catch (e) {
+        console.error('Load journey failed:', e);
         return { journey: null, schedule: null };
     }
-
-    const days = await journeyService.loadJourneyDays(supabaseJourney.id);
-    const schedule = {
-        initial: supabaseJourney.initial_balance,
-        days: supabaseJourney.cycle_length_days,
-        rate: supabaseJourney.daily_target_pct,
-        startDate: supabaseJourney.start_date,
-        rows: normalizeJourneyDays(days, supabaseJourney.daily_target_pct),
-    };
-
-    return { journey: supabaseJourney, schedule };
 };
 
 export const loadJourneySync = (loginid: string): Journey | null => {
@@ -60,9 +61,6 @@ export const loadJourneySync = (loginid: string): Journey | null => {
 
 export const saveJourney = async (loginid: string, journey: Journey): Promise<{ journey: Journey; schedule: { initial: number; days: number; rate: number; startDate: string; rows: ScheduleRow[] } }> => {
     const saved = await journeyService.saveJourney(loginid, journey);
-    if (!saved?.id) {
-        throw new Error('Failed to save journey');
-    }
 
     const schedule = buildSchedule(journey);
     await journeyService.saveJourneyDays(saved.id, journey, schedule);
