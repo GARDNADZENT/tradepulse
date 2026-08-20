@@ -85,6 +85,7 @@ interface TradePulseState {
     profitTable: any;
     journeyLoading: boolean;
     journeyError: string | null;
+    journeyModalOpen: boolean;
 }
 
 interface TradePulseContextValue extends TradePulseState {
@@ -121,6 +122,7 @@ export const TradePulseProvider = ({ children }: { children: ReactNode }) => {
         profitTable: null,
         journeyLoading: false,
         journeyError: null,
+        journeyModalOpen: false,
     });
 
     const setPartial = useCallback((updates: Partial<TradePulseState>) => {
@@ -223,6 +225,7 @@ export const TradePulseProvider = ({ children }: { children: ReactNode }) => {
             profitTable: null,
             journeyLoading: false,
             journeyError: null,
+            journeyModalOpen: false,
         });
         try {
             await fetch('/api/logout', { method: 'POST' });

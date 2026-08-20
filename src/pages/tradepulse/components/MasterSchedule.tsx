@@ -69,7 +69,7 @@ const MasterSchedule = observer(() => {
     const currentDay = journey ? getCurrentJourneyDay(journey.start_date) : 1;
     const rows = schedule?.rows || [];
 
-    if (journeyLoading || !journey || !schedule || (loading && balance === 0)) {
+    if (!journey || !schedule || (loading && balance === 0)) {
         return (
             <div className='tradepulse__page'>
                 <div className='tradepulse__card'>

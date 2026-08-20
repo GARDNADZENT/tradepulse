@@ -1,5 +1,5 @@
 // @ts-nocheck — TradePulse component with known type gaps
-import React from 'react';
+import React, { useState } from 'react';
 import { observer } from 'mobx-react-lite';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useTradePulse } from '../TradePulseContext';
@@ -8,6 +8,7 @@ import {
     getCurrentJourneyDay,
     computeJourneyDay,
     formatCurrency,
+    saveJourney,
 } from '../utils/calculations';
 import useTradePulseData from '../hooks/useTradePulseData';
 import useTradePulseFetch from '../hooks/useTradePulseFetch';
@@ -21,6 +22,9 @@ const MyJourney = observer(() => {
 
     const { journey, schedule, journeyLoading, refreshJourney } = useTradePulse();
     const isConnected = connectionStatus === 'opened' || connectionStatus === 'OPENED';
+
+    const [showJourneyModal, setShowJourneyModal] = useState(false);
+    const [isLocking, setIsLocking] = useState(false);
 
     const currentDay = journey ? getCurrentJourneyDay(journey.start_date) : 1;
     const rows = schedule?.rows || [];
@@ -38,20 +42,43 @@ const MyJourney = observer(() => {
     const streakLabel = overallStats.win_streak > 0 ? `🔥 ${overallStats.win_streak} Wins` : overallStats.loss_streak > 0 ? `❄ ${overallStats.loss_streak} Losses` : '—';
     const todayProfit = overallStats.total_profit || 0;
 
-    if (journeyLoading || !journey || !schedule) {
+    const handleLockJourney = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        setIsLocking(true);
+        const form = e.currentTarget;
+        const initial_balance = Number((form.elements.namedItem('j-initial') as HTMLInputElement).value);
+        const daily_target_pct = Number((form.elements.namedItem('j-rate') as HTMLInputElement).value);
+        const cycle_length_days = Number((form.elements.namedItem('j-days') as HTMLInputElement).value);
+        const start_date = (form.elements.namedItem('j-start') as HTMLInputElement).value;
+
+        try {
+            await saveJourney('', {
+                loginid: '',
+                initial_balance,
+                daily_target_pct,
+                cycle_length_days,
+                start_date,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+            });
+            await refreshJourney();
+            setShowJourneyModal(false);
+        } catch (err) {
+            console.error('Lock journey failed:', err);
+        } finally {
+            setIsLocking(false);
+        }
+    };
+
+    if (journeyLoading) {
         return (
             <div className='tradepulse__page'>
-                {/* Today's Target */}
-                <section className='tradepulse__section'>
+                <div className='tradepulse__section'>
                     <div className='tradepulse__section-header'>
                         <div>
                             <div className='tradepulse__section-brand'>{localize('Today')}</div>
                             <h2 className='tradepulse__section-title'>{localize("Today's Target")}</h2>
                             <p className='tradepulse__section-subtitle'>{localize('Track your daily progress against the plan.')}</p>
-                        </div>
-                        <div className='tradepulse__live-indicator'>
-                            <span className='tradepulse__live-dot'></span>
-                            <span>{localize('Waiting for connection')}</span>
                         </div>
                     </div>
                     <div className='tradepulse__kpi-grid'>
@@ -63,19 +90,148 @@ const MyJourney = observer(() => {
                         ))}
                     </div>
                     <div className='tradepulse__skeleton tradepulse__skeleton-card'></div>
-                </section>
+                </div>
+            </div>
+        );
+    }
 
-                {/* Quick Summary */}
-                <section className='tradepulse__section'>
-                    <div className='tradepulse__summary-grid'>
-                        {[...Array(4)].map((_, i) => (
-                            <div key={i} className='tradepulse__summary-card'>
-                                <div className='tradepulse__skeleton tradepulse__skeleton-text tradepulse__skeleton-text--short'></div>
-                                <div className='tradepulse__skeleton tradepulse__skeleton-title'></div>
-                            </div>
-                        ))}
+    if (!journey || !schedule) {
+        return (
+            <div className='tradepulse__page'>
+                <div className='tradepulse__section'>
+                    <div className='tradepulse__section-header'>
+                        <div>
+                            <div className='tradepulse__section-brand'>{localize('Today')}</div>
+                            <h2 className='tradepulse__section-title'>{localize("Today's Target")}</h2>
+                            <p className='tradepulse__section-subtitle'>{localize('Track your daily progress against the plan.')}</p>
+                        </div>
                     </div>
-                </section>
+                    <div style={{
+                        textAlign: 'center',
+                        padding: '60px 24px',
+                        background: 'rgba(30, 41, 59, .4)',
+                        border: '1px solid rgba(148, 163, 184, .08)',
+                        borderRadius: '20px',
+                    }}>
+                        <div style={{
+                            width: '64px',
+                            height: '64px',
+                            borderRadius: '50%',
+                            background: 'rgba(99, 102, 241, .1)',
+                            border: '1px solid rgba(99, 102, 241, .2)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto 16px',
+                        }}>
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#818cf8' }}>
+                                <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path>
+                                <path d="M12 6v6l4 2"></path>
+                            </svg>
+                        </div>
+                        <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#f1f5f9', margin: '0 0 8px' }}>{localize('No Journey Locked')}</h3>
+                        <p style={{ fontSize: '0.9rem', color: '#94a3b8', maxWidth: '420px', margin: '0 auto 24px', lineHeight: 6 }}>
+                            {localize('Create your permanent trading plan. Set your goals, lock your journey, and track your progress automatically.')}
+                        </p>
+                        <button
+                            onClick={() => setShowJourneyModal(true)}
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                padding: '12px 24px',
+                                borderRadius: '12px',
+                                background: '#6366f1',
+                                color: '#fff',
+                                border: 'none',
+                                fontSize: '0.9rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                fontFamily: 'inherit',
+                            }}
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path>
+                                <path d="M12 6v6l4 2"></path>
+                            </svg>
+                            {localize('Start My Journey')}
+                        </button>
+                    </div>
+                </div>
+
+                {/* Journey Creation Modal */}
+                {showJourneyModal && (
+                    <div style={{
+                        position: 'fixed',
+                        inset: 0,
+                        background: 'rgba(15, 23, 42, .6)',
+                        backdropFilter: 'blur(4px)',
+                        zIndex: 50,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '24px',
+                    }} onClick={() => setShowJourneyModal(false)}>
+                        <div style={{
+                            background: 'rgba(30, 41, 59, .4)',
+                            border: '1px solid rgba(148, 163, 184, .08)',
+                            borderRadius: '20px',
+                            width: '100%',
+                            maxWidth: '480px',
+                            overflow: 'hidden',
+                        }} onClick={e => e.stopPropagation()}>
+                            <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(148, 163, 184, .08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div>
+                                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#818cf8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>{localize('Lock Your Journey')}</div>
+                                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>{localize('Start My Journey')}</h3>
+                                </div>
+                                <button onClick={() => setShowJourneyModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}>
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                </button>
+                            </div>
+                            <form onSubmit={handleLockJourney} style={{ padding: '24px' }}>
+                                <p style={{ fontSize: '0.85rem', color: '#94a3b8', margin: '0 0 20px', lineHeight: 1.6 }}>
+                                    {localize('Set your trading goals. Once locked, these values cannot be changed — only reset.')}
+                                </p>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#94a3b8', marginBottom: '6px' }}>{localize('Initial Balance (USD)')}</label>
+                                        <input name='j-initial' type='number' min='1' step='0.01' defaultValue='1000' required
+                                            style={{ width: '100%', padding: '10px 14px', border: '1px solid rgba(148, 163, 184, .1)', borderRadius: '12px', background: 'rgba(30, 41, 59, .6)', color: '#e2e8f0', fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none' }} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#94a3b8', marginBottom: '6px' }}>{localize('Daily Target (%)')}</label>
+                                        <input name='j-rate' type='number' min='0.01' max='100' step='0.01' defaultValue='5' required
+                                            style={{ width: '100%', padding: '10px 14px', border: '1px solid rgba(148, 163, 184, .1)', borderRadius: '12px', background: 'rgba(30, 41, 59, .6)', color: '#e2e8f0', fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none' }} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#94a3b8', marginBottom: '6px' }}>{localize('Cycle Length (Days)')}</label>
+                                        <input name='j-days' type='number' min='1' max='365' defaultValue='30' required
+                                            style={{ width: '100%', padding: '10px 14px', border: '1px solid rgba(148, 163, 184, .1)', borderRadius: '12px', background: 'rgba(30, 41, 59, .6)', color: '#e2e8f0', fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none' }} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#94a3b8', marginBottom: '6px' }}>{localize('Start Date')}</label>
+                                        <input name='j-start' type='date' required
+                                            style={{ width: '100%', padding: '10px 14px', border: '1px solid rgba(148, 163, 184, .1)', borderRadius: '12px', background: 'rgba(30, 41, 59, .6)', color: '#e2e8f0', fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none' }} />
+                                    </div>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
+                                    <button type='button' onClick={() => setShowJourneyModal(false)} disabled={isLocking}
+                                        style={{ padding: '10px 20px', borderRadius: '12px', background: 'transparent', color: '#e2e8f0', border: '1px solid rgba(148, 163, 184, .15)', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                                        {localize('Cancel')}
+                                    </button>
+                                    <button type='submit' disabled={isLocking}
+                                        style={{ padding: '10px 20px', borderRadius: '12px', background: '#6366f1', color: '#fff', border: 'none', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 1px 2px rgba(15, 23, 42, .04), 0 20px 40px -20px rgba(15, 23, 42, .2)' }}>
+                                        {isLocking ? localize('Locking...') : localize('Lock Journey')}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
             </div>
         );
     }
