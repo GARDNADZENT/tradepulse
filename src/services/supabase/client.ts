@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY;
 
 let supabase: ReturnType<typeof createClient<Database>> | null = null;
 
@@ -14,7 +14,7 @@ if (supabaseUrl && supabaseKey) {
         },
     });
 } else {
-    console.warn('[Supabase] Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY — status sync disabled');
+    console.warn('[Supabase] Missing SUPABASE_URL or SUPABASE_PUBLISHABLE_KEY — status sync disabled');
 }
 
 export { supabase };
