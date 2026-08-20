@@ -12,24 +12,73 @@ export const getDefaultJourney = (loginid: string): Journey => ({
     updated_at: new Date().toISOString(),
 });
 
-export const loadJourney = async (loginid: string): Promise<Journey | null> => {
+/* Convert the server's journey-day rows into the canonical plan shape the
+   dashboard uses. Pure plan derivation only — no live balance is involved.
+   Server rows use: day_number, date, expected_start, expected_end. */
+export const normalizeJourneyDays = (rawDays: any[] | null | undefined, rate: number): ScheduleRow[] => {
+    if (!Array.isArray(rawDays) || rawDays.length === 0) return [];
+    return rawDays.map(d => {
+        const day = d.day || d.day_number;
+        const date = d.date;
+        const start = Number(d.start != null ? d.start : d.expected_start) || 0;
+        const end = Number(d.end != null ? d.end : d.expected_end) || 0;
+        return {
+            day: Number(day),
+            date: String(date),
+            start: Math.round(start * 100) / 100,
+            end: Math.round(end * 100) / 100,
+            profit: Math.round((end - start) * 100) / 100,
+            rate: Number(rate),
+            actual: null,
+            diff: null,
+            status: 'pending',
+        };
+    });
+};
+
+export const loadJourney = async (loginid: string): Promise<{ journey: Journey | null; schedule: { initial: number; days: number; rate: number; startDate: string; rows: ScheduleRow[] } | null }> => {
     const supabaseJourney = await journeyService.loadJourney(loginid);
-    if (supabaseJourney) {
-        return supabaseJourney;
+    if (!supabaseJourney) {
+        return { journey: null, schedule: null };
     }
-    return null;
+
+    const days = await journeyService.loadJourneyDays(supabaseJourney.id);
+    const schedule = {
+        initial: supabaseJourney.initial_balance,
+        days: supabaseJourney.cycle_length_days,
+        rate: supabaseJourney.daily_target_pct,
+        startDate: supabaseJourney.start_date,
+        rows: normalizeJourneyDays(days, supabaseJourney.daily_target_pct),
+    };
+
+    return { journey: supabaseJourney, schedule };
 };
 
 export const loadJourneySync = (loginid: string): Journey | null => {
     return null;
 };
 
-export const saveJourney = async (loginid: string, journey: Journey) => {
+export const saveJourney = async (loginid: string, journey: Journey): Promise<{ journey: Journey; schedule: { initial: number; days: number; rate: number; startDate: string; rows: ScheduleRow[] } }> => {
     const saved = await journeyService.saveJourney(loginid, journey);
-    if (saved?.id) {
-        const schedule = buildSchedule(journey);
-        await journeyService.saveJourneyDays(saved.id, journey, schedule);
+    if (!saved?.id) {
+        throw new Error('Failed to save journey');
     }
+
+    const schedule = buildSchedule(journey);
+    await journeyService.saveJourneyDays(saved.id, journey, schedule);
+
+    const result = {
+        journey: saved,
+        schedule: {
+            initial: saved.initial_balance,
+            days: saved.cycle_length_days,
+            rate: saved.daily_target_pct,
+            startDate: saved.start_date,
+            rows: schedule,
+        },
+    };
+
+    return result;
 };
 
 export const buildSchedule = (journey: Journey): ScheduleRow[] => {

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { loadJourney, normalizeJourneyDays } from './utils/calculations';
 
 interface Account {
     loginid: string;
@@ -82,13 +83,15 @@ interface TradePulseState {
     statistics: Statistics | null;
     portfolio: any;
     profitTable: any;
+    journeyLoading: boolean;
+    journeyError: string | null;
 }
 
 interface TradePulseContextValue extends TradePulseState {
     setState: (updates: Partial<TradePulseState>) => void;
     refreshAll: () => Promise<void>;
     refreshBalance: () => Promise<void>;
-    loadJourney: () => Promise<void>;
+    refreshJourney: () => Promise<void>;
     logout: () => Promise<void>;
     switchAccount: (loginid: string) => void;
     getSelected: () => Account | null;
@@ -116,6 +119,8 @@ export const TradePulseProvider = ({ children }: { children: ReactNode }) => {
         statistics: null,
         portfolio: null,
         profitTable: null,
+        journeyLoading: false,
+        journeyError: null,
     });
 
     const setPartial = useCallback((updates: Partial<TradePulseState>) => {
@@ -126,28 +131,54 @@ export const TradePulseProvider = ({ children }: { children: ReactNode }) => {
         return state.accounts.find(a => a.loginid === state.currentAccount) || null;
     }, [state.accounts, state.currentAccount]);
 
+    const refreshJourney = useCallback(async () => {
+        const loginid = state.currentAccount;
+        if (!loginid) return;
+        setState(prev => ({ ...prev, journeyLoading: true, journeyError: null }));
+        try {
+            const result = await loadJourney(loginid);
+            setState(prev => ({
+                ...prev,
+                journey: result.journey,
+                schedule: result.schedule,
+                journeyLoading: false,
+            }));
+        } catch (e) {
+            console.error('Load journey failed:', e);
+            setState(prev => ({
+                ...prev,
+                journey: null,
+                schedule: null,
+                journeyLoading: false,
+                journeyError: e instanceof Error ? e.message : 'Failed to load journey',
+            }));
+        }
+    }, [state.currentAccount]);
+
     const refreshAll = useCallback(async () => {
         if (!state.currentAccount) return;
         try {
             const res = await fetch(`/api/statistics?account_id=${encodeURIComponent(state.currentAccount)}`);
             if (!res.ok) throw new Error(`API error ${res.status}`);
             const data = await res.json();
-            setState(prev => ({
-                ...prev,
-                statistics: data,
-                contracts: (data.contracts || []).filter((t: any) => t.contract_type && Number(t.is_sold) === 1),
-            }));
-            if (data.balance) {
-                setState(prev => {
-                    const accounts = prev.accounts.map(a => {
-                        if (a.loginid === state.currentAccount) {
-                            return { ...a, balance: Number(data.balance.balance), currency: data.balance.currency || a.currency };
-                        }
-                        return a;
-                    });
-                    return { ...prev, accounts };
-                });
-            }
+
+            setState(prev => {
+                const accounts = [...prev.accounts];
+                const selectedIndex = accounts.findIndex(a => a.loginid === prev.currentAccount);
+                if (selectedIndex !== -1 && data.balance) {
+                    accounts[selectedIndex] = {
+                        ...accounts[selectedIndex],
+                        balance: Number(data.balance.balance),
+                        currency: data.balance.currency || accounts[selectedIndex].currency,
+                    };
+                }
+                return {
+                    ...prev,
+                    statistics: data,
+                    contracts: (data.contracts || []).filter((t: any) => t.contract_type && Number(t.is_sold) === 1),
+                    accounts,
+                };
+            });
         } catch (e) {
             console.error('Statistics fetch failed:', e);
         }
@@ -160,42 +191,21 @@ export const TradePulseProvider = ({ children }: { children: ReactNode }) => {
             if (!res.ok) throw new Error(`API error ${res.status}`);
             const data = await res.json();
             setState(prev => {
-                const accounts = prev.accounts.map(a => {
-                    if (a.loginid === state.currentAccount) {
-                        return { ...a, balance: Number(data.balance), currency: data.currency || a.currency };
-                    }
-                    return a;
-                });
+                const accounts = [...prev.accounts];
+                const selectedIndex = accounts.findIndex(a => a.loginid === prev.currentAccount);
+                if (selectedIndex !== -1) {
+                    accounts[selectedIndex] = {
+                        ...accounts[selectedIndex],
+                        balance: Number(data.balance),
+                        currency: data.currency || accounts[selectedIndex].currency,
+                    };
+                }
                 return { ...prev, accounts };
             });
         } catch (e) {
             console.error('Balance fetch failed', e);
         }
     }, [state.currentAccount]);
-
-    const loadJourney = useCallback(async () => {
-        try {
-            const res = await fetch('/api/journey');
-            if (!res.ok) throw new Error(`API error ${res.status}`);
-            const data = await res.json();
-            if (data.journey && data.journey.id) {
-                const journey = data.journey;
-                const schedule = {
-                    initial: journey.initial_balance,
-                    days: journey.cycle_length_days,
-                    rate: journey.daily_target_pct,
-                    startDate: journey.start_date,
-                    rows: normalizeJourneyDays(journey.days, journey.daily_target_pct),
-                };
-                setState(prev => ({ ...prev, journey, schedule }));
-            } else {
-                setState(prev => ({ ...prev, journey: null, schedule: null }));
-            }
-        } catch (e) {
-            console.error('Load journey failed:', e);
-            setState(prev => ({ ...prev, journey: null, schedule: null }));
-        }
-    }, []);
 
     const logout = useCallback(async () => {
         setState({
@@ -211,6 +221,8 @@ export const TradePulseProvider = ({ children }: { children: ReactNode }) => {
             statistics: null,
             portfolio: null,
             profitTable: null,
+            journeyLoading: false,
+            journeyError: null,
         });
         try {
             await fetch('/api/logout', { method: 'POST' });
@@ -227,9 +239,12 @@ export const TradePulseProvider = ({ children }: { children: ReactNode }) => {
             statistics: null,
             portfolio: null,
             profitTable: null,
+            journey: null,
+            schedule: null,
         }));
         refreshAll();
-    }, [refreshAll]);
+        refreshJourney();
+    }, [refreshAll, refreshJourney]);
 
     return (
         <TradePulseContext.Provider value={{
@@ -237,7 +252,7 @@ export const TradePulseProvider = ({ children }: { children: ReactNode }) => {
             setState: setPartial,
             refreshAll,
             refreshBalance,
-            loadJourney,
+            refreshJourney,
             logout,
             switchAccount,
             getSelected,

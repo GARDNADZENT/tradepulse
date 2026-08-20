@@ -60,7 +60,9 @@ create table if not exists public.journey_days (
                 array[
                     'pending'::text,
                     'completed'::text,
-                    'missed'::text
+                    'missed'::text,
+                    'complete'::text,
+                    'behind'::text
                 ]
             )
         )

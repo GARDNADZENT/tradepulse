@@ -1,14 +1,11 @@
 // @ts-nocheck — TradePulse component with known type gaps
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { observer } from 'mobx-react-lite';
 import { useStore } from '@/hooks/useStore';
+import { useTradePulse } from '../TradePulseContext';
 import { localize } from '@deriv-com/translations';
 import useTradePulseData from '../hooks/useTradePulseData';
 import useTradePulseFetch from '../hooks/useTradePulseFetch';
-import {
-    loadJourney,
-    getDefaultJourney,
-} from '../utils/calculations';
 import './AccountInfo.scss';
 
 const AccountInfo = observer(() => {
@@ -20,21 +17,9 @@ const AccountInfo = observer(() => {
     const currency = client?.currency ?? 'USD';
     const isVirtual = client?.is_virtual ?? false;
 
+    const { journey } = useTradePulse();
+
     const { overallStats } = useTradePulseData();
-
-    const [journey, setJourney] = useState<any>(null);
-
-    useEffect(() => {
-        let cancelled = false;
-        const fetchJourney = async () => {
-            const loaded = await loadJourney(loginid);
-            if (!cancelled) {
-                setJourney(loaded ?? getDefaultJourney(loginid));
-            }
-        };
-        fetchJourney();
-        return () => { cancelled = true; };
-    }, [loginid]);
 
     const totalTrades = overallStats.total_trades || 0;
     const wins = overallStats.winning_trades || 0;

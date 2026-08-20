@@ -1,16 +1,14 @@
 // @ts-nocheck — TradePulse component with known type gaps
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { observer } from 'mobx-react-lite';
 import { useStore } from '@/hooks/useStore';
+import { useTradePulse } from '../TradePulseContext';
 import { localize } from '@deriv-com/translations';
 import {
-    loadJourney,
     saveJourney,
     getCurrentJourneyDay,
-    buildSchedule,
     computeJourneyDay,
     formatCurrency,
-    getDefaultJourney,
 } from '../utils/calculations';
 import useTradePulseData from '../hooks/useTradePulseData';
 import './MasterSchedule.scss';
@@ -22,24 +20,8 @@ const MasterSchedule = observer(() => {
     const { balance, loading } = useTradePulseData();
     const currency = client?.currency ?? 'USD';
 
-    const [journey, setJourney] = useState<any>(null);
-    const [journeyLoaded, setJourneyLoaded] = useState(false);
+    const { journey, schedule, journeyLoading, refreshJourney } = useTradePulse();
     const [isGenerating, setIsGenerating] = useState(false);
-
-    useEffect(() => {
-        let cancelled = false;
-        const fetchJourney = async () => {
-            const loaded = await loadJourney(loginid);
-            if (!cancelled) {
-                setJourney(loaded ?? getDefaultJourney(loginid));
-                setJourneyLoaded(true);
-            }
-        };
-        fetchJourney();
-        return () => { cancelled = true; };
-    }, [loginid]);
-
-    const schedule = useMemo(() => journey ? buildSchedule(journey) : [], [journey]);
 
     const [form, setForm] = useState({
         initial_balance: 0,
@@ -70,23 +52,37 @@ const MasterSchedule = observer(() => {
             created_at: journey?.created_at || new Date().toISOString(),
             updated_at: new Date().toISOString(),
         };
-        await saveJourney(loginid, locked);
-        setJourney(locked);
-        setIsGenerating(false);
-    }, [loginid, form, journey]);
+        try {
+            await saveJourney(loginid, locked);
+            await refreshJourney();
+        } catch (e) {
+            console.error('Generate schedule failed:', e);
+        } finally {
+            setIsGenerating(false);
+        }
+    }, [loginid, form, journey, refreshJourney]);
 
     const updateField = useCallback((field: string, value: string | number) => {
         setForm(prev => ({ ...prev, [field]: value }));
     }, []);
 
     const currentDay = journey ? getCurrentJourneyDay(journey.start_date) : 1;
+    const rows = schedule?.rows || [];
 
-    if (!journeyLoaded || !journey || (loading && balance === 0)) {
+    if (journeyLoading || !journey || !schedule || (loading && balance === 0)) {
         return (
             <div className='tradepulse__page'>
                 <div className='tradepulse__card'>
                     <div className='tradepulse__card-header'>
-                        <div className='tradepulse__section-brand'>{localize('Planning')}</div>
+                        <div className='tradepulse__section-brand'>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                            </svg>
+                            {localize('Planning')}
+                        </div>
                         <h2 className='tradepulse__section-title'>{localize('Master Schedule')}</h2>
                         <p className='tradepulse__section-subtitle'>{localize('Set your trading goal to automatically generate your complete trading plan.')}</p>
                     </div>
@@ -180,13 +176,13 @@ const MasterSchedule = observer(() => {
             </section>
 
             {/* Generated Schedule */}
-            {schedule.length > 0 && (
+            {rows.length > 0 && (
                 <section className='tradepulse__section fade-in'>
                     <div className='tradepulse__card'>
                         <div className='tradepulse__card-header'>
                             <h3 className='tradepulse__section-title'>{localize('Generated Schedule')}</h3>
                             <p className='tradepulse__section-subtitle'>
-                                {schedule.length} {localize('days')} · {schedule[0].rate}% {localize('daily')} · {localize('starting')} {formatCurrency(schedule[0].start, currency)} · {localize('from')} {schedule[0].date}
+                                {rows.length} {localize('days')} · {rows[0].rate}% {localize('daily')} · {localize('starting')} {formatCurrency(rows[0].start, currency)} · {localize('from')} {rows[0].date}
                             </p>
                         </div>
                         <div className='tradepulse__table-wrapper'>
@@ -204,7 +200,7 @@ const MasterSchedule = observer(() => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {schedule.map(row => {
+                                    {rows.map(row => {
                                         const computed = computeJourneyDay(row, balance, currentDay);
                                         if (!computed) return null;
                                         const isToday = row.day === currentDay;

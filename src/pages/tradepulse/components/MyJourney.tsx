@@ -1,57 +1,36 @@
 // @ts-nocheck — TradePulse component with known type gaps
-import React, { useMemo, useState, useEffect } from 'react';
+import React from 'react';
 import { observer } from 'mobx-react-lite';
-import { useStore } from '@/hooks/useStore';
 import { useApiBase } from '@/hooks/useApiBase';
+import { useTradePulse } from '../TradePulseContext';
 import { localize } from '@deriv-com/translations';
 import {
-    loadJourney,
     getCurrentJourneyDay,
-    buildSchedule,
     computeJourneyDay,
     formatCurrency,
-    getDefaultJourney,
 } from '../utils/calculations';
 import useTradePulseData from '../hooks/useTradePulseData';
 import useTradePulseFetch from '../hooks/useTradePulseFetch';
 import './MyJourney.scss';
 
 const MyJourney = observer(() => {
-    const store = useStore();
-    const { client } = store;
-    const loginid = client?.loginid ?? '—';
     const { connectionStatus } = useApiBase();
     const { balance: fetchedBalance, loading } = useTradePulseFetch();
-    const balance = client?.balance ? parseFloat(client.balance) : fetchedBalance;
-    const currency = client?.currency ?? 'USD';
+    const balance = fetchedBalance;
+    const currency = 'USD';
 
-    const [journey, setJourney] = useState<any>(null);
-    const [journeyLoaded, setJourneyLoaded] = useState(false);
-
-    useEffect(() => {
-        let cancelled = false;
-        const fetchJourney = async () => {
-            const loaded = await loadJourney(loginid);
-            if (!cancelled) {
-                setJourney(loaded ?? getDefaultJourney(loginid));
-                setJourneyLoaded(true);
-            }
-        };
-        fetchJourney();
-        return () => { cancelled = true; };
-    }, [loginid]);
+    const { journey, schedule, journeyLoading, refreshJourney } = useTradePulse();
+    const isConnected = connectionStatus === 'opened' || connectionStatus === 'OPENED';
 
     const currentDay = journey ? getCurrentJourneyDay(journey.start_date) : 1;
-    const schedule = useMemo(() => journey ? buildSchedule(journey) : [], [journey]);
-    const idx = Math.min(Math.max(currentDay, 1), schedule.length) - 1;
-    const baseRow = schedule[idx];
-    const row = journey ? computeJourneyDay(baseRow, balance, currentDay) : undefined;
+    const rows = schedule?.rows || [];
+    const idx = Math.min(Math.max(currentDay, 1), rows.length) - 1;
+    const baseRow = rows[idx];
+    const row = baseRow ? computeJourneyDay(baseRow, balance, currentDay) : undefined;
     const displayRow = row || baseRow;
 
     const progress = journey ? Math.min(100, Math.max(0, ((currentDay - 1) / journey.cycle_length_days) * 100)) : 0;
     const delta = balance - (baseRow?.end ?? 0);
-
-    const isConnected = connectionStatus === 'opened' || connectionStatus === 'OPENED';
 
     const { overallStats } = useTradePulseData();
     const totalTrades = overallStats.total_trades || 0;
@@ -59,7 +38,7 @@ const MyJourney = observer(() => {
     const streakLabel = overallStats.win_streak > 0 ? `🔥 ${overallStats.win_streak} Wins` : overallStats.loss_streak > 0 ? `❄ ${overallStats.loss_streak} Losses` : '—';
     const todayProfit = overallStats.total_profit || 0;
 
-    if (!journeyLoaded || !journey) {
+    if (journeyLoading || !journey || !schedule) {
         return (
             <div className='tradepulse__page'>
                 {/* Today's Target */}
@@ -133,7 +112,7 @@ const MyJourney = observer(() => {
                         sub={showBalanceSkeleton ? '' : (delta >= 0 ? `+${formatCurrency(delta, currency)} vs target` : `${formatCurrency(delta, currency)} vs target`)}
                         skeleton={showBalanceSkeleton}
                     />
-                    <KPICard label={localize('30-Day Goal')} value={formatCurrency(schedule[schedule.length - 1]?.end ?? 0, currency)} icon='flag' />
+                    <KPICard label={localize('30-Day Goal')} value={formatCurrency(rows[rows.length - 1]?.end ?? 0, currency)} icon='flag' />
                 </div>
 
                 <div className='tradepulse__progress-card'>

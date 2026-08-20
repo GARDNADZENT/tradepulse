@@ -6,7 +6,6 @@ import MasterSchedule from './components/MasterSchedule';
 import Performance from './components/Performance';
 import AccountInfo from './components/AccountInfo';
 import { localize } from '@deriv-com/translations';
-import { journeyService } from '@/services/supabase/journey.service';
 import './tradepulse.scss';
 
 const TradePulseApp = () => {
@@ -15,7 +14,7 @@ const TradePulseApp = () => {
     const [showResetModal, setShowResetModal] = useState(false);
     const [isResetting, setIsResetting] = useState(false);
 
-    const { isLoggedIn, currentAccount } = useTradePulse();
+    const { isLoggedIn, currentAccount, refreshJourney } = useTradePulse();
 
     useEffect(() => {
         const onHashChange = () => {
@@ -41,11 +40,10 @@ const TradePulseApp = () => {
     const handleReset = async () => {
         setIsResetting(true);
         try {
-            if (currentAccount) {
-                await journeyService.deleteJourney(currentAccount);
-            }
+            const res = await fetch('/api/journey', { method: 'DELETE' });
+            if (!res.ok) throw new Error(`Reset failed: ${res.status}`);
+            await refreshJourney();
             window.location.hash = 'journey';
-            window.location.reload();
         } catch (e) {
             console.error('Reset failed:', e);
         } finally {
