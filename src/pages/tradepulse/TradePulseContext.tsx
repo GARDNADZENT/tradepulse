@@ -133,12 +133,12 @@ export const TradePulseProvider = ({ children }: { children: ReactNode }) => {
         return state.accounts.find(a => a.loginid === state.currentAccount) || null;
     }, [state.accounts, state.currentAccount]);
 
-    const refreshJourney = useCallback(async () => {
-        const loginid = state.currentAccount;
-        if (!loginid) return;
+    const refreshJourney = useCallback(async (loginid?: string) => {
+        const accountLoginid = loginid || state.currentAccount;
+        if (!accountLoginid) return;
         setState(prev => ({ ...prev, journeyLoading: true, journeyError: null }));
         try {
-            const result = await loadJourney(loginid);
+            const result = await loadJourney(accountLoginid);
             setState(prev => ({
                 ...prev,
                 journey: result.journey,
@@ -246,7 +246,7 @@ export const TradePulseProvider = ({ children }: { children: ReactNode }) => {
             schedule: null,
         }));
         refreshAll();
-        refreshJourney();
+        refreshJourney(loginid);
     }, [refreshAll, refreshJourney]);
 
     return (

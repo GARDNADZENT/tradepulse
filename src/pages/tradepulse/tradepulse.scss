@@ -2,12 +2,31 @@
    TRADERSPULSE — Premium dark trading dashboard
    ========================================================= */
 
+:root {
+    --tp-bg: #0f172a;
+    --tp-surface: rgba(30, 41, 59, .45);
+    --tp-surface-hover: rgba(30, 41, 59, .65);
+    --tp-border: rgba(148, 163, 184, .12);
+    --tp-border-subtle: rgba(148, 163, 184, .06);
+    --tp-text-primary: #f1f5f9;
+    --tp-text-secondary: #cbd5e1;
+    --tp-text-tertiary: #94a3b8;
+    --tp-text-disabled: #64748b;
+    --tp-accent: #6366f1;
+    --tp-accent-soft: rgba(99, 102, 241, .12);
+    --tp-profit: #34d399;
+    --tp-profit-soft: rgba(16, 185, 129, .12);
+    --tp-loss: #fca5a5;
+    --tp-loss-soft: rgba(239, 68, 68, .12);
+    --tp-warning: #fbbf24;
+}
+
 .tradepulse {
     display: flex;
     flex-direction: column;
     width: 100%;
-    background: #0f172a;
-    color: #e2e8f0;
+    background: var(--tp-bg);
+    color: var(--tp-text-primary);
     font-family: 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
 }
@@ -67,16 +86,16 @@
 }
 
 .tradepulse__logo-name {
-    font-size: 1.1rem;
+    font-size: 1.25rem;
     font-weight: 700;
-    color: rgba(30, 41, 59, .6);
+    color: var(--tp-text-primary);
     letter-spacing: -0.01em;
     line-height: 1.2;
 }
 
 .tradepulse__logo-tag {
-    font-size: 0.65rem;
-    color: #94a3b8;
+    font-size: 0.75rem;
+    color: var(--tp-text-tertiary);
     letter-spacing: 0.02em;
 }
 
@@ -168,8 +187,8 @@
     align-items: center;
     gap: 4px;
     padding: 0 16px;
-    border-bottom: 1px solid #e2e8f0;
-    background: #fff;
+    border-bottom: 1px solid var(--tp-border);
+    background: var(--tp-surface);
     overflow-x: auto;
 }
 
@@ -191,11 +210,11 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 12px 16px;
+    padding: 14px 18px;
     border-radius: 8px 8px 0 0;
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     font-weight: 500;
-    color: #94a3b8;
+    color: var(--tp-text-tertiary);
     background: none;
     border: none;
     cursor: pointer;
@@ -250,8 +269,8 @@
 }
 
 .tradepulse__modal-header {
-    padding: 20px 24px;
-    border-bottom: 1px solid rgba(148, 163, 184, .08);
+    padding: 24px;
+    border-bottom: 1px solid var(--tp-border);
 }
 
 .tradepulse__modal-title {
@@ -266,9 +285,9 @@
 }
 
 .tradepulse__modal-text {
-    font-size: 0.85rem;
-    color: #94a3b8;
-    line-height: 1.6;
+    font-size: 0.95rem;
+    color: var(--tp-text-secondary);
+    line-height: 1.7;
     margin: 0;
 }
 
@@ -276,9 +295,9 @@
     display: flex;
     justify-content: flex-end;
     gap: 12px;
-    padding: 16px 24px;
-    border-top: 1px solid rgba(148, 163, 184, .08);
-    background: rgba(30, 41, 59, .4);
+    padding: 20px 24px;
+    border-top: 1px solid var(--tp-border);
+    background: var(--tp-surface);
 }
 
 /* ---------- Mobile Bottom Nav ---------- */
@@ -371,20 +390,20 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    margin-bottom: 32px;
-    gap: 16px;
+    margin-bottom: 40px;
+    gap: 20px;
 }
 
 .tradepulse__section-brand {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     font-weight: 600;
-    color: #6366f1;
+    color: var(--tp-accent);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 8px;
+    letter-spacing: 0.06em;
+    margin-bottom: 10px;
 }
 
 .tradepulse__section-title {
@@ -396,9 +415,9 @@
 }
 
 .tradepulse__section-subtitle {
-    font-size: 0.9rem;
-    color: #94a3b8;
-    margin: 6px 0 0 0;
+    font-size: 1rem;
+    color: var(--tp-text-tertiary);
+    margin: 8px 0 0 0;
 }
 
 .tradepulse__card-meta {
@@ -498,11 +517,11 @@
 }
 
 .tradepulse__kpi-label {
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     font-weight: 600;
-    color: #94a3b8;
+    color: var(--tp-text-tertiary);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
 }
 
 .tradepulse__kpi-icon {
@@ -520,15 +539,15 @@
 }
 
 .tradepulse__kpi-value--live {
-    color: #34d399;
+    color: var(--tp-profit);
 }
 
 .tradepulse__kpi-value--profit {
-    color: #34d399;
+    color: var(--tp-profit);
 }
 
 .tradepulse__kpi-value--brand {
-    color: #818cf8;
+    color: var(--tp-accent);
 }
 
 .tradepulse__kpi-sub {
@@ -553,14 +572,14 @@
 }
 
 .tradepulse__progress-label {
-    font-size: 0.9rem;
+    font-size: 1rem;
     font-weight: 600;
-    color: #e2e8f0;
+    color: var(--tp-text-primary);
 }
 
 .tradepulse__progress-sub {
-    font-size: 0.8rem;
-    color: #94a3b8;
+    font-size: 0.9rem;
+    color: var(--tp-text-tertiary);
 }
 
 .tradepulse__progress-pct {
@@ -673,11 +692,11 @@
 }
 
 .tradepulse__summary-label {
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     font-weight: 600;
-    color: #94a3b8;
+    color: var(--tp-text-tertiary);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
 }
 
 .tradepulse__summary-icon {
@@ -694,11 +713,11 @@
 }
 
 .tradepulse__summary-value--profit {
-    color: #34d399;
+    color: var(--tp-profit);
 }
 
 .tradepulse__summary-value--brand {
-    color: #818cf8;
+    color: var(--tp-accent);
 }
 
 .tradepulse__summary-value--mono {
@@ -725,19 +744,19 @@
 }
 
 .tradepulse__form-label {
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     font-weight: 600;
-    color: #94a3b8;
+    color: var(--tp-text-secondary);
 }
 
 .tradepulse__form-input {
     width: 100%;
     padding: 12px 16px;
-    border: 1px solid rgba(148, 163, 184, .1);
+    border: 1px solid var(--tp-border);
     border-radius: 12px;
-    background: rgba(30, 41, 59, .6);
-    color: #e2e8f0;
-    font-size: 0.9rem;
+    background: var(--tp-surface);
+    color: var(--tp-text-primary);
+    font-size: 0.95rem;
     font-family: inherit;
     outline: none;
     transition: border-color .2s ease, box-shadow .2s ease;
@@ -788,53 +807,53 @@
 }
 
 .tradepulse__chip--ontrack {
-    background: rgba(16, 185, 129, .1);
-    color: #34d399;
-    border: 1px solid rgba(16, 185, 129, .2);
+    background: var(--tp-profit-soft);
+    color: var(--tp-profit);
+    border: 1px solid rgba(16, 185, 129, .25);
 }
 
 .tradepulse__chip--close {
     background: rgba(245, 158, 11, .1);
-    color: #fbbf24;
-    border: 1px solid rgba(245, 158, 11, .2);
+    color: var(--tp-warning);
+    border: 1px solid rgba(245, 158, 11, .25);
 }
 
 .tradepulse__chip--below {
-    background: rgba(239, 68, 68, .1);
-    color: #fca5a5;
-    border: 1px solid rgba(239, 68, 68, .2);
+    background: var(--tp-loss-soft);
+    color: var(--tp-loss);
+    border: 1px solid rgba(239, 68, 68, .25);
 }
 
 .tradepulse__chip--pending {
-    background: rgba(148, 163, 184, .1);
-    color: #94a3b8;
-    border: 1px solid rgba(148, 163, 184, .2);
+    background: rgba(148, 163, 184, .08);
+    color: var(--tp-text-tertiary);
+    border: 1px solid rgba(148, 163, 184, .15);
 }
 
 .tradepulse__chip--today {
-    background: rgba(99, 102, 241, .1);
-    color: #818cf8;
-    border: 1px solid rgba(99, 102, 241, .2);
+    background: var(--tp-accent-soft);
+    color: var(--tp-accent);
+    border: 1px solid rgba(99, 102, 241, .25);
 }
 
 .tradepulse__text-success {
-    color: #34d399;
+    color: var(--tp-profit);
 }
 
 .tradepulse__text-danger {
-    color: #fca5a5;
+    color: var(--tp-loss);
 }
 
 .tradepulse__text-muted {
-    color: #64748b;
+    color: var(--tp-text-disabled);
 }
 
 .tradepulse__text-brand {
-    color: #818cf8;
+    color: var(--tp-accent);
 }
 
 .tradepulse__text-warning {
-    color: #fbbf24;
+    color: var(--tp-warning);
 }
 
 .tradepulse__table-name {
@@ -879,7 +898,7 @@
 }
 
 .tradepulse__btn--primary {
-    background: #6366f1;
+    background: var(--tp-accent);
     color: #fff;
     box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 20px 40px -20px rgba(15, 23, 42, .2);
 }
@@ -890,8 +909,8 @@
 
 .tradepulse__btn--secondary {
     background: transparent;
-    color: #e2e8f0;
-    border: 1px solid rgba(148, 163, 184, .15);
+    color: var(--tp-text-secondary);
+    border: 1px solid var(--tp-border);
 }
 
 .tradepulse__btn--secondary:hover {
@@ -900,8 +919,8 @@
 
 .tradepulse__btn--danger {
     background: transparent;
-    color: #fca5a5;
-    border: 1px solid rgba(239, 68, 68, .2);
+    color: var(--tp-loss);
+    border: 1px solid rgba(239, 68, 68, .25);
 }
 
 .tradepulse__btn--danger:hover {
@@ -910,7 +929,7 @@
 
 .tradepulse__btn--ghost {
     background: transparent;
-    color: #94a3b8;
+    color: var(--tp-text-tertiary);
     border: none;
     padding: 6px 12px;
 }
@@ -942,13 +961,13 @@
 }
 
 .tradepulse__account-block-title {
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     font-weight: 600;
-    color: #94a3b8;
+    color: var(--tp-text-tertiary);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     padding: 16px 20px;
-    border-bottom: 1px solid rgba(148, 163, 184, .08);
+    border-bottom: 1px solid var(--tp-border);
 }
 
 .tradepulse__account-rows {
@@ -968,14 +987,14 @@
 }
 
 .tradepulse__account-label {
-    font-size: 0.85rem;
-    color: #94a3b8;
+    font-size: 0.9rem;
+    color: var(--tp-text-secondary);
 }
 
 .tradepulse__account-value {
-    font-size: 0.85rem;
+    font-size: 0.95rem;
     font-weight: 600;
-    color: #e2e8f0;
+    color: var(--tp-text-primary);
 }
 
 .tradepulse__accounts-grid {

@@ -20,7 +20,7 @@ const MyJourney = observer(() => {
     const balance = fetchedBalance;
     const currency = 'USD';
 
-    const { journey, schedule, journeyLoading, refreshJourney } = useTradePulse();
+    const { journey, schedule, journeyLoading, currentAccount, refreshJourney } = useTradePulse();
     const isConnected = connectionStatus === 'opened' || connectionStatus === 'OPENED';
 
     const [showJourneyModal, setShowJourneyModal] = useState(false);
@@ -44,6 +44,10 @@ const MyJourney = observer(() => {
 
     const handleLockJourney = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        if (!currentAccount) {
+            console.error('No account selected');
+            return;
+        }
         setIsLocking(true);
         const form = e.currentTarget;
         const initial_balance = Number((form.elements.namedItem('j-initial') as HTMLInputElement).value);
@@ -52,8 +56,8 @@ const MyJourney = observer(() => {
         const start_date = (form.elements.namedItem('j-start') as HTMLInputElement).value;
 
         try {
-            await saveJourney('', {
-                loginid: '',
+            await saveJourney(currentAccount, {
+                loginid: currentAccount,
                 initial_balance,
                 daily_target_pct,
                 cycle_length_days,
@@ -109,8 +113,8 @@ const MyJourney = observer(() => {
                     <div style={{
                         textAlign: 'center',
                         padding: '60px 24px',
-                        background: 'rgba(30, 41, 59, .4)',
-                        border: '1px solid rgba(148, 163, 184, .08)',
+                        background: 'var(--tp-surface)',
+                        border: '1px solid var(--tp-border)',
                         borderRadius: '20px',
                     }}>
                         <div style={{
@@ -129,8 +133,8 @@ const MyJourney = observer(() => {
                                 <path d="M12 6v6l4 2"></path>
                             </svg>
                         </div>
-                        <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#f1f5f9', margin: '0 0 8px' }}>{localize('No Journey Locked')}</h3>
-                        <p style={{ fontSize: '0.9rem', color: '#94a3b8', maxWidth: '420px', margin: '0 auto 24px', lineHeight: 6 }}>
+                        <h3 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--tp-text-primary)', margin: '0 0 12px' }}>{localize('No Journey Locked')}</h3>
+                        <p style={{ fontSize: '1rem', color: 'var(--tp-text-secondary)', maxWidth: '440px', margin: '0 auto 28px', lineHeight: 1.7 }}>
                             {localize('Create your permanent trading plan. Set your goals, lock your journey, and track your progress automatically.')}
                         </p>
                         <button
@@ -164,7 +168,7 @@ const MyJourney = observer(() => {
                     <div style={{
                         position: 'fixed',
                         inset: 0,
-                        background: 'rgba(15, 23, 42, .6)',
+                        background: 'rgba(15, 23, 42, .7)',
                         backdropFilter: 'blur(4px)',
                         zIndex: 50,
                         display: 'flex',
@@ -173,8 +177,8 @@ const MyJourney = observer(() => {
                         padding: '24px',
                     }} onClick={() => setShowJourneyModal(false)}>
                         <div style={{
-                            background: 'rgba(30, 41, 59, .4)',
-                            border: '1px solid rgba(148, 163, 184, .08)',
+                            background: 'var(--tp-surface)',
+                            border: '1px solid var(--tp-border)',
                             borderRadius: '20px',
                             width: '100%',
                             maxWidth: '480px',
@@ -182,10 +186,10 @@ const MyJourney = observer(() => {
                         }} onClick={e => e.stopPropagation()}>
                             <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(148, 163, 184, .08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <div>
-                                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#818cf8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>{localize('Lock Your Journey')}</div>
-                                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>{localize('Start My Journey')}</h3>
+                                    <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--tp-accent)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>{localize('Lock Your Journey')}</div>
+                                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--tp-text-primary)', margin: 0 }}>{localize('Start My Journey')}</h3>
                                 </div>
-                                <button onClick={() => setShowJourneyModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}>
+                                <button onClick={() => setShowJourneyModal(false)} style={{ background: 'none', border: 'none', color: 'var(--tp-text-tertiary)', cursor: 'pointer', padding: '4px' }}>
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                         <line x1="18" y1="6" x2="6" y2="18"></line>
                                         <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -193,29 +197,29 @@ const MyJourney = observer(() => {
                                 </button>
                             </div>
                             <form onSubmit={handleLockJourney} style={{ padding: '24px' }}>
-                                <p style={{ fontSize: '0.85rem', color: '#94a3b8', margin: '0 0 20px', lineHeight: 1.6 }}>
+                                <p style={{ fontSize: '0.95rem', color: 'var(--tp-text-secondary)', margin: '0 0 24px', lineHeight: 1.7 }}>
                                     {localize('Set your trading goals. Once locked, these values cannot be changed — only reset.')}
                                 </p>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#94a3b8', marginBottom: '6px' }}>{localize('Initial Balance (USD)')}</label>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--tp-text-secondary)', marginBottom: '8px' }}>{localize('Initial Balance (USD)')}</label>
                                         <input name='j-initial' type='number' min='1' step='0.01' defaultValue='1000' required
-                                            style={{ width: '100%', padding: '10px 14px', border: '1px solid rgba(148, 163, 184, .1)', borderRadius: '12px', background: 'rgba(30, 41, 59, .6)', color: '#e2e8f0', fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none' }} />
+                                            style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--tp-border)', borderRadius: '12px', background: 'var(--tp-surface)', color: 'var(--tp-text-primary)', fontSize: '0.95rem', fontFamily: 'inherit', outline: 'none' }} />
                                     </div>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#94a3b8', marginBottom: '6px' }}>{localize('Daily Target (%)')}</label>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--tp-text-secondary)', marginBottom: '8px' }}>{localize('Daily Target (%)')}</label>
                                         <input name='j-rate' type='number' min='0.01' max='100' step='0.01' defaultValue='5' required
-                                            style={{ width: '100%', padding: '10px 14px', border: '1px solid rgba(148, 163, 184, .1)', borderRadius: '12px', background: 'rgba(30, 41, 59, .6)', color: '#e2e8f0', fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none' }} />
+                                            style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--tp-border)', borderRadius: '12px', background: 'var(--tp-surface)', color: 'var(--tp-text-primary)', fontSize: '0.95rem', fontFamily: 'inherit', outline: 'none' }} />
                                     </div>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#94a3b8', marginBottom: '6px' }}>{localize('Cycle Length (Days)')}</label>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--tp-text-secondary)', marginBottom: '8px' }}>{localize('Cycle Length (Days)')}</label>
                                         <input name='j-days' type='number' min='1' max='365' defaultValue='30' required
-                                            style={{ width: '100%', padding: '10px 14px', border: '1px solid rgba(148, 163, 184, .1)', borderRadius: '12px', background: 'rgba(30, 41, 59, .6)', color: '#e2e8f0', fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none' }} />
+                                            style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--tp-border)', borderRadius: '12px', background: 'var(--tp-surface)', color: 'var(--tp-text-primary)', fontSize: '0.95rem', fontFamily: 'inherit', outline: 'none' }} />
                                     </div>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#94a3b8', marginBottom: '6px' }}>{localize('Start Date')}</label>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--tp-text-secondary)', marginBottom: '8px' }}>{localize('Start Date')}</label>
                                         <input name='j-start' type='date' required
-                                            style={{ width: '100%', padding: '10px 14px', border: '1px solid rgba(148, 163, 184, .1)', borderRadius: '12px', background: 'rgba(30, 41, 59, .6)', color: '#e2e8f0', fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none' }} />
+                                            style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--tp-border)', borderRadius: '12px', background: 'var(--tp-surface)', color: 'var(--tp-text-primary)', fontSize: '0.95rem', fontFamily: 'inherit', outline: 'none' }} />
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
@@ -252,6 +256,29 @@ const MyJourney = observer(() => {
                         <span className={`tradepulse__live-dot${isConnected ? ' tradepulse__live-dot--active' : ''}`}></span>
                         <span>{isConnected ? localize('Live') : localize('Waiting for connection')}</span>
                     </div>
+                </div>
+
+                {/* Locked Journey Banner */}
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '12px 18px',
+                    background: 'var(--tp-accent-soft)',
+                    border: '1px solid rgba(99, 102, 241, .2)',
+                    borderRadius: '12px',
+                    marginBottom: '24px',
+                }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--tp-accent)', flexShrink: 0 }}>
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                    <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--tp-accent)' }}>
+                        {localize('Journey Locked')}
+                    </span>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--tp-text-secondary)', marginLeft: '4px' }}>
+                        {localize('Your plan is active and linked to your account.')}
+                    </span>
                 </div>
 
                 <div className='tradepulse__kpi-grid'>
