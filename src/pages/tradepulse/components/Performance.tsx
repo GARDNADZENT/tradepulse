@@ -112,18 +112,6 @@ const Performance = observer(() => {
             {/* Daily Performance Chart */}
             <section className='tradepulse__section'>
                 <div className='tradepulse__card'>
-                    <div className='tradepulse__card-header'>
-                        <div className='tradepulse__section-brand'>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <line x1="18" y1="20" x2="18" y2="10"></line>
-                                <line x1="12" y1="20" x2="12" y2="4"></line>
-                                <line x1="6" y1="20" x2="6" y2="14"></line>
-                            </svg>
-                            {localize('Performance')}
-                        </div>
-                        <h3 className='tradepulse__section-title'>{localize('Daily Performance')}</h3>
-                        <p className='tradepulse__section-subtitle'>{localize('Net profit/loss per day over the last 30 days.')}</p>
-                    </div>
                     <div className='tradepulse__card-body'>
                         {chartData.length === 0 ? (
                             <div className='performance__empty-state'>
