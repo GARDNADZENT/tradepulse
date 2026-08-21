@@ -10,7 +10,7 @@
 
 .master-schedule__loading {
     color: var(--tp-text-tertiary);
-    font-size: 1.4rem;
+    font-size: 0.95rem;
     text-align: center;
     padding: 40px 0;
 }
@@ -20,7 +20,7 @@
 }
 
 .master-schedule__label {
-    font-size: 1.1rem;
+    font-size: 0.875rem;
     font-weight: 600;
     color: var(--tp-accent);
     text-transform: uppercase;
@@ -28,14 +28,14 @@
 }
 
 .master-schedule__title {
-    font-size: 2.4rem;
+    font-size: 2rem;
     font-weight: bold;
     color: var(--tp-text-primary);
     margin: 4px 0 8px 0;
 }
 
 .master-schedule__subtitle {
-    font-size: 1.3rem;
+    font-size: 0.95rem;
     color: var(--tp-text-tertiary);
     margin: 0;
 }
@@ -57,13 +57,13 @@
 }
 
 .master-schedule__locked-label {
-    font-size: 1.6rem;
+    font-size: 1.5rem;
     font-weight: bold;
     color: var(--tp-text-primary);
 }
 
 .master-schedule__locked-sub {
-    font-size: 1.2rem;
+    font-size: 0.95rem;
     color: var(--tp-text-tertiary);
     margin-top: 4px;
 }
@@ -79,7 +79,7 @@
     color: var(--tp-text-primary);
     border: 1px solid var(--tp-border);
     border-radius: 8px;
-    font-size: 1.2rem;
+    font-size: 0.95rem;
     cursor: pointer;
     font-family: inherit;
 }
@@ -90,7 +90,7 @@
     color: var(--tp-loss);
     border: 1px solid #fecaca;
     border-radius: 8px;
-    font-size: 1.2rem;
+    font-size: 0.95rem;
     cursor: pointer;
     font-family: inherit;
 }
@@ -116,7 +116,7 @@
 }
 
 .info-card__label {
-    font-size: 1rem;
+    font-size: 0.875rem;
     font-weight: 600;
     color: var(--tp-text-tertiary);
     text-transform: uppercase;
@@ -124,7 +124,7 @@
 }
 
 .info-card__value {
-    font-size: 1.4rem;
+    font-size: 1.5rem;
     font-weight: bold;
     color: var(--tp-text-primary);
 }
@@ -150,7 +150,7 @@
 }
 
 .master-schedule__card-text {
-    font-size: 1.2rem;
+    font-size: 0.875rem;
     color: var(--tp-text-tertiary);
     font-family: 'JetBrains Mono', monospace;
 }
@@ -174,7 +174,7 @@
 }
 
 .master-schedule__label {
-    font-size: 1.1rem;
+    font-size: 0.875rem;
     font-weight: 600;
     color: var(--tp-text-tertiary);
 }
@@ -189,7 +189,7 @@
     top: 50%;
     transform: translateY(-50%);
     color: var(--tp-text-tertiary);
-    font-size: 1.3rem;
+    font-size: 0.95rem;
 }
 
 .master-schedule__input {
@@ -199,7 +199,7 @@
     border-radius: 8px;
     background: var(--tp-surface);
     color: var(--tp-text-primary);
-    font-size: 1.3rem;
+    font-size: 0.95rem;
     font-family: inherit;
     outline: none;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -222,7 +222,7 @@
     color: var(--tp-text-primary);
     border: 1px solid var(--tp-border);
     border-radius: 8px;
-    font-size: 1.3rem;
+    font-size: 0.95rem;
     cursor: pointer;
     font-family: inherit;
 }
@@ -233,7 +233,7 @@
     color: #fff;
     border: none;
     border-radius: 8px;
-    font-size: 1.3rem;
+    font-size: 0.95rem;
     font-weight: 600;
     cursor: pointer;
     font-family: inherit;
@@ -267,14 +267,14 @@
 }
 
 .master-schedule__generator-title {
-    font-size: 1.6rem;
+    font-size: 1.5rem;
     font-weight: bold;
     color: var(--tp-text-primary);
     margin: 0;
 }
 
 .master-schedule__generator-sub {
-    font-size: 1.2rem;
+    font-size: 0.95rem;
     color: var(--tp-text-tertiary);
     margin-top: 2px;
 }
@@ -292,14 +292,14 @@
 }
 
 .master-schedule__output-title {
-    font-size: 1.6rem;
+    font-size: 1.5rem;
     font-weight: bold;
     color: var(--tp-text-primary);
     margin: 0;
 }
 
 .master-schedule__output-meta {
-    font-size: 1.1rem;
+    font-size: 0.95rem;
     color: var(--tp-text-tertiary);
     margin: 4px 0 0 0;
 }
@@ -311,7 +311,7 @@
 .master-schedule__table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 1.2rem;
+    font-size: 0.95rem;
 }
 
 .master-schedule__table th,
@@ -325,7 +325,7 @@
     background: var(--tp-bg);
     color: var(--tp-text-tertiary);
     font-weight: 600;
-    font-size: 1rem;
+    font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.03em;
 }
@@ -347,7 +347,7 @@
 }
 
 .master-schedule__table-date {
-    font-size: 1rem;
+    font-size: 0.875rem;
     color: var(--tp-text-tertiary);
     margin-top: 2px;
 }
@@ -358,7 +358,7 @@
     gap: 4px;
     padding: 4px 10px;
     border-radius: 999px;
-    font-size: 1rem;
+    font-size: 0.75rem;
     font-weight: 600;
 }
 
@@ -366,7 +366,7 @@
     padding: 16px 24px;
     background: var(--tp-bg);
     border-top: 1px solid var(--tp-border);
-    font-size: 1.1rem;
+    font-size: 0.875rem;
     color: var(--tp-text-tertiary);
     display: flex;
     align-items: flex-start;

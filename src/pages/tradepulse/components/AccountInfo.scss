@@ -13,7 +13,7 @@
 }
 
 .account-info__label {
-    font-size: 1.1rem;
+    font-size: 0.875rem;
     font-weight: 600;
     color: var(--tp-accent);
     text-transform: uppercase;
@@ -21,14 +21,14 @@
 }
 
 .account-info__title {
-    font-size: 2.4rem;
+    font-size: 2rem;
     font-weight: bold;
     color: var(--tp-text-primary);
     margin: 4px 0 8px 0;
 }
 
 .account-info__subtitle {
-    font-size: 1.3rem;
+    font-size: 0.95rem;
     color: var(--tp-text-tertiary);
     margin: 0;
 }
@@ -69,7 +69,7 @@
 }
 
 .summary-card__label {
-    font-size: 1rem;
+    font-size: 0.875rem;
     font-weight: 600;
     color: var(--tp-text-tertiary);
     text-transform: uppercase;
@@ -89,7 +89,7 @@
 }
 
 .summary-card__value {
-    font-size: 1.5rem;
+    font-size: 1.625rem;
     font-weight: bold;
     color: var(--tp-text-primary);
     word-break: break-word;

@@ -48,13 +48,13 @@ const Header = ({ title, onToggleSidebar }: { title: string; onToggleSidebar: ()
                         <span className={`tradepulse__account-badge ${!selected.is_virtual ? 'tradepulse__account-badge--real' : 'tradepulse__account-badge--demo'}`}>
                             {!selected.is_virtual ? 'REAL' : 'DEMO'}
                         </span>
-                        <span className='mono' style={{ fontSize: '0.85rem', color: 'var(--text-prominent)', fontWeight: 500 }}>
+                        <span className='mono' style={{ fontSize: '0.875rem', color: 'var(--text-prominent)', fontWeight: 500 }}>
                             {selected.loginid}
                         </span>
-                        <span className='mono' style={{ fontSize: '0.85rem', color: '#10b981', fontWeight: 600 }}>
+                        <span className='mono' style={{ fontSize: '0.875rem', color: '#10b981', fontWeight: 600 }}>
                             {Number(selected.balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-less-prominent)' }}>{selected.currency}</span>
+                        <span style={{ fontSize: '0.875rem', color: 'var(--text-less-prominent)' }}>{selected.currency}</span>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-less-prominent)', marginLeft: 4 }}>
                             <polyline points="6 9 12 15 18 9"></polyline>
                         </svg>
@@ -78,20 +78,20 @@ const Header = ({ title, onToggleSidebar }: { title: string; onToggleSidebar: ()
                                             background: !account.is_virtual ? 'rgba(16,185,129,.15)' : 'rgba(56,189,248,.15)',
                                             color: !account.is_virtual ? '#10b981' : '#38bdf8',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            fontSize: '0.85rem', fontWeight: 700, flexShrink: 0,
+                                            fontSize: '0.875rem', fontWeight: 700, flexShrink: 0,
                                         }}>
                                             {!account.is_virtual ? 'R' : 'D'}
                                         </div>
                                         <div style={{ flex: 1, minWidth: 0 }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                <span className='mono' style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-prominent)' }}>
+                                                <span className='mono' style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-prominent)' }}>
                                                     {account.loginid}
                                                 </span>
                                                 <span className={`tradepulse__account-badge ${!account.is_virtual ? 'tradepulse__account-badge--real' : 'tradepulse__account-badge--demo'}`}>
                                                     {!account.is_virtual ? 'REAL' : 'DEMO'}
                                                 </span>
                                             </div>
-                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-less-prominent)', marginTop: 2 }}>
+                                            <div style={{ fontSize: '0.875rem', color: 'var(--text-less-prominent)', marginTop: 2 }}>
                                                 {account.landing_company_shortcode || ''} · {account.currency || ''}
                                             </div>
                                         </div>

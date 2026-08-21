@@ -123,7 +123,7 @@ const MyJourney = observer(() => {
                             </svg>
                         </div>
                         <h3 className='tradepulse__section-title' style={{ margin: '0 0 12px', textAlign: 'center' }}>{localize('No Journey Locked')}</h3>
-                        <p style={{ fontSize: '1rem', color: 'var(--tp-text-secondary)', maxWidth: '440px', margin: '0 auto 28px', lineHeight: 1.7 }}>
+                        <p style={{ fontSize: '0.95rem', color: 'var(--tp-text-secondary)', maxWidth: '440px', margin: '0 auto 28px', lineHeight: 1.7 }}>
                             {localize('Create your permanent trading plan. Set your goals, lock your journey, and track your progress automatically.')}
                         </p>
                         <button
@@ -226,10 +226,10 @@ const MyJourney = observer(() => {
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                         <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                     </svg>
-                    <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--tp-accent)' }}>
+                    <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--tp-accent)' }}>
                         {localize('Journey Locked')}
                     </span>
-                    <span style={{ fontSize: '0.85rem', color: 'var(--tp-text-secondary)', marginLeft: '4px' }}>
+                    <span style={{ fontSize: '0.875rem', color: 'var(--tp-text-secondary)', marginLeft: '4px' }}>
                         {localize('Your plan is active and linked to your account.')}
                     </span>
                 </div>
