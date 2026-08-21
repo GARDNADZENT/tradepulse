@@ -261,6 +261,18 @@ export const TradePulseProvider = ({ children }: { children: ReactNode }) => {
         refreshJourney(loginid);
     }, [refreshAll, refreshJourney]);
 
+    useEffect(() => {
+        if (state.currentAccount) {
+            refreshJourney();
+        }
+    }, [state.currentAccount, refreshJourney]);
+
+    useEffect(() => {
+        if (state.currentAccount) {
+            refreshAll();
+        }
+    }, [state.currentAccount, refreshAll]);
+
     return (
         <TradePulseContext.Provider value={{
             ...state,
