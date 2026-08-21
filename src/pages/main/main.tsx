@@ -48,7 +48,6 @@ import TradingBots from '../free-bots/trading-bots';
 import ManualTrade from '../manual-trade';
 import { TradePulse } from '../tradepulse';
 import { MakotiWidget } from '@/components/makoti-widget/makoti-widget';
-import { AutoTrades } from '@/components/makoti-widget/auto-trades';
 import '@/components/makoti-widget/makoti-widget.scss';
 
 const ChartWrapper = lazy(() => import('../chart/chart-wrapper'));
@@ -508,7 +507,7 @@ const AppWrapper = observer(() => {
                                 }
                                 id='id-auto-trades'
                             >
-                                <AutoTrades />
+                                <MakotiWidget />
                             </div>
                         </Tabs>
                         {!isDesktop && right_tab_shadow && <span className='tabs-shadow tabs-shadow--right' />}{' '}
@@ -544,8 +543,6 @@ const AppWrapper = observer(() => {
             >
                 {message}
             </Dialog>
-
-            {active_tab === BOT_BUILDER && <MakotiWidget />}
 
             {/* Trade Type Confirmation Modal */}
             {(() => {

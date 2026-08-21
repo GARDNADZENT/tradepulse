@@ -19,7 +19,7 @@ export const DBOT_TABS: TDashboardTabIndex = Object.freeze({
     MANUAL_TRADE: 4,
     TRADEPULSE: 5,
     TUTORIAL: 999,
-    AUTO_TRADES: 7,
+    AUTO_TRADES: 6,
 });
 
 export const MAX_STRATEGIES = 10;
