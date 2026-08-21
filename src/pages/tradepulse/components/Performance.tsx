@@ -126,8 +126,8 @@ const Performance = observer(() => {
                     </div>
                     <div className='tradepulse__card-body'>
                         {chartData.length === 0 ? (
-                            <div className='tradepulse__text-muted' style={{ textAlign: 'center', padding: '40px 0' }}>
-                                {localize('No performance data available yet.')}
+                            <div className='performance__empty-state'>
+                                <p className='tradepulse__text-muted'>{localize('No performance data available yet.')}</p>
                             </div>
                         ) : (
                             <div className='tradepulse__chart-card'>
@@ -178,8 +178,10 @@ const Performance = observer(() => {
                     </div>
 
                     {contractPerformance.length === 0 ? (
-                        <div className='tradepulse__card-body' style={{ textAlign: 'center', padding: '40px 0' }}>
-                            <p className='tradepulse__text-muted'>{localize('No completed contracts yet. Trades will appear here automatically once connected.')}</p>
+                        <div className='tradepulse__card-body'>
+                            <div className='performance__empty-state'>
+                                <p className='tradepulse__text-muted'>{localize('No completed contracts yet. Trades will appear here automatically once connected.')}</p>
+                            </div>
                         </div>
                     ) : (
                         <div className='tradepulse__table-wrapper'>

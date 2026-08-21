@@ -1,15 +1,4 @@
-/* TradePulse dark theme overrides */
-:root {
-    --text-prominent: #f1f5f9;
-    --text-less-prominent: #94a3b8;
-    --text-profit-success: #34d399;
-    --text-loss-danger: #fca5a5;
-    --general-main-2: rgba(30, 41, 59, .4);
-    --general-section-1: rgba(30, 41, 59, .6);
-    --border-normal: rgba(148, 163, 184, .08);
-    --transparent-success: rgba(16, 185, 129, .1);
-}
-
+/* TradePulse light theme — My Journey */
 @import '@/components/shared/styles/_themes.scss';
 @import '@/components/shared/styles/_constants.scss';
 
@@ -26,7 +15,7 @@
 .my-journey__label-today {
     font-size: 1.1rem;
     font-weight: 600;
-    color: var(--brand-primary);
+    color: var(--tp-accent);
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
@@ -34,13 +23,13 @@
 .my-journey__title {
     font-size: 2.4rem;
     font-weight: bold;
-    color: var(--text-prominent);
+    color: var(--tp-text-primary);
     margin: 4px 0 8px 0;
 }
 
 .my-journey__subtitle {
     font-size: 1.3rem;
-    color: var(--text-less-prominent);
+    color: var(--tp-text-tertiary);
     margin: 0;
 }
 
@@ -51,8 +40,8 @@
 }
 
 .kpi-card {
-    background: var(--general-main-2);
-    border: 1px solid var(--border-normal);
+    background: var(--tp-surface);
+    border: 1px solid var(--tp-border);
     border-radius: 12px;
     padding: 16px;
     display: flex;
@@ -66,8 +55,8 @@
 }
 
 .kpi-card--accent {
-    border-color: var(--brand-primary);
-    background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-primary) 100%);
+    border-color: var(--tp-accent);
+    background: linear-gradient(135deg, var(--tp-accent) 0%, var(--tp-accent) 100%);
     color: #fff;
 }
 
@@ -81,11 +70,11 @@
 }
 
 .kpi-card--live {
-    border-color: var(--transparent-success);
+    border-color: var(--tp-profit-soft);
 }
 
 .kpi-card--highlight .kpi-card__value {
-    color: var(--text-profit-success);
+    color: var(--tp-profit);
 }
 
 .kpi-card__header {
@@ -97,7 +86,7 @@
 .kpi-card__label {
     font-size: 1.1rem;
     font-weight: 600;
-    color: var(--text-less-prominent);
+    color: var(--tp-text-tertiary);
     text-transform: uppercase;
     letter-spacing: 0.03em;
 }
@@ -106,7 +95,7 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--text-profit-success);
+    background: var(--tp-profit);
     position: relative;
 }
 
@@ -115,7 +104,7 @@
     position: absolute;
     inset: -3px;
     border-radius: 50%;
-    background: var(--text-profit-success);
+    background: var(--tp-profit);
     opacity: 0.35;
     animation: pulse 1.6s ease-out infinite;
 }
@@ -128,25 +117,25 @@
 .kpi-card__value {
     font-size: 1.8rem;
     font-weight: bold;
-    color: var(--text-prominent);
+    color: var(--tp-text-primary);
 }
 
 .kpi-card__sub {
     font-size: 1.1rem;
-    color: var(--text-less-prominent);
+    color: var(--tp-text-tertiary);
 }
 
 .text-profit {
-    color: var(--text-profit-success);
+    color: var(--tp-profit);
 }
 
 .text-loss {
-    color: var(--text-loss-danger);
+    color: var(--tp-loss);
 }
 
 .my-journey__progress {
-    background: var(--general-main-2);
-    border: 1px solid var(--border-normal);
+    background: var(--tp-surface);
+    border: 1px solid var(--tp-border);
     border-radius: 12px;
     padding: 20px;
 }
@@ -161,31 +150,31 @@
 .my-journey__progress-label {
     font-size: 1.3rem;
     font-weight: 600;
-    color: var(--text-prominent);
+    color: var(--tp-text-primary);
 }
 
 .my-journey__progress-sub {
     font-size: 1.1rem;
-    color: var(--text-less-prominent);
+    color: var(--tp-text-tertiary);
     margin-top: 2px;
 }
 
 .my-journey__progress-pct {
     font-size: 1.8rem;
     font-weight: bold;
-    color: var(--text-prominent);
+    color: var(--tp-text-primary);
 }
 
 .my-journey__progress-bar {
     height: 10px;
-    background: var(--general-section-1);
+    background: var(--tp-border);
     border-radius: 999px;
     overflow: hidden;
 }
 
 .my-journey__progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, var(--brand-primary) 0%, #8b5cf6 50%, #06b6d4 100%);
+    background: linear-gradient(90deg, var(--tp-accent) 0%, #8b5cf6 50%, #06b6d4 100%);
     border-radius: 999px;
     transition: width 0.5s ease;
 }
@@ -194,8 +183,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: var(--general-main-2);
-    border: 1px solid var(--border-normal);
+    background: var(--tp-surface);
+    border: 1px solid var(--tp-border);
     border-radius: 12px;
     padding: 16px 20px;
 }
@@ -203,13 +192,13 @@
 .my-journey__status-label {
     font-size: 1.3rem;
     font-weight: 600;
-    color: var(--text-prominent);
+    color: var(--tp-text-primary);
 }
 
 .my-journey__status-value {
     font-size: 1.4rem;
     font-weight: bold;
-    color: var(--brand-primary);
+    color: var(--tp-accent);
 }
 
 .my-journey__actions {
@@ -219,18 +208,18 @@
 
 .my-journey__edit-btn {
     padding: 10px 20px;
-    background: var(--general-main-2);
-    color: var(--text-prominent);
-    border: 1px solid var(--border-normal);
+    background: var(--tp-bg);
+    color: var(--tp-text-primary);
+    border: 1px solid var(--tp-border);
     border-radius: 8px;
     font-size: 1.3rem;
     cursor: pointer;
-    font-family: var(--brand-font-primary);
+    font-family: inherit;
     transition: background 0.2s ease;
 }
 
 .my-journey__edit-btn:hover {
-    background: var(--general-section-1);
+    background: var(--tp-border);
 }
 
 .my-journey__modal-overlay {
@@ -246,8 +235,8 @@
 }
 
 .my-journey__modal {
-    background: var(--general-main-2);
-    border: 1px solid var(--border-normal);
+    background: var(--tp-surface);
+    border: 1px solid var(--tp-border);
     border-radius: 12px;
     padding: 24px;
     width: 100%;
@@ -259,7 +248,7 @@
 .my-journey__modal-title {
     font-size: 1.6rem;
     font-weight: bold;
-    color: var(--text-prominent);
+    color: var(--tp-text-primary);
     margin: 0 0 16px 0;
 }
 
@@ -279,23 +268,23 @@
 .my-journey__label {
     font-size: 1.2rem;
     font-weight: 600;
-    color: var(--text-less-prominent);
+    color: var(--tp-text-tertiary);
 }
 
 .my-journey__input {
     padding: 10px 12px;
-    border: 1px solid var(--border-normal);
+    border: 1px solid var(--tp-border);
     border-radius: 8px;
-    background: var(--general-main-1);
-    color: var(--text-prominent);
+    background: var(--tp-surface);
+    color: var(--tp-text-primary);
     font-size: 1.4rem;
-    font-family: var(--brand-font-primary);
+    font-family: inherit;
     outline: none;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .my-journey__input:focus {
-    border-color: var(--brand-primary);
+    border-color: var(--tp-accent);
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
@@ -308,28 +297,28 @@
 .my-journey__cancel-btn {
     padding: 10px 20px;
     background: transparent;
-    color: var(--text-prominent);
-    border: 1px solid var(--border-normal);
+    color: var(--tp-text-primary);
+    border: 1px solid var(--tp-border);
     border-radius: 8px;
     font-size: 1.3rem;
     cursor: pointer;
-    font-family: var(--brand-font-primary);
+    font-family: inherit;
 }
 
 .my-journey__save-btn {
     padding: 10px 20px;
-    background: var(--brand-primary);
+    background: var(--tp-accent);
     color: #fff;
     border: none;
     border-radius: 8px;
     font-size: 1.3rem;
     cursor: pointer;
-    font-family: var(--brand-font-primary);
+    font-family: inherit;
     font-weight: 600;
 }
 
 .my-journey__loading {
-    color: var(--text-less-prominent);
+    color: var(--tp-text-tertiary);
     font-size: 1.4rem;
     text-align: center;
     padding: 40px 0;

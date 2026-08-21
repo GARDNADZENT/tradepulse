@@ -1,14 +1,4 @@
-/* TradePulse dark theme overrides */
-:root {
-    --text-prominent: #f1f5f9;
-    --text-less-prominent: #94a3b8;
-    --text-profit-success: #34d399;
-    --text-loss-danger: #fca5a5;
-    --general-main-2: rgba(30, 41, 59, .4);
-    --general-section-1: rgba(30, 41, 59, .6);
-    --border-normal: rgba(148, 163, 184, .08);
-}
-
+/* TradePulse light theme — Account Info */
 @import '@/components/shared/styles/_themes.scss';
 @import '@/components/shared/styles/_constants.scss';
 
@@ -25,7 +15,7 @@
 .account-info__label {
     font-size: 1.1rem;
     font-weight: 600;
-    color: var(--brand-primary);
+    color: var(--tp-accent);
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
@@ -33,13 +23,13 @@
 .account-info__title {
     font-size: 2.4rem;
     font-weight: bold;
-    color: var(--text-prominent);
+    color: var(--tp-text-primary);
     margin: 4px 0 8px 0;
 }
 
 .account-info__subtitle {
     font-size: 1.3rem;
-    color: var(--text-less-prominent);
+    color: var(--tp-text-tertiary);
     margin: 0;
 }
 
@@ -50,8 +40,8 @@
 }
 
 .summary-card {
-    background: var(--general-main-2);
-    border: 1px solid var(--border-normal);
+    background: var(--tp-surface);
+    border: 1px solid var(--tp-border);
     border-radius: 12px;
     padding: 16px;
     display: flex;
@@ -65,11 +55,11 @@
 }
 
 .summary-card--accent {
-    border-color: var(--brand-primary);
+    border-color: var(--tp-accent);
 }
 
 .summary-card--highlight {
-    border-color: var(--transparent-success);
+    border-color: var(--tp-profit-soft);
 }
 
 .summary-card__header {
@@ -81,36 +71,36 @@
 .summary-card__label {
     font-size: 1rem;
     font-weight: 600;
-    color: var(--text-less-prominent);
+    color: var(--tp-text-tertiary);
     text-transform: uppercase;
     letter-spacing: 0.03em;
 }
 
 .summary-card__icon {
-    color: var(--text-less-prominent);
+    color: var(--tp-text-tertiary);
 }
 
 .summary-card--accent .summary-card__icon {
-    color: var(--brand-primary);
+    color: var(--tp-accent);
 }
 
 .summary-card--highlight .summary-card__icon {
-    color: var(--text-profit-success);
+    color: var(--tp-profit);
 }
 
 .summary-card__value {
     font-size: 1.5rem;
     font-weight: bold;
-    color: var(--text-prominent);
+    color: var(--tp-text-primary);
     word-break: break-word;
 }
 
 .summary-card--accent .summary-card__value {
-    color: var(--brand-primary);
+    color: var(--tp-accent);
 }
 
 .summary-card--highlight .summary-card__value {
-    color: var(--text-profit-success);
+    color: var(--tp-profit);
 }
 
 .mono {
@@ -118,11 +108,11 @@
 }
 
 .text-profit {
-    color: var(--text-profit-success);
+    color: var(--tp-profit);
 }
 
 .text-loss {
-    color: var(--text-loss-danger);
+    color: var(--tp-loss);
 }
 
 @media (max-width: 768px) {

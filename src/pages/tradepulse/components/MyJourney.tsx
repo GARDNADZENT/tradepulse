@@ -115,49 +115,20 @@ const MyJourney = observer(() => {
                             <p className='tradepulse__section-subtitle'>{localize('Track your daily progress against the plan.')}</p>
                         </div>
                     </div>
-                    <div style={{
-                        textAlign: 'center',
-                        padding: '60px 24px',
-                        background: 'var(--tp-surface)',
-                        border: '1px solid var(--tp-border)',
-                        borderRadius: '20px',
-                    }}>
-                        <div style={{
-                            width: '64px',
-                            height: '64px',
-                            borderRadius: '50%',
-                            background: 'rgba(99, 102, 241, .1)',
-                            border: '1px solid rgba(99, 102, 241, .2)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            margin: '0 auto 16px',
-                        }}>
-                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#818cf8' }}>
+                    <div className='tradepulse__card' style={{ textAlign: 'center' }}>
+                        <div className='tradepulse__kpi-icon' style={{ width: '64px', height: '64px', margin: '0 auto 16px', color: 'var(--tp-accent)' }}>
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path>
                                 <path d="M12 6v6l4 2"></path>
                             </svg>
                         </div>
-                        <h3 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--tp-text-primary)', margin: '0 0 12px' }}>{localize('No Journey Locked')}</h3>
+                        <h3 className='tradepulse__section-title' style={{ margin: '0 0 12px', textAlign: 'center' }}>{localize('No Journey Locked')}</h3>
                         <p style={{ fontSize: '1rem', color: 'var(--tp-text-secondary)', maxWidth: '440px', margin: '0 auto 28px', lineHeight: 1.7 }}>
                             {localize('Create your permanent trading plan. Set your goals, lock your journey, and track your progress automatically.')}
                         </p>
                         <button
                             onClick={() => setShowJourneyModal(true)}
-                            style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                padding: '12px 24px',
-                                borderRadius: '12px',
-                                background: '#6366f1',
-                                color: '#fff',
-                                border: 'none',
-                                fontSize: '0.9rem',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                                fontFamily: 'inherit',
-                            }}
+                            className='tradepulse__btn tradepulse__btn--primary'
                         >
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path>
@@ -170,29 +141,12 @@ const MyJourney = observer(() => {
 
                 {/* Journey Creation Modal */}
                 {showJourneyModal && (
-                    <div style={{
-                        position: 'fixed',
-                        inset: 0,
-                        background: 'rgba(15, 23, 42, .7)',
-                        backdropFilter: 'blur(4px)',
-                        zIndex: 50,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: '24px',
-                    }} onClick={() => setShowJourneyModal(false)}>
-                        <div style={{
-                            background: 'var(--tp-surface)',
-                            border: '1px solid var(--tp-border)',
-                            borderRadius: '20px',
-                            width: '100%',
-                            maxWidth: '480px',
-                            overflow: 'hidden',
-                        }} onClick={e => e.stopPropagation()}>
-                            <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(148, 163, 184, .08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div className='my-journey__modal-overlay' onClick={() => setShowJourneyModal(false)}>
+                        <div className='my-journey__modal' onClick={e => e.stopPropagation()}>
+                            <div className='my-journey__modal-header' style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <div>
-                                    <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--tp-accent)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>{localize('Lock Your Journey')}</div>
-                                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--tp-text-primary)', margin: 0 }}>{localize('Start My Journey')}</h3>
+                                    <div className='my-journey__label'>{localize('Lock Your Journey')}</div>
+                                    <h3 className='my-journey__modal-title'>{localize('Start My Journey')}</h3>
                                 </div>
                                 <button onClick={() => setShowJourneyModal(false)} style={{ background: 'none', border: 'none', color: 'var(--tp-text-tertiary)', cursor: 'pointer', padding: '4px' }}>
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -201,39 +155,33 @@ const MyJourney = observer(() => {
                                     </svg>
                                 </button>
                             </div>
-                            <form onSubmit={handleLockJourney} style={{ padding: '24px' }}>
-                                <p style={{ fontSize: '0.95rem', color: 'var(--tp-text-secondary)', margin: '0 0 24px', lineHeight: 1.7 }}>
+                            <form onSubmit={handleLockJourney} className='my-journey__modal-body'>
+                                <p className='my-journey__modal-text'>
                                     {localize('Set your trading goals. Once locked, these values cannot be changed — only reset.')}
                                 </p>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--tp-text-secondary)', marginBottom: '8px' }}>{localize('Initial Balance (USD)')}</label>
-                                        <input name='j-initial' type='number' min='1' step='0.01' defaultValue='1000' required
-                                            style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--tp-border)', borderRadius: '12px', background: 'var(--tp-surface)', color: 'var(--tp-text-primary)', fontSize: '0.95rem', fontFamily: 'inherit', outline: 'none' }} />
+                                <div className='my-journey__settings-grid'>
+                                    <div className='my-journey__field'>
+                                        <label className='my-journey__label'>{localize('Initial Balance (USD)')}</label>
+                                        <input name='j-initial' type='number' min='1' step='0.01' defaultValue='1000' required className='my-journey__input' />
                                     </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--tp-text-secondary)', marginBottom: '8px' }}>{localize('Daily Target (%)')}</label>
-                                        <input name='j-rate' type='number' min='0.01' max='100' step='0.01' defaultValue='5' required
-                                            style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--tp-border)', borderRadius: '12px', background: 'var(--tp-surface)', color: 'var(--tp-text-primary)', fontSize: '0.95rem', fontFamily: 'inherit', outline: 'none' }} />
+                                    <div className='my-journey__field'>
+                                        <label className='my-journey__label'>{localize('Daily Target (%)')}</label>
+                                        <input name='j-rate' type='number' min='0.01' max='100' step='0.01' defaultValue='5' required className='my-journey__input' />
                                     </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--tp-text-secondary)', marginBottom: '8px' }}>{localize('Cycle Length (Days)')}</label>
-                                        <input name='j-days' type='number' min='1' max='365' defaultValue='30' required
-                                            style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--tp-border)', borderRadius: '12px', background: 'var(--tp-surface)', color: 'var(--tp-text-primary)', fontSize: '0.95rem', fontFamily: 'inherit', outline: 'none' }} />
+                                    <div className='my-journey__field'>
+                                        <label className='my-journey__label'>{localize('Cycle Length (Days)')}</label>
+                                        <input name='j-days' type='number' min='1' max='365' defaultValue='30' required className='my-journey__input' />
                                     </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--tp-text-secondary)', marginBottom: '8px' }}>{localize('Start Date')}</label>
-                                        <input name='j-start' type='date' required
-                                            style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--tp-border)', borderRadius: '12px', background: 'var(--tp-surface)', color: 'var(--tp-text-primary)', fontSize: '0.95rem', fontFamily: 'inherit', outline: 'none' }} />
+                                    <div className='my-journey__field'>
+                                        <label className='my-journey__label'>{localize('Start Date')}</label>
+                                        <input name='j-start' type='date' required className='my-journey__input' />
                                     </div>
                                 </div>
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
-                                    <button type='button' onClick={() => setShowJourneyModal(false)} disabled={isLocking}
-                                        style={{ padding: '10px 20px', borderRadius: '12px', background: 'transparent', color: '#e2e8f0', border: '1px solid rgba(148, 163, 184, .15)', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                                <div className='my-journey__modal-actions'>
+                                    <button type='button' onClick={() => setShowJourneyModal(false)} disabled={isLocking} className='my-journey__cancel-btn'>
                                         {localize('Cancel')}
                                     </button>
-                                    <button type='submit' disabled={isLocking}
-                                        style={{ padding: '10px 20px', borderRadius: '12px', background: '#6366f1', color: '#fff', border: 'none', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 1px 2px rgba(15, 23, 42, .04), 0 20px 40px -20px rgba(15, 23, 42, .2)' }}>
+                                    <button type='submit' disabled={isLocking} className='my-journey__save-btn'>
                                         {isLocking ? localize('Locking...') : localize('Lock Journey')}
                                     </button>
                                 </div>
