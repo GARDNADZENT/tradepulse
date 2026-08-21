@@ -2,6 +2,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useStore } from '@/hooks/useStore';
 import { loadJourney, normalizeJourneyDays } from './utils/calculations';
+import { journeyService } from '@/services/supabase/journey.service';
 
 interface Account {
     loginid: string;
@@ -94,6 +95,7 @@ interface TradePulseContextValue extends TradePulseState {
     refreshAll: () => Promise<void>;
     refreshBalance: () => Promise<void>;
     refreshJourney: () => Promise<void>;
+    resetJourney: () => Promise<void>;
     logout: () => Promise<void>;
     switchAccount: (loginid: string) => void;
     getSelected: () => Account | null;
@@ -246,6 +248,24 @@ export const TradePulseProvider = ({ children }: { children: ReactNode }) => {
         }
     }, []);
 
+    const resetJourney = useCallback(async (loginid?: string) => {
+        const accountLoginid = loginid || state.currentAccount;
+        if (!accountLoginid) return;
+        try {
+            await journeyService.deleteJourney(accountLoginid);
+        } catch (e) {
+            console.error('Reset journey failed:', e);
+        } finally {
+            setState(prev => ({
+                ...prev,
+                journey: null,
+                schedule: null,
+                todayDay: 0,
+                journeyModalOpen: false,
+            }));
+        }
+    }, [state.currentAccount]);
+
     const switchAccount = useCallback((loginid: string) => {
         setState(prev => ({
             ...prev,
@@ -280,6 +300,7 @@ export const TradePulseProvider = ({ children }: { children: ReactNode }) => {
             refreshAll,
             refreshBalance,
             refreshJourney,
+            resetJourney,
             logout,
             switchAccount,
             getSelected,

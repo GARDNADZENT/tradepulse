@@ -23,11 +23,13 @@ const MyJourney = observer(() => {
     const balance = fetchedBalance;
     const currency = 'USD';
 
-    const { journey, schedule, journeyLoading, currentAccount, refreshJourney } = useTradePulse();
+    const { journey, schedule, journeyLoading, currentAccount, refreshJourney, resetJourney } = useTradePulse();
     const isConnected = connectionStatus === 'opened' || connectionStatus === 'OPENED';
 
     const [showJourneyModal, setShowJourneyModal] = useState(false);
     const [isLocking, setIsLocking] = useState(false);
+    const [showResetModal, setShowResetModal] = useState(false);
+    const [isResetting, setIsResetting] = useState(false);
 
     const currentDay = journey ? getCurrentJourneyDay(journey.start_date) : 1;
     const rows = schedule?.rows || [];
@@ -76,6 +78,21 @@ const MyJourney = observer(() => {
             alert(err instanceof Error ? err.message : 'Failed to lock journey');
         } finally {
             setIsLocking(false);
+        }
+    };
+
+    const handleResetJourney = async () => {
+        const loginid = currentAccount || storeLoginid;
+        if (!loginid) return;
+        setIsResetting(true);
+        try {
+            await resetJourney(loginid);
+            await refreshJourney();
+            setShowResetModal(false);
+        } catch (err) {
+            console.error('Reset journey failed:', err);
+        } finally {
+            setIsResetting(false);
         }
     };
 
@@ -232,6 +249,13 @@ const MyJourney = observer(() => {
                     <span style={{ fontSize: '0.875rem', color: 'var(--tp-text-secondary)', marginLeft: '4px' }}>
                         {localize('Your plan is active and linked to your account.')}
                     </span>
+                    <button onClick={() => setShowResetModal(true)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--tp-text-tertiary)', cursor: 'pointer', padding: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.875rem', fontWeight: 500 }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12"></path>
+                            <path d="M3 5v7h7"></path>
+                        </svg>
+                        {localize('Reset Journey')}
+                    </button>
                 </div>
 
                 <div className='tradepulse__kpi-grid'>
@@ -264,6 +288,26 @@ const MyJourney = observer(() => {
                     </div>
                 </div>
             </section>
+
+            {/* Reset Confirmation Modal */}
+            {showResetModal && (
+                <div className='tradepulse__modal-overlay' onClick={() => setShowResetModal(false)}>
+                    <div className='tradepulse__modal'>
+                        <h3 className='tradepulse__modal-title'>{localize('Reset Journey')}</h3>
+                        <p className='tradepulse__modal-text'>
+                            {localize('This will permanently delete your locked trading journey and schedule from both local storage and the cloud. This action cannot be undone.')}
+                        </p>
+                        <div className='tradepulse__modal-actions'>
+                            <button className='tradepulse__btn tradepulse__btn--secondary' onClick={() => setShowResetModal(false)} disabled={isResetting}>
+                                {localize('Cancel')}
+                            </button>
+                            <button className='tradepulse__btn tradepulse__btn--danger' onClick={handleResetJourney} disabled={isResetting}>
+                                {isResetting ? localize('Resetting...') : localize('Reset Journey')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 });
