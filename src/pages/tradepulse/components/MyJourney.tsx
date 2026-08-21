@@ -316,16 +316,6 @@ const MyJourney = observer(() => {
                     </div>
                 </div>
             </section>
-
-            {/* Quick Summary */}
-            <section className='tradepulse__section'>
-                <div className='tradepulse__summary-grid'>
-                    <SummaryCard label={localize('Total Trades')} value={String(totalTrades)} icon='activity' />
-                    <SummaryCard label={localize('Win Rate')} value={`${winRate.toFixed(1)}%`} icon='trophy' accent />
-                    <SummaryCard label={localize('Streak')} value={streakLabel} icon='flame' />
-                    <SummaryCard label={localize("Today's Profit")} value={`${todayProfit >= 0 ? '+' : ''}${formatCurrency(todayProfit, currency)}`} icon='trending-up' highlight={todayProfit >= 0} />
-                </div>
-            </section>
         </div>
     );
 });

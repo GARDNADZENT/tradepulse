@@ -96,84 +96,86 @@ const MasterSchedule = observer(() => {
 
     return (
         <div className='tradepulse__page fade-in'>
-            {/* Schedule Setup */}
-            <section className='tradepulse__section'>
-                <div className='tradepulse__card'>
-                    <div className='tradepulse__card-header'>
-                        <div className='tradepulse__section-brand'>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                                <line x1="16" y1="2" x2="16" y2="6"></line>
-                                <line x1="8" y1="2" x2="8" y2="6"></line>
-                                <line x1="3" y1="10" x2="21" y2="10"></line>
-                            </svg>
-                            {localize('Planning')}
+            {/* Schedule Setup — only show when no plan exists */}
+            {rows.length === 0 && (
+                <section className='tradepulse__section'>
+                    <div className='tradepulse__card'>
+                        <div className='tradepulse__card-header'>
+                            <div className='tradepulse__section-brand'>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                                {localize('Planning')}
+                            </div>
+                            <h2 className='tradepulse__section-title'>{localize('Master Schedule')}</h2>
+                            <p className='tradepulse__section-subtitle'>{localize('Set your trading goal to automatically generate your complete trading plan.')}</p>
+                            <div className='tradepulse__card-meta'>Compound growth model</div>
                         </div>
-                        <h2 className='tradepulse__section-title'>{localize('Master Schedule')}</h2>
-                        <p className='tradepulse__section-subtitle'>{localize('Set your trading goal to automatically generate your complete trading plan.')}</p>
-                        <div className='tradepulse__card-meta'>Compound growth model</div>
-                    </div>
-                    <div className='tradepulse__card-body'>
-                        <form onSubmit={e => { e.preventDefault(); handleGenerate(); }} className='tradepulse__form-grid'>
-                            <div className='tradepulse__form-group'>
-                                <label className='tradepulse__form-label'>{localize('Initial Balance')}</label>
-                                <div className='tradepulse__input-wrap'>
-                                    <span className='tradepulse__input-prefix'>$</span>
+                        <div className='tradepulse__card-body'>
+                            <form onSubmit={e => { e.preventDefault(); handleGenerate(); }} className='tradepulse__form-grid'>
+                                <div className='tradepulse__form-group'>
+                                    <label className='tradepulse__form-label'>{localize('Initial Balance')}</label>
+                                    <div className='tradepulse__input-wrap'>
+                                        <span className='tradepulse__input-prefix'>$</span>
+                                        <input
+                                            type='number'
+                                            className='tradepulse__form-input'
+                                            value={form.initial_balance}
+                                            onChange={e => updateField('initial_balance', e.target.value)}
+                                            min='1'
+                                            step='0.01'
+                                            required
+                                        />
+                                    </div>
+                                </div>
+                                <div className='tradepulse__form-group'>
+                                    <label className='tradepulse__form-label'>{localize('Trading Days')}</label>
                                     <input
                                         type='number'
                                         className='tradepulse__form-input'
-                                        value={form.initial_balance}
-                                        onChange={e => updateField('initial_balance', e.target.value)}
+                                        value={form.cycle_length_days}
+                                        onChange={e => updateField('cycle_length_days', e.target.value)}
                                         min='1'
+                                        max='365'
+                                        required
+                                    />
+                                </div>
+                                <div className='tradepulse__form-group'>
+                                    <label className='tradepulse__form-label'>{localize('Daily Growth Rate (%)')}</label>
+                                    <input
+                                        type='number'
+                                        className='tradepulse__form-input'
+                                        value={form.daily_target_pct}
+                                        onChange={e => updateField('daily_target_pct', e.target.value)}
+                                        min='0.01'
+                                        max='100'
                                         step='0.01'
                                         required
                                     />
                                 </div>
-                            </div>
-                            <div className='tradepulse__form-group'>
-                                <label className='tradepulse__form-label'>{localize('Trading Days')}</label>
-                                <input
-                                    type='number'
-                                    className='tradepulse__form-input'
-                                    value={form.cycle_length_days}
-                                    onChange={e => updateField('cycle_length_days', e.target.value)}
-                                    min='1'
-                                    max='365'
-                                    required
-                                />
-                            </div>
-                            <div className='tradepulse__form-group'>
-                                <label className='tradepulse__form-label'>{localize('Daily Growth Rate (%)')}</label>
-                                <input
-                                    type='number'
-                                    className='tradepulse__form-input'
-                                    value={form.daily_target_pct}
-                                    onChange={e => updateField('daily_target_pct', e.target.value)}
-                                    min='0.01'
-                                    max='100'
-                                    step='0.01'
-                                    required
-                                />
-                            </div>
-                            <div className='tradepulse__form-group'>
-                                <label className='tradepulse__form-label'>{localize('Cycle Start Date')}</label>
-                                <input
-                                    type='date'
-                                    className='tradepulse__form-input'
-                                    value={form.start_date}
-                                    onChange={e => updateField('start_date', e.target.value)}
-                                    required
-                                />
-                            </div>
-                            <div className='tradepulse__form-actions'>
-                                <button type='submit' className='tradepulse__btn tradepulse__btn--primary' disabled={isGenerating}>
-                                    {isGenerating ? localize('Generating...') : localize('Generate Master Schedule')}
-                                </button>
-                            </div>
-                        </form>
+                                <div className='tradepulse__form-group'>
+                                    <label className='tradepulse__form-label'>{localize('Cycle Start Date')}</label>
+                                    <input
+                                        type='date'
+                                        className='tradepulse__form-input'
+                                        value={form.start_date}
+                                        onChange={e => updateField('start_date', e.target.value)}
+                                        required
+                                    />
+                                </div>
+                                <div className='tradepulse__form-actions'>
+                                    <button type='submit' className='tradepulse__btn tradepulse__btn--primary' disabled={isGenerating}>
+                                        {isGenerating ? localize('Generating...') : localize('Generate Master Schedule')}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
-                </div>
-            </section>
+                </section>
+            )}
 
             {/* Generated Schedule */}
             {rows.length > 0 && (
@@ -185,7 +187,7 @@ const MasterSchedule = observer(() => {
                                 {rows.length} {localize('days')} · {rows[0].rate}% {localize('daily')} · {localize('starting')} {formatCurrency(rows[0].start, currency)} · {localize('from')} {rows[0].date}
                             </p>
                         </div>
-                        <div className='tradepulse__table-wrapper'>
+                        <div className='tradepulse__table-wrapper' style={{ maxHeight: '520px', overflowY: 'auto' }}>
                             <table className='tradepulse__table'>
                                 <thead>
                                     <tr>
