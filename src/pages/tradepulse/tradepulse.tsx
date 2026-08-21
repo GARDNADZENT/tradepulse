@@ -10,11 +10,8 @@ import './tradepulse.scss';
 
 const TradePulseApp = () => {
     const [activeTab, setActiveTab] = useState('journey');
-    const [connection, setConnection] = useState<'connected' | 'disconnected' | 'error'>('disconnected');
-    const [showResetModal, setShowResetModal] = useState(false);
-    const [isResetting, setIsResetting] = useState(false);
 
-    const { isLoggedIn, currentAccount, refreshJourney } = useTradePulse();
+    const { isLoggedIn, currentAccount } = useTradePulse();
 
     useEffect(() => {
         const onHashChange = () => {
@@ -37,27 +34,6 @@ const TradePulseApp = () => {
         }
     };
 
-    const handleReset = async () => {
-        setIsResetting(true);
-        try {
-            const res = await fetch('/api/journey', { method: 'DELETE' });
-            if (!res.ok) throw new Error(`Reset failed: ${res.status}`);
-            await refreshJourney();
-            window.location.hash = 'journey';
-        } catch (e) {
-            console.error('Reset failed:', e);
-        } finally {
-            setIsResetting(false);
-            setShowResetModal(false);
-        }
-    };
-
-    const connectionClass = connection === 'connected'
-        ? 'tradepulse__connection-indicator tradepulse__connection-indicator--connected'
-        : connection === 'error'
-            ? 'tradepulse__connection-indicator tradepulse__connection-indicator--error'
-            : 'tradepulse__connection-indicator';
-
     return (
         <div className='tradepulse'>
             {/* TradePulse Header */}
@@ -72,20 +48,6 @@ const TradePulseApp = () => {
                         <div className='tradepulse__logo-text'>
                             <div className='tradepulse__logo-name'>TradePulse</div>
                             <div className='tradepulse__logo-tag'>Plan. Track. Perform.</div>
-                        </div>
-                    </div>
-
-                    <div className='tradepulse__header-actions'>
-                        <button className='tradepulse__reset-btn' onClick={() => setShowResetModal(true)}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12"></path>
-                                <path d="M3 5v7h7"></path>
-                            </svg>
-                            {localize('Reset System')}
-                        </button>
-                        <div className={connectionClass}>
-                            <span className='tradepulse__connection-dot'></span>
-                            <span>{connection === 'connected' ? localize('Live') : connection === 'error' ? localize('Error') : localize('Disconnected')}</span>
                         </div>
                     </div>
                 </div>
@@ -111,26 +73,6 @@ const TradePulseApp = () => {
             <main className='tradepulse__main'>
                 {renderView()}
             </main>
-
-            {/* Reset Confirmation Modal */}
-            {showResetModal && (
-                <div className='tradepulse__modal-overlay' onClick={() => setShowResetModal(false)}>
-                    <div className='tradepulse__modal'>
-                        <h3 className='tradepulse__modal-title'>{localize('Reset TradePulse System')}</h3>
-                        <p className='tradepulse__modal-text'>
-                            {localize('This will reset your TradePulse journey, schedule, and planning data. This action cannot be undone. Your actual Deriv trading account and balance will not be affected.')}
-                        </p>
-                        <div className='tradepulse__modal-actions'>
-                            <button className='tradepulse__btn tradepulse__btn--secondary' onClick={() => setShowResetModal(false)} disabled={isResetting}>
-                                {localize('Cancel')}
-                            </button>
-                            <button className='tradepulse__btn tradepulse__btn--danger' onClick={handleReset} disabled={isResetting}>
-                                {isResetting ? localize('Resetting...') : localize('Reset System')}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };
