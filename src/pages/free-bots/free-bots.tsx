@@ -31,33 +31,15 @@ const FreeBots = observer(() => {
     // Bot descriptions mapping
     const getBotDescription = (botName: string): string => {
         const descriptions: { [key: string]: string } = {
-            'STARTER BOT':
-                'Official starter bot for TraderPulse. Optimized for beginners with standard risk management.',
-            'POVERTY KILLER':
-                'High-performance digit trading bot with intelligent recovery and profit optimization.',
-            'POVERTY KILLER V2.1':
-                'Updated version of the Poverty Killer bot with enhanced performance and risk management.',
-            'BEST RISE FALL':
-                'Automated rise and fall strategy optimized for consistent returns in trending markets.',
-            'TRADERSPULSE AUTOMATED RISE FALL':
-                'Premium rise and fall strategy featuring advanced entry points and recovery mechanisms.',
-            'OVER1 R32 PRO':
-                'Professional Over 1 trading bot with R32 recovery strategy. Optimized for high win rates with intelligent recovery mechanisms and risk management.',
-            'OVER2 R43 PRO':
-                'Advanced Over 2 bot featuring R43 recovery system. Designed for consistent profits with sophisticated entry points and recovery strategies.',
-            'THE CMV PRO':
-                'Premium CMV Pro trading bot with multi-strategy approach. Combines technical analysis with automated execution for maximum profitability.',
-            'UNDER BLAST PRO':
-                'High-performance Under trading bot with blast strategy. Optimized for rapid execution and high-probability trades in Under markets.',
-            'UNDER7 R56 PRO':
-                'Professional Under 7 bot with R56 recovery mechanism. Features intelligent risk management and recovery strategies for consistent returns.',
-            'UNDER8 R67 PRO':
-                'Advanced Under 8 trading bot with R67 recovery system. Designed for optimal performance with sophisticated pattern recognition and recovery.',
-            'TRADERSPULSEV3RISE FALL':
-                'Premium Rise/Fall trading bot with MACD analysis and intelligent recovery. Optimized for consistent returns in trending markets.',
-            'TRADERSPULSE RISE/FALL V4':
-                'Latest version of the TraderPulse Rise/Fall bot. Enhanced with improved entry signals and advanced recovery management for maximum stability.',
-                        };
+            'OVER 2 PROFIT BOT':
+                'Advanced Over 2 profit bot with intelligent entry logic and risk management for consistent returns.',
+            'MR DUKE SPEED BOT':
+                'High-speed trading bot optimized for rapid execution and quick profit targeting in volatile markets.',
+            'OVER 2 RECOVERY OVER 4':
+                'Recovery-focused bot that switches to Over 4 after a loss, maximizing win rate with intelligent martingale recovery.',
+            'TRADEPULSE EVEN ODD PROFIT BOT':
+                'Digit-based trading bot specializing in even/odd predictions with profit optimization and recovery strategy.',
+        };
 
         // Try exact match first
         if (descriptions[botName]) {
@@ -77,19 +59,10 @@ const FreeBots = observer(() => {
     // Show selected bots from public/xml (explicit curated list)
     const getXmlFiles = () => {
         return [
-            'STARTER_BOT.xml',
-            'POVERTY_KILLER.xml',
-            'POVERTY_KILLER_V2.1.xml',
-            'BEST_RISE_FALL.xml',
-            'TRADERSPULSE_AUTOMATED_RISE_FALL.xml',
-            'THE CMV PRO.xml',
-            'UNDER BLAST PRO.xml',
-            'OVER1_R32 PRO.xml',
-            'OVER2_R43 PRO.xml',
-            'UNDER8_R67 PRO.xml',
-            'UNDER7_R56 PRO.xml',
-            'TRADERSPULSEV3RISE_FALL.xml',
-            'TRADERSPULSERISE_FALLV4.xml',
+            'OVER 2 PROFIT BOT.xml',
+            'Mr Duke Speed Bot.1.xml',
+            'OVER 2 RECOVERY OVER 4.xml',
+            'tradepulse_even_odd profit bot.xml',
         ];
     };
 
@@ -156,8 +129,7 @@ const FreeBots = observer(() => {
 
                 // Update skeletons to our explicit list
                 const skeletonBots: BotData[] = manifest.map(item => {
-                    const botName = (item.name || item.file.replace('.xml', '')).replace(/[_-]/g, ' ').replace('TRADERSPULSERISE FALLV4', 'TRADERSPULSE RISE/FALL V4');
-                    const isPremiumPlus = botName.includes('TRADERSPULSE RISE/FALL V4');
+                    const botName = (item.name || item.file.replace('.xml', '')).replace(/[_-]/g, ' ');
                     return {
                         name: botName,
                         description: getBotDescription(botName),
@@ -165,8 +137,8 @@ const FreeBots = observer(() => {
                         strategy: 'Multi-Strategy',
                         features: DEFAULT_FEATURES,
                         xml: '',
-                        badge_text: isPremiumPlus ? 'PREMIUM PLUS' : 'PREMIUM',
-                        badge_class: isPremiumPlus ? 'premium-plus' : 'premium',
+                        badge_text: 'PREMIUM',
+                        badge_class: 'premium',
                     };
                 });
                 setAvailableBots(skeletonBots);
@@ -178,8 +150,7 @@ const FreeBots = observer(() => {
                     try {
                         const xml = await fetchXmlWithCache(item.file);
                         if (xml) {
-                            const botName = (item.name || item.file.replace('.xml', '')).replace(/[_-]/g, ' ').replace('TRADERSPULSERISE FALLV4', 'TRADERSPULSE RISE/FALL V4');
-                            const isPremiumPlus = botName.includes('TRADERSPULSE RISE/FALL V4');
+                            const botName = (item.name || item.file.replace('.xml', '')).replace(/[_-]/g, ' ');
                             loadedBots.push({
                                 name: botName,
                                 description: getBotDescription(botName),
@@ -187,8 +158,8 @@ const FreeBots = observer(() => {
                                 strategy: 'Multi-Strategy',
                                 features: DEFAULT_FEATURES,
                                 xml,
-                                badge_text: isPremiumPlus ? 'PREMIUM PLUS' : 'PREMIUM',
-                                badge_class: isPremiumPlus ? 'premium-plus' : 'premium',
+                                badge_text: 'PREMIUM',
+                                badge_class: 'premium',
                             });
                             setAvailableBots([...loadedBots, ...skeletonBots.slice(loadedBots.length)]);
                         }
