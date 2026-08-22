@@ -101,13 +101,34 @@ export default Engine =>
         async areLastDigitsEven(count) {
             const digits = await this.getLastDigitList();
             const last_n = digits.slice(-count);
-            return last_n.length > 0 && last_n.every(d => d % 2 === 0);
+            const result = last_n.length > 0 && last_n.every(d => d % 2 === 0);
+            this.logLastDigitsAnalysis('ALL_EVEN', last_n, result);
+            return result;
         }
 
         async areLastDigitsOdd(count) {
             const digits = await this.getLastDigitList();
             const last_n = digits.slice(-count);
-            return last_n.length > 0 && last_n.every(d => d % 2 !== 0);
+            const result = last_n.length > 0 && last_n.every(d => d % 2 !== 0);
+            this.logLastDigitsAnalysis('ALL_ODD', last_n, result);
+            return result;
+        }
+
+        logLastDigitsAnalysis(condition, digits, result) {
+            const conditionText = condition === 'ALL_EVEN' ? 'all even' : condition === 'ALL_ODD' ? 'all odd' : condition;
+            globalObserver.emit('ui.log.success', {
+                log_type: 'digits_analysis',
+                extra: { condition: conditionText, digits, result },
+            });
+        }
+
+        logLastDigitsAnalysis(condition, digits, result) {
+            const conditionText = condition === 'ALL_EVEN' ? 'all even' : condition === 'ALL_ODD' ? 'all odd' : condition;
+            const resultText = result ? 'TRUE' : 'FALSE';
+            globalObserver.emit('ui.log.success', {
+                log_type: 'digits_analysis',
+                extra: { condition: conditionText, digits, result },
+            });
         }
 
         checkDirection(dir) {

@@ -86,6 +86,27 @@ const FormatMessage = ({ logType, className, extra }: TFormatMessageProps) => {
                     );
                 break;
             }
+            case LogTypes.DIGITS_ANALYSIS: {
+                const { condition, digits, result } = extra;
+                const conditionText = condition === 'ALL_EVEN' ? 'all even' : condition === 'ALL_ODD' ? 'all odd' : condition;
+                const resultText = result ? '✅ TRUE' : '❌ FALSE';
+                const resultColor = result ? 'var(--status-success)' : 'var(--status-danger)';
+                return (
+                    <Localize
+                        i18n_default_text='Last Digits Analysis Condition: <0>{{condition}}</0> Digits: [{{digits}}] Result: <1>{{result}}</1>'
+                        values={{
+                            condition: conditionText,
+                            digits: digits.join(', '),
+                            result: resultText,
+                        }}
+                        components={[
+                            <Text key={0} size='xxs' styles={{ color: 'var(--status-info)' }} />,
+                            <Text key={1} size='xxs' styles={{ color: resultColor }} />,
+                        ]}
+                        options={{ interpolation: { escapeValue: false } }}
+                    />
+                );
+            }
             default:
                 return null;
         }
