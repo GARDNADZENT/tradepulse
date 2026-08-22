@@ -198,12 +198,16 @@ export const load = async ({
     }
 
     // Check if all block types in XML are allowed.
-    const has_invalid_blocks = Array.from(blockly_xml).some(block => {
+    const supported_blocks = Object.keys(window.Blockly.Blocks);
+    const invalid_blocks = Array.from(blockly_xml).filter(block => {
         const block_type = block.getAttribute('type');
-        return !Object.keys(window.Blockly.Blocks).includes(block_type);
+        return !supported_blocks.includes(block_type);
     });
-    if (has_invalid_blocks) {
-        return showInvalidStrategyError();
+
+    if (invalid_blocks.length > 0) {
+        const invalid_types = [...new Set(invalid_blocks.map(b => b.getAttribute('type')))];
+        console.warn('XML contains unsupported block types, removing them:', invalid_types);
+        invalid_blocks.forEach(block => block.remove());
     }
 
     try {
