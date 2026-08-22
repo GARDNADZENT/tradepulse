@@ -89,7 +89,7 @@ const Dashboard = () => {
                                 <div style={{ fontSize: '0.8rem', color: 'var(--text-less-prominent)' }}>Day {journeyDay} of {s.days}</div>
                             </div>
                             <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--brand-primary)' }}>
-                                {baseRow ? Math.round(Math.max(0, Math.min(100, ((live - baseRow.start) / (baseRow.end - baseRow.start || 1)) * 100)) : 0}%
+                                {baseRow ? Math.round(Math.max(0, Math.min(100, ((live - baseRow.start) / (baseRow.end - baseRow.start || 1)) * 100))) : 0}%
                             </div>
                         </div>
                         <div className='tradepulse__progress-bar'>

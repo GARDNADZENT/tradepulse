@@ -173,11 +173,13 @@ export const load = async ({
     try {
         const xmlDoc = new DOMParser().parseFromString(block_string, 'application/xml');
         if (xmlDoc.getElementsByTagName('parsererror').length) {
+            console.error('XML parse error:', block_string.substring(0, 200));
             return showInvalidStrategyError();
         } else {
             show_snackbar && botNotification(notification_message().BOT_IMPORT);
         }
     } catch (e) {
+        console.error('DOMParser error:', e);
         return showInvalidStrategyError();
     }
 
@@ -186,6 +188,7 @@ export const load = async ({
     try {
         xml = window.Blockly.utils.xml.textToDom(block_string);
     } catch (e) {
+        console.error('Blockly textToDom error:', e);
         return showInvalidStrategyError();
     }
     const blockConversion = new BlockConversion();
@@ -194,14 +197,15 @@ export const load = async ({
 
     // Check if there are any blocks in this strategy.
     if (!blockly_xml.length) {
+        console.error('No blocks found after conversion');
         return showInvalidStrategyError();
     }
 
     // Check if all block types in XML are allowed.
-    const supported_blocks = Object.keys(window.Blockly.Blocks);
+    const supported_blocks = Object.keys(window.Blockly.Blocks || {});
     const invalid_blocks = Array.from(blockly_xml).filter(block => {
         const block_type = block.getAttribute('type');
-        return !supported_blocks.includes(block_type);
+        return block_type && !supported_blocks.includes(block_type);
     });
 
     if (invalid_blocks.length > 0) {
@@ -246,7 +250,7 @@ export const load = async ({
             globalObserver.emit('ui.log.success', { log_type: LogTypes.LOAD_BLOCK });
         }
     } catch (e) {
-        console.error(e); // eslint-disable-line
+        console.error('Failed to load bot strategy:', e);
         return showInvalidStrategyError();
     } finally {
         setLoading(false);

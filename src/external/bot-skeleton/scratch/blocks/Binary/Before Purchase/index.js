@@ -4,3 +4,6 @@ import './ask_price';
 import './payout';
 import './last_digits_condition';
 import './mon_purchase';
+import './tp_block';
+import './sl_block';
+import './apollo_notify';
