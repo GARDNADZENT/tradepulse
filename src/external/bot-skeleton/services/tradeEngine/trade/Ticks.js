@@ -98,6 +98,18 @@ export default Engine =>
             return digits;
         }
 
+        async areLastDigitsEven(count) {
+            const digits = await this.getLastDigitList();
+            const last_n = digits.slice(-count);
+            return last_n.length > 0 && last_n.every(d => d % 2 === 0);
+        }
+
+        async areLastDigitsOdd(count) {
+            const digits = await this.getLastDigitList();
+            const last_n = digits.slice(-count);
+            return last_n.length > 0 && last_n.every(d => d % 2 !== 0);
+        }
+
         checkDirection(dir) {
             return new Promise(resolve =>
                 this.$scope.ticksService

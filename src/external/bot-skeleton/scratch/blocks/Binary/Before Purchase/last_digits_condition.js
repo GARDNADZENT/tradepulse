@@ -37,6 +37,12 @@ window.Blockly.Blocks.last_digits_condition = {
     },
 };
 
-window.Blockly.JavaScript.javascriptGenerator.forBlock.last_digits_condition = () => {
-    return ['false', window.Blockly.JavaScript.javascriptGenerator.ORDER_ATOMIC];
+window.Blockly.JavaScript.javascriptGenerator.forBlock.last_digits_condition = block => {
+    const condition = block.getFieldValue('CONDITION');
+    const n_code =
+        window.Blockly.JavaScript.javascriptGenerator.valueToCode(block, 'N', window.Blockly.JavaScript.javascriptGenerator.ORDER_ATOMIC) ||
+        '3';
+    const check = condition === 'ALL_EVEN' ? 'areLastDigitsEven' : 'areLastDigitsOdd';
+    const code = `Bot.${check}(${n_code})`;
+    return [code, window.Blockly.JavaScript.javascriptGenerator.ORDER_ATOMIC];
 };

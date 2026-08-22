@@ -53,6 +53,18 @@ window.Blockly.Blocks.mon_purchase = {
     },
 };
 
-window.Blockly.JavaScript.javascriptGenerator.forBlock.mon_purchase = () => {
-    return '';
+window.Blockly.JavaScript.javascriptGenerator.forBlock.mon_purchase = block => {
+    const purchaseList = block.getFieldValue('PURCHASE_LIST');
+    const multipleContracts = block.getFieldValue('MULTIPLE_CONTRACTS');
+    const quantity = Number(block.getFieldValue('CONTRACT_QUANTITY') || '1');
+
+    if (multipleContracts === 'TRUE' && quantity > 1) {
+        let code = '';
+        for (let i = 0; i < quantity; i++) {
+            code += `Bot.purchase('${purchaseList}');\n`;
+        }
+        return code;
+    }
+
+    return `Bot.purchase('${purchaseList}');\n`;
 };

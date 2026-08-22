@@ -10,6 +10,8 @@ const getTicksInterface = tradeEngine => {
         getOhlcFromEnd: (...args) => tradeEngine.getOhlcFromEnd(...args),
         getOhlc: (...args) => tradeEngine.getOhlc(...args),
         getLastDigitList: (...args) => tradeEngine.getLastDigitList(...args),
+        areLastDigitsEven: (...args) => tradeEngine.areLastDigitsEven(...args),
+        areLastDigitsOdd: (...args) => tradeEngine.areLastDigitsOdd(...args),
     };
 };
 
