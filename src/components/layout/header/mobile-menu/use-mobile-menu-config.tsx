@@ -5,7 +5,7 @@ import { navigateToTransfer } from '@/utils/transfer-utils';
 import { LegacyLogout1pxIcon, LegacyTheme1pxIcon, LegacyTransferIcon } from '@deriv/quill-icons/Legacy';
 import { useTranslations } from '@deriv-com/translations';
 import { ToggleSwitch } from '@deriv-com/ui';
-import { LabelPairedChartLineCaptionRegularIcon } from '@deriv/quill-icons/LabelPaired';
+import { LabelPairedChartLineCaptionRegularIcon, LabelPairedPlayLgFillIcon } from '@deriv/quill-icons/LabelPaired';
 
 export type TSubmenuSection = 'accountSettings' | 'cashier' | 'reports';
 
@@ -75,7 +75,7 @@ const useMobileMenuConfig = (
                 client?.is_logged_in && {
                     as: 'a',
                     label: localize('Auto Trades'),
-                    LeftComponent: LabelPairedGearCaptionRegularIcon,
+                    LeftComponent: LabelPairedPlayLgFillIcon,
                     href: '/#auto_trades',
                 },
             ].filter(Boolean) as TMenuConfig,

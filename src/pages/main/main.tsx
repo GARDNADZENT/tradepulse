@@ -31,7 +31,6 @@ import {
 } from '@/utils/trade-type-modal-handler';
 import {
     LabelPairedChartLineCaptionRegularIcon,
-    LabelPairedGearCaptionRegularIcon,
     LabelPairedObjectsColumnCaptionRegularIcon,
     LabelPairedPlayLgFillIcon,
     LabelPairedPuzzlePieceTwoCaptionBoldIcon,
@@ -500,7 +499,7 @@ const AppWrapper = observer(() => {
                             <div
                                 label={
                                     <>
-                                        <LabelPairedGearCaptionRegularIcon
+                                        <LabelPairedPlayLgFillIcon
                                             height='24px'
                                             width='24px'
                                             fill='var(--text-general)'
