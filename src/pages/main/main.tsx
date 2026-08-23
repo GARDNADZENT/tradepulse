@@ -31,6 +31,7 @@ import {
 } from '@/utils/trade-type-modal-handler';
 import {
     LabelPairedChartLineCaptionRegularIcon,
+    LabelPairedGearCaptionRegularIcon,
     LabelPairedObjectsColumnCaptionRegularIcon,
     LabelPairedPlayLgFillIcon,
     LabelPairedPuzzlePieceTwoCaptionBoldIcon,
@@ -47,8 +48,8 @@ import './main.scss';
 import TradingBots from '../free-bots/trading-bots';
 import ManualTrade from '../manual-trade';
 import { TradePulse } from '../tradepulse';
-import { MakotiWidget } from '@/components/makoti-widget/makoti-widget';
-import '@/components/makoti-widget/makoti-widget.scss';
+import AutoTrades from '../auto-trades/auto-trades';
+import './main.scss';
 
 const ChartWrapper = lazy(() => import('../chart/chart-wrapper'));
 const Tutorial = lazy(() => import('../tutorials'));
@@ -82,9 +83,9 @@ const AppWrapper = observer(() => {
         [key: string]: string;
     };
     const { clear } = summary_card;
-    const { DASHBOARD, BOT_BUILDER, TRADING_BOTS, MANUAL_TRADE, TRADEPULSE } = DBOT_TABS;
+    const { DASHBOARD, BOT_BUILDER, TRADING_BOTS, MANUAL_TRADE, TRADEPULSE, AUTO_TRADES } = DBOT_TABS;
     const init_render = React.useRef(true);
-    const hash = ['dashboard', 'bot_builder', 'chart', 'trading_bots', 'manual_trade', 'tradepulse', 'tutorial'];
+    const hash = ['dashboard', 'bot_builder', 'chart', 'trading_bots', 'manual_trade', 'tradepulse', 'auto_trades', 'tutorial'];
     const { isDesktop } = useDevice();
     const location = useLocation();
     const navigate = useNavigate();
@@ -410,9 +411,7 @@ const AppWrapper = observer(() => {
                                     </>
                                 }
                                 id='id-bot-builder'
-                            >
-                                <MakotiWidget />
-                            </div>
+                            />
                             <div
                                 label={
                                     <>
@@ -497,6 +496,21 @@ const AppWrapper = observer(() => {
                                         <Tutorial handleTabChange={handleTabChange} />
                                     </Suspense>
                                 </div>
+                            </div>
+                            <div
+                                label={
+                                    <>
+                                        <LabelPairedGearCaptionRegularIcon
+                                            height='24px'
+                                            width='24px'
+                                            fill='var(--text-general)'
+                                        />
+                                        <Localize i18n_default_text='Auto Trades' />
+                                    </>
+                                }
+                                id='id-auto-trades'
+                            >
+                                <AutoTrades />
                             </div>
                         </Tabs>
                         {!isDesktop && right_tab_shadow && <span className='tabs-shadow tabs-shadow--right' />}{' '}

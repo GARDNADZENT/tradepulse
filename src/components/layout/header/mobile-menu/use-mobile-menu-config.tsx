@@ -72,6 +72,12 @@ const useMobileMenuConfig = (
                     LeftComponent: LabelPairedChartLineCaptionRegularIcon,
                     href: '/#tradepulse',
                 },
+                client?.is_logged_in && {
+                    as: 'a',
+                    label: localize('Auto Trades'),
+                    LeftComponent: LabelPairedGearCaptionRegularIcon,
+                    href: '/#auto_trades',
+                },
             ].filter(Boolean) as TMenuConfig,
             [
                 client?.is_logged_in && {

@@ -57,6 +57,13 @@ export const MenuItems = observer(() => {
             >
                 {localize('TradePulse')}
             </MenuItem>
+            <MenuItem
+                as='a'
+                className='app-header__menu'
+                href='/#auto_trades'
+            >
+                {localize('Auto Trades')}
+            </MenuItem>
         </>
     );
 });
