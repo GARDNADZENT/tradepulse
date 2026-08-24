@@ -1,0 +1,244 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for utils/custom-demo-icon-utils.tsx</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../prettify.css" />
+    <link rel="stylesheet" href="../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../index.html">All files</a> / <a href="index.html">utils</a> custom-demo-icon-utils.tsx</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">75.47% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>40/53</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">33.33% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>2/6</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">40% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>2/5</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">75.47% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>40/53</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line medium'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">16x</span>
+<span class="cline-any cline-yes">16x</span>
+<span class="cline-any cline-yes">16x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import React from 'react';
+&nbsp;
+export const CUSTOM_DEMO_SVG = (
+    &lt;svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="24" height="24" style={{ borderRadius: '50%' }}&gt;
+        &lt;defs&gt;
+            &lt;clipPath id="circleView"&gt;
+                &lt;circle cx="256" cy="256" r="256" /&gt;
+            &lt;/clipPath&gt;
+        &lt;/defs&gt;
+        &lt;g clipPath="url(#circleView)"&gt;
+            &lt;path fill="#eee" d="M0 0h512v512H0z"/&gt;
+            &lt;path fill="#bd3d44" d="M0 0h512v39.4H0zm0 78.8h512v39.4H0zm0 78.7h512v39.4H0zm0 78.8h512v39.4H0zm0 78.8h512v39.4H0zm0 78.7h512v39.4H0zm0 78.8h512v39.4H0z"/&gt;
+            &lt;path fill="#192f5d" d="M0 0h204.8v275.7H0z"/&gt;
+            &lt;g fill="#eee"&gt;
+                &lt;path d="M10.2 26.7l2 6.3h6.7l-5.4 4 2 6.2-5.3-3.9-5.3 3.9 2-6.2-5.4-4h6.7zm41 0l2 6.3h6.6l-5.4 4 2 6.2-5.4-3.9-5.3 3.9 2-6.2-5.4-4h6.7zm41 0l2 6.3h6.6l-5.4 4 2 6.2-5.4-3.9-5.3 3.9 2-6.2-5.4-4h6.7zm41 0l2 6.3h6.6l-5.4 4 2 6.2-5.4-3.9-5.3 3.9 2-6.2-5.4-4h6.7zm41 0l2 6.3h6.6l-5.4 4 2 6.2-5.4-3.9-5.3 3.9 2-6.2-5.4-4h6.7zM30.7 53l2 6.3h6.7l-5.4 3.9 2 6.3-5.3-4-5.3 4 2-6.3-5.4-3.9h6.7zm41 0l2 6.3h6.6l-5.4 3.9 2 6.3-5.4-4-5.3 4 2-6.3-5.4-3.9h6.7zm41 0l2 6.3h6.6l-5.4 3.9 2 6.3-5.4-4-5.3 4 2-6.3-5.4-3.9h6.7zm41 0l2 6.3h6.6l-5.4 3.9 2 6.3-5.4-4-5.3 4 2-6.3-5.4-3.9h6.7z"/&gt;
+            &lt;/g&gt;
+        &lt;/g&gt;
+    &lt;/svg&gt;
+);
+&nbsp;
+const STORAGE_KEY = 'is_custom_demo_icon_active';
+&nbsp;
+function safeGet(key) {
+    try { return localStorage.getItem(key); } <span class="branch-0 cbranch-no" title="branch not covered" >catch { return null; }</span>
+}
+<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >function safeSet(key, val) {</span></span>
+<span class="cstat-no" title="statement not covered" >    try { localStorage.setItem(key, val); } catch { /* noop */ }</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >function safeRemove(key) {</span></span>
+<span class="cstat-no" title="statement not covered" >    try { sessionStorage.removeItem(key); } catch { /* noop */ }</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+// Migrate from sessionStorage to localStorage on first load
+if (typeof window !== 'undefined' &amp;&amp; !safeGet(STORAGE_KEY)) {
+    try {
+        const oldVal = sessionStorage.getItem(STORAGE_KEY);
+        if (oldVal !== null) <span class="branch-0 cbranch-no" title="branch not covered" >{</span>
+<span class="cstat-no" title="statement not covered" >            safeSet(STORAGE_KEY, oldVal);</span>
+<span class="cstat-no" title="statement not covered" >            safeRemove(STORAGE_KEY);</span>
+<span class="cstat-no" title="statement not covered" >        }</span>
+    } <span class="branch-0 cbranch-no" title="branch not covered" >catch { /* noop */ }</span>
+}
+&nbsp;
+export const isCustomDemoIconActive = () =&gt; {
+    if (typeof window === 'undefined') <span class="branch-0 cbranch-no" title="branch not covered" >return false;</span>
+    return safeGet(STORAGE_KEY) === 'true';
+};
+&nbsp;
+export const setCustomDemoIconActive = <span class="fstat-no" title="function not covered" >(active: boolean) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >    if (typeof window === 'undefined') return;</span>
+<span class="cstat-no" title="statement not covered" >    safeSet(STORAGE_KEY, active ? 'true' : 'false');</span>
+<span class="cstat-no" title="statement not covered" >    window.dispatchEvent(new Event('custom_demo_icon_changed'));</span>
+<span class="cstat-no" title="statement not covered" >};</span>
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-08-24T07:40:49.750Z
+            </div>
+        <script src="../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../sorter.js"></script>
+        <script src="../block-navigation.js"></script>
+    </body>
+</html>
+    

@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import React from 'react';
 import { createBrowserRouter, createRoutesFromElements, Route, RouterProvider } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import LocalStorageSyncWrapper from '@/components/localStorage-sync-wrapper';
 import RoutePromptDialog from '@/components/route-prompt-dialog';
 import InstallPrompt from '@/components/install-prompt';
@@ -80,6 +81,7 @@ function App() {
         <>
             <RouterProvider router={router} />
             <StandaloneLoginScreen />
+            <Analytics />
         </>
     );
 }
