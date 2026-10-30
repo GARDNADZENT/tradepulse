@@ -1,11 +1,12 @@
 // @ts-nocheck — TradePulse component with known type gaps
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { observer } from 'mobx-react-lite';
 import { useStore } from '@/hooks/useStore';
 import { useTradePulse } from '../TradePulseContext';
 import { localize } from '@deriv-com/translations';
 import {
     saveJourney,
+    buildSchedule,
     getCurrentJourneyDay,
     computeJourneyDay,
     formatCurrency,
@@ -16,15 +17,15 @@ import './MasterSchedule.scss';
 const MasterSchedule = observer(() => {
     const store = useStore();
     const { client } = store;
-    const loginid = client?.loginid ?? '—';
-    const { balance, loading } = useTradePulseData();
-    const currency = client?.currency ?? 'USD';
+    const loginid = client?.loginid || localStorage.getItem('active_loginid') || '';
+    const { balance, currency: dataCurrency } = useTradePulseData();
+    const curr = client?.currency || dataCurrency || 'USD';
 
     const { journey, schedule, journeyLoading, refreshJourney } = useTradePulse();
     const [isGenerating, setIsGenerating] = useState(false);
 
     const [form, setForm] = useState({
-        initial_balance: 0,
+        initial_balance: balance > 0 ? Number(balance.toFixed(2)) : 50,
         daily_target_pct: 5,
         cycle_length_days: 30,
         start_date: new Date().toISOString().slice(0, 10),
@@ -38,10 +39,13 @@ const MasterSchedule = observer(() => {
                 cycle_length_days: journey.cycle_length_days,
                 start_date: journey.start_date,
             });
+        } else if (balance > 0 && form.initial_balance === 0) {
+            setForm(prev => ({ ...prev, initial_balance: Number(balance.toFixed(2)) }));
         }
-    }, [journey]);
+    }, [journey, balance]);
 
     const handleGenerate = useCallback(async () => {
+        if (!loginid) return;
         setIsGenerating(true);
         const locked = {
             loginid,
@@ -54,7 +58,7 @@ const MasterSchedule = observer(() => {
         };
         try {
             await saveJourney(loginid, locked);
-            await refreshJourney();
+            await refreshJourney(loginid);
         } catch (e) {
             console.error('Generate schedule failed:', e);
         } finally {
@@ -66,28 +70,42 @@ const MasterSchedule = observer(() => {
         setForm(prev => ({ ...prev, [field]: value }));
     }, []);
 
-    const currentDay = journey ? getCurrentJourneyDay(journey.start_date) : 1;
-    const rows = schedule?.rows || [];
+    // Use locked schedule rows when active, or live preview schedule built from form
+    const rows = useMemo(() => {
+        if (schedule?.rows && schedule.rows.length > 0) {
+            return schedule.rows;
+        }
+        if (journey) {
+            return buildSchedule(journey);
+        }
+        return buildSchedule({
+            loginid: loginid || 'preview',
+            initial_balance: Number(form.initial_balance) || 50,
+            daily_target_pct: Number(form.daily_target_pct) || 5,
+            cycle_length_days: Number(form.cycle_length_days) || 30,
+            start_date: form.start_date || new Date().toISOString().slice(0, 10),
+        });
+    }, [schedule, journey, form, loginid]);
+
+    const activeStartDate = journey ? journey.start_date : form.start_date;
+    const currentDay = activeStartDate ? getCurrentJourneyDay(activeStartDate) : 1;
+    const finalEquity =
+        rows.length > 0 ? rows[rows.length - 1].end : Number(form.initial_balance || 0);
 
     if (journeyLoading) {
         return (
-            <div className='tradepulse__page'>
-                <div className='tradepulse__card'>
-                    <div className='tradepulse__card-header'>
-                        <div className='tradepulse__section-brand'>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                                <line x1="16" y1="2" x2="16" y2="6"></line>
-                                <line x1="8" y1="2" x2="8" y2="6"></line>
-                                <line x1="3" y1="10" x2="21" y2="10"></line>
-                            </svg>
-                            {localize('Planning')}
+            <div className='tradepulse__page fade-in'>
+                <div className='tp-plan-grid'>
+                    {[1, 2, 3, 4].map(i => (
+                        <div key={i} className='tp-plan-card'>
+                            <div className='tradepulse__skeleton tradepulse__skeleton-text tradepulse__skeleton-text--short' />
+                            <div className='tradepulse__skeleton tradepulse__skeleton-title' />
                         </div>
-                        <h2 className='tradepulse__section-title'>{localize('Master Schedule')}</h2>
-                        <p className='tradepulse__section-subtitle'>{localize('Set your trading goal to automatically generate your complete trading plan.')}</p>
-                    </div>
+                    ))}
+                </div>
+                <div className='tradepulse__card'>
                     <div className='tradepulse__card-body'>
-                        <p className='tradepulse__text-muted'>{localize('Loading schedule...')}</p>
+                        <div className='tradepulse__skeleton tradepulse__skeleton-card' />
                     </div>
                 </div>
             </div>
@@ -96,160 +114,309 @@ const MasterSchedule = observer(() => {
 
     return (
         <div className='tradepulse__page fade-in'>
-            {/* Schedule Setup — only show when no plan exists */}
-            {rows.length === 0 && (
-                <section className='tradepulse__section'>
-                    <div className='tradepulse__card'>
-                        <div className='tradepulse__card-header'>
-                            <div className='tradepulse__section-brand'>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                                    <line x1="16" y1="2" x2="16" y2="6"></line>
-                                    <line x1="8" y1="2" x2="8" y2="6"></line>
-                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+            {/* 4-Card Compounding Summary Strip */}
+            <section className='tp-plan-grid'>
+                <div className='tp-plan-card'>
+                    <span className='tp-plan-card__label'>{localize('Initial Balance')}</span>
+                    <span className='tp-plan-card__val'>
+                        {formatCurrency(
+                            Number(journey ? journey.initial_balance : form.initial_balance || 0),
+                            curr
+                        )}
+                    </span>
+                </div>
+
+                <div className='tp-plan-card'>
+                    <span className='tp-plan-card__label'>{localize('Daily Target')}</span>
+                    <span className='tp-plan-card__val tradepulse__text-brand'>
+                        +
+                        {Number(
+                            journey ? journey.daily_target_pct : form.daily_target_pct || 0
+                        ).toFixed(1)}
+                        % / day
+                    </span>
+                </div>
+
+                <div className='tp-plan-card'>
+                    <span className='tp-plan-card__label'>{localize('Cycle Length')}</span>
+                    <span className='tp-plan-card__val'>
+                        {journey ? journey.cycle_length_days : form.cycle_length_days} Days
+                    </span>
+                </div>
+
+                <div className='tp-plan-card'>
+                    <span className='tp-plan-card__label'>
+                        {localize('Projected Final Equity')}
+                    </span>
+                    <span className='tp-plan-card__val tradepulse__text-success'>
+                        {formatCurrency(finalEquity, curr)}
+                    </span>
+                    <span className='tp-plan-card__badge'>
+                        {journey ? (
+                            <>
+                                <svg
+                                    width='12'
+                                    height='12'
+                                    viewBox='0 0 24 24'
+                                    fill='none'
+                                    stroke='currentColor'
+                                    strokeWidth='2.5'
+                                >
+                                    <rect x='3' y='11' width='18' height='11' rx='2' ry='2' />
+                                    <path d='M7 11V7a5 5 0 0 1 10 0v4' />
                                 </svg>
-                                {localize('Planning')}
-                            </div>
-                            <h2 className='tradepulse__section-title'>{localize('Master Schedule')}</h2>
-                            <p className='tradepulse__section-subtitle'>{localize('Set your trading goal to automatically generate your complete trading plan.')}</p>
-                            <div className='tradepulse__card-meta'>Compound growth model</div>
+                                {localize('Locked Compounding Plan')}
+                            </>
+                        ) : (
+                            localize('Interactive Preview')
+                        )}
+                    </span>
+                </div>
+            </section>
+
+            {/* Schedule Setup Card — shown when no locked plan exists yet */}
+            {!journey && (
+                <section className='tradepulse__card'>
+                    <div className='tradepulse__card-header'>
+                        <div>
+                            <h2 className='tradepulse__section-title'>
+                                {localize('Configure & Lock Schedule')}
+                            </h2>
+                            <p className='tradepulse__section-subtitle'>
+                                {localize(
+                                    'Set your trading goal below to preview or lock your complete daily compounding plan.'
+                                )}
+                            </p>
                         </div>
-                        <div className='tradepulse__card-body'>
-                            <form onSubmit={e => { e.preventDefault(); handleGenerate(); }} className='tradepulse__form-grid'>
-                                <div className='tradepulse__form-group'>
-                                    <label className='tradepulse__form-label'>{localize('Initial Balance')}</label>
-                                    <div className='tradepulse__input-wrap'>
-                                        <span className='tradepulse__input-prefix'>$</span>
-                                        <input
-                                            type='number'
-                                            className='tradepulse__form-input'
-                                            value={form.initial_balance}
-                                            onChange={e => updateField('initial_balance', e.target.value)}
-                                            min='1'
-                                            step='0.01'
-                                            required
-                                        />
-                                    </div>
-                                </div>
-                                <div className='tradepulse__form-group'>
-                                    <label className='tradepulse__form-label'>{localize('Trading Days')}</label>
+                    </div>
+                    <div className='tradepulse__card-body'>
+                        <form
+                            onSubmit={e => {
+                                e.preventDefault();
+                                handleGenerate();
+                            }}
+                            className='tradepulse__form-grid'
+                        >
+                            <div className='tradepulse__form-group'>
+                                <label className='tradepulse__form-label'>
+                                    {localize('Initial Balance')} ({curr})
+                                </label>
+                                <div className='tradepulse__input-wrap'>
+                                    <span className='tradepulse__input-prefix'>$</span>
                                     <input
                                         type='number'
                                         className='tradepulse__form-input'
-                                        value={form.cycle_length_days}
-                                        onChange={e => updateField('cycle_length_days', e.target.value)}
+                                        value={form.initial_balance}
+                                        onChange={e =>
+                                            updateField('initial_balance', e.target.value)
+                                        }
                                         min='1'
-                                        max='365'
-                                        required
-                                    />
-                                </div>
-                                <div className='tradepulse__form-group'>
-                                    <label className='tradepulse__form-label'>{localize('Daily Growth Rate (%)')}</label>
-                                    <input
-                                        type='number'
-                                        className='tradepulse__form-input'
-                                        value={form.daily_target_pct}
-                                        onChange={e => updateField('daily_target_pct', e.target.value)}
-                                        min='0.01'
-                                        max='100'
                                         step='0.01'
                                         required
                                     />
                                 </div>
-                                <div className='tradepulse__form-group'>
-                                    <label className='tradepulse__form-label'>{localize('Cycle Start Date')}</label>
-                                    <input
-                                        type='date'
-                                        className='tradepulse__form-input'
-                                        value={form.start_date}
-                                        onChange={e => updateField('start_date', e.target.value)}
-                                        required
-                                    />
-                                </div>
-                                <div className='tradepulse__form-actions'>
-                                    <button type='submit' className='tradepulse__btn tradepulse__btn--primary' disabled={isGenerating}>
-                                        {isGenerating ? localize('Generating...') : localize('Generate Master Schedule')}
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
+                            </div>
+
+                            <div className='tradepulse__form-group'>
+                                <label className='tradepulse__form-label'>
+                                    {localize('Daily Target (%)')}
+                                </label>
+                                <input
+                                    type='number'
+                                    className='tradepulse__form-input'
+                                    value={form.daily_target_pct}
+                                    onChange={e => updateField('daily_target_pct', e.target.value)}
+                                    min='0.1'
+                                    max='100'
+                                    step='0.1'
+                                    required
+                                />
+                            </div>
+
+                            <div className='tradepulse__form-group'>
+                                <label className='tradepulse__form-label'>
+                                    {localize('Trading Days')}
+                                </label>
+                                <input
+                                    type='number'
+                                    className='tradepulse__form-input'
+                                    value={form.cycle_length_days}
+                                    onChange={e =>
+                                        updateField('cycle_length_days', e.target.value)
+                                    }
+                                    min='1'
+                                    max='365'
+                                    step='1'
+                                    required
+                                />
+                            </div>
+
+                            <div className='tradepulse__form-group'>
+                                <label className='tradepulse__form-label'>
+                                    {localize('Start Date')}
+                                </label>
+                                <input
+                                    type='date'
+                                    className='tradepulse__form-input'
+                                    value={form.start_date}
+                                    onChange={e => updateField('start_date', e.target.value)}
+                                    required
+                                />
+                            </div>
+
+                            <div className='tradepulse__form-actions'>
+                                <button
+                                    type='submit'
+                                    className='tradepulse__btn tradepulse__btn--primary'
+                                    disabled={isGenerating || !loginid}
+                                >
+                                    {isGenerating
+                                        ? localize('Generating Plan...')
+                                        : localize('Lock & Generate Plan')}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </section>
             )}
 
-            {/* Generated Schedule */}
+            {/* Master Compounding Schedule Table */}
             {rows.length > 0 && (
-                <section className='tradepulse__section fade-in'>
-                    <div className='tradepulse__card'>
-                        <div className='tradepulse__card-header'>
-                            <h3 className='tradepulse__section-title'>{localize('Generated Schedule')}</h3>
+                <section className='tradepulse__card'>
+                    <div className='tradepulse__card-header'>
+                        <div>
+                            <h2 className='tradepulse__section-title'>
+                                {localize('Master Compounding Schedule')}
+                            </h2>
                             <p className='tradepulse__section-subtitle'>
-                                {rows.length} {localize('days')} · {rows[0].rate}% {localize('daily')} · {localize('starting')} {formatCurrency(rows[0].start, currency)} · {localize('from')} {rows[0].date}
+                                {rows.length} trading days • Started {activeStartDate}
                             </p>
                         </div>
-                        <div className='tradepulse__table-wrapper' style={{ maxHeight: '520px', overflowY: 'auto' }}>
-                            <table className='tradepulse__table'>
-                                <thead>
-                                    <tr>
-                                        <th className='tradepulse__table-left'>{localize('Day')}</th>
-                                        <th className='tradepulse__table-right'>{localize('Expected Start')}</th>
-                                        <th className='tradepulse__table-right'>{localize('Expected End')}</th>
-                                        <th className='tradepulse__table-right'>{localize('Daily Profit Target')}</th>
-                                        <th className='tradepulse__table-right'>{localize('Required %')}</th>
-                                        <th className='tradepulse__table-right'>{localize('Actual Balance')}</th>
-                                        <th className='tradepulse__table-right'>{localize('Difference')}</th>
-                                        <th className='tradepulse__table-center'>{localize('Status')}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {rows.map(row => {
-                                        const computed = computeJourneyDay(row, balance, currentDay);
-                                        if (!computed) return null;
-                                        const isToday = row.day === currentDay;
-                                        const status = computed.status;
-                                        const statusLabel = status === 'complete' ? '✅ ' + localize('On Track') : status === 'behind' ? '⚠ ' + localize('Below') : status === 'missed' ? '❄ ' + localize('Missed') : localize('Pending');
-                                        const statusClass = status === 'complete' ? 'tradepulse__chip--ontrack' : status === 'behind' || status === 'missed' ? 'tradepulse__chip--below' : 'tradepulse__chip--pending';
+                        <span className='tradepulse__chip tradepulse__chip--today'>
+                            {journey
+                                ? `Active • Day ${Math.max(
+                                      1,
+                                      Math.min(currentDay, rows.length)
+                                  )} of ${rows.length}`
+                                : `${rows.length}-Day Preview`}
+                        </span>
+                    </div>
 
-                                        return (
-                                            <tr key={row.day} className={isToday ? 'tradepulse__table-row--today' : ''}>
-                                                <td className='tradepulse__table-name'>
-                                                    <div>{localize('Day')} {row.day}</div>
-                                                    <div className='tradepulse__table-mono'>{row.date}</div>
-                                                </td>
-                                                <td className='tradepulse__table-right tradepulse__table-mono'>{formatCurrency(row.start, currency)}</td>
-                                                <td className='tradepulse__table-right tradepulse__table-mono'>{formatCurrency(row.end, currency)}</td>
-                                                <td className='tradepulse__table-right tradepulse__table-mono tradepulse__table-brand'>+{formatCurrency(row.profit, currency)}</td>
-                                                <td className='tradepulse__table-right tradepulse__table-mono'>{row.rate}%</td>
-                                                <td className={`tradepulse__table-right tradepulse__table-mono tradepulse__table-bold ${computed.actual != null && computed.actual >= row.end ? 'tradepulse__text-success' : computed.actual != null ? 'tradepulse__text-danger' : 'tradepulse__text-muted'}`}>
-                                                    {computed.actual != null ? formatCurrency(computed.actual, currency) : '—'}
-                                                </td>
-                                                <td className={`tradepulse__table-right tradepulse__table-mono tradepulse__table-bold ${computed.diff == null ? 'tradepulse__text-muted' : computed.diff >= 0 ? 'tradepulse__text-success' : 'tradepulse__text-danger'}`}>
-                                                    {computed.diff != null ? `${computed.diff >= 0 ? '+' : ''}${formatCurrency(computed.diff, currency)}` : '—'}
-                                                </td>
-                                                <td className='tradepulse__table-center'>
-                                                    <span className={`tradepulse__chip ${statusClass}`}>
-                                                        {statusLabel}
-                                                    </span>
-                                                </td>
-                                            </tr>
+                    <div className='tradepulse__table-wrapper tp-schedule-scroll'>
+                        <table className='tradepulse__table'>
+                            <thead>
+                                <tr>
+                                    <th>{localize('Day')}</th>
+                                    <th>{localize('Date')}</th>
+                                    <th className='tradepulse__table-right'>
+                                        {localize('Starting Bal')}
+                                    </th>
+                                    <th className='tradepulse__table-right'>
+                                        {localize('Target Profit')}
+                                    </th>
+                                    <th className='tradepulse__table-right'>
+                                        {localize('Expected End Bal')}
+                                    </th>
+                                    <th className='tradepulse__table-right'>
+                                        {localize('Actual End Bal')}
+                                    </th>
+                                    <th className='tradepulse__table-center'>
+                                        {localize('Status')}
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rows.map(rawRow => {
+                                    const computed =
+                                        computeJourneyDay(rawRow, balance, currentDay) || rawRow;
+                                    const isToday = computed.day === currentDay;
+
+                                    let actualEl: React.ReactNode = (
+                                        <span className='tradepulse__text-muted'>—</span>
+                                    );
+                                    let statusEl: React.ReactNode = (
+                                        <span className='tradepulse__chip tradepulse__chip--pending'>
+                                            {localize('Pending')}
+                                        </span>
+                                    );
+
+                                    if (computed.actual != null) {
+                                        actualEl = (
+                                            <span
+                                                className={`tradepulse__table-bold ${
+                                                    isToday
+                                                        ? 'tradepulse__text-brand'
+                                                        : computed.status === 'complete'
+                                                        ? 'tradepulse__text-success'
+                                                        : 'tradepulse__text-danger'
+                                                }`}
+                                            >
+                                                {formatCurrency(computed.actual, curr)}
+                                                {isToday ? ' (Live)' : ''}
+                                            </span>
                                         );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                        <div className='tradepulse__card-footer'>
-                            {localize('Your master schedule is generated from the goal you set above. Your actual account balance will automatically be compared with the expected balance for each trading day.')}
-                        </div>
+                                    }
+
+                                    if (computed.status === 'complete') {
+                                        statusEl = (
+                                            <span className='tradepulse__chip tradepulse__chip--ontrack'>
+                                                {localize('Completed')}
+                                            </span>
+                                        );
+                                    } else if (isToday) {
+                                        statusEl = (
+                                            <span className='tradepulse__chip tradepulse__chip--today'>
+                                                {localize('Today • Active')}
+                                            </span>
+                                        );
+                                    } else if (
+                                        computed.status === 'behind' ||
+                                        computed.status === 'missed'
+                                    ) {
+                                        statusEl = (
+                                            <span className='tradepulse__chip tradepulse__chip--below'>
+                                                {localize('Below')}
+                                            </span>
+                                        );
+                                    }
+
+                                    return (
+                                        <tr
+                                            key={computed.day}
+                                            className={isToday ? 'tradepulse__table-row--today' : ''}
+                                        >
+                                            <td className='tradepulse__table-name'>
+                                                Day {computed.day}
+                                                {isToday && (
+                                                    <span className='tp-today-dot' title='Today' />
+                                                )}
+                                            </td>
+                                            <td className='tradepulse__table-mono'>
+                                                {computed.date}
+                                            </td>
+                                            <td className='tradepulse__table-right tradepulse__table-mono'>
+                                                {formatCurrency(computed.start, curr)}
+                                            </td>
+                                            <td className='tradepulse__table-right tradepulse__table-mono tradepulse__text-brand tradepulse__table-bold'>
+                                                +{formatCurrency(computed.profit, curr)}
+                                            </td>
+                                            <td className='tradepulse__table-right tradepulse__table-mono tradepulse__table-bold'>
+                                                {formatCurrency(computed.end, curr)}
+                                            </td>
+                                            <td className='tradepulse__table-right tradepulse__table-mono'>
+                                                {actualEl}
+                                            </td>
+                                            <td className='tradepulse__table-center'>{statusEl}</td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
                     </div>
                 </section>
             )}
         </div>
     );
 });
-
-const formatCurrency = (value: number, currency: string): string => {
-    if (Math.abs(value) < 0.01) return `${currency} 0.00`;
-    return `${currency} ${value.toFixed(2)}`;
-};
 
 export default MasterSchedule;
