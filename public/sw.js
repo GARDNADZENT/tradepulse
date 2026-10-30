@@ -1,14 +1,5 @@
-/* Service worker for MAKOTI TRADERS PWA
- *
- * Strategy:
- * - Navigations (HTML): network-first, falling back to the cached app shell so the
- *   app still opens offline.
- * - Same-origin static assets: cache-first (build files are content-hashed, so a
- *   bump of CACHE_NAME on deploy invalidates stale entries).
- * - Cross-origin requests (Deriv WS API, GTM, LiveChat, fonts, CDNs): never touched,
- *   always go straight to the network.
- */
-const CACHE_NAME = 'makoti-traders-v2';
+/* Service worker for TradePulse PWA */
+const CACHE_NAME = 'tradepulse-v3';
 
 self.addEventListener('install', (event) => {
     event.waitUntil(

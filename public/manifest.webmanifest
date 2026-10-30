@@ -1,29 +1,28 @@
 {
-    "name": "MAKOTI TRADERS",
-    "short_name": "Makoti",
-    "description": "Automate your trades — import an existing bot or create a trading bot from scratch with guides, FAQs, and tutorials.",
+    "name": "TradePulse — Plan. Track. Perform.",
+    "short_name": "TradePulse",
+    "description": "Plan. Track. Perform. Structured trading plans, analytics, and automated strategies powered by Deriv.",
     "start_url": "./",
     "scope": "./",
     "display": "standalone",
     "orientation": "any",
-    "background_color": "#ffffff",
-    "theme_color": "#3B82F6",
-    "lang": "en",
+    "background_color": "#F8FAFC",
+    "theme_color": "#6366F1",
     "icons": [
         {
-            "src": "/pwa/icon-192x192.png",
+            "src": "pwa/icon-192x192.png",
             "sizes": "192x192",
             "type": "image/png",
             "purpose": "any"
         },
         {
-            "src": "/pwa/icon-512x512.png",
+            "src": "pwa/icon-512x512.png",
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "any"
         },
         {
-            "src": "/pwa/maskable-512x512.png",
+            "src": "pwa/maskable-512x512.png",
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "maskable"

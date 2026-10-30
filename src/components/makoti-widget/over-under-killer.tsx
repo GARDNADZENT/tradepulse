@@ -833,7 +833,7 @@ export const OverUnderKiller: React.FC = () => {
             {running && (
                 <div className='mw-killer__mode-note'>
                     {inManualRecoveryRef.current
-                        ? <span style={{color:'#f97316'}}>🔴 MANUAL RECOVERY — {recoverySideRef.current === 'DIGITOVER' ? 'OVER' : 'UNDER'} {recoveryDigitRef.current}</span>
+                        ? <span style={{color:'#6366f1'}}>🔴 MANUAL RECOVERY — {recoverySideRef.current === 'DIGITOVER' ? 'OVER' : 'UNDER'} {recoveryDigitRef.current}</span>
                         : automateRef.current
                         ? <span style={{color:'#22c55e'}}>🤖 AUTOMATE — any signal / any barrier</span>
                         : <>Auto (Over/Under) — Digit {predictionDigitRef.current} {contractSide === 'DIGITOVER' ? 'OVER' : 'UNDER'}</>
@@ -854,7 +854,7 @@ export const OverUnderKiller: React.FC = () => {
                                     style={{
                                         height: `${Math.min(100, p * 2.5)}%`,
                                         background: i === digitAnalysis.streakDigit
-                                            ? 'linear-gradient(to top, #f97316, #fb923c)'
+                                            ? 'linear-gradient(to top, #6366f1, #6366f1)'
                                             : 'linear-gradient(to top, #3b82f6, #60a5fa)',
                                     }} />
                                 <span className='mw-scanner__bar-pct'>{p.toFixed(0)}%</span>

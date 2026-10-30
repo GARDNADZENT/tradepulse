@@ -2,8 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { generateOAuthURL } from '@/components/shared';
 import './LoginScreen.scss';
 
-const PARTICLES = 50;
-
 const safeParse = (raw: string | null): unknown => {
     if (!raw) return null;
     try {
@@ -19,8 +17,6 @@ const isUserLoggedIn = () => {
     if (accountsList && typeof accountsList === 'object' && Object.keys(accountsList as Record<string, unknown>).length > 0) {
         return true;
     }
-    // Treat a valid OAuth token as logged-in so the screen hides as soon as the
-    // token exchange completes, even if the async accounts fetch is still running.
     const authInfo = safeParse(localStorage.getItem('auth_info'));
     if (authInfo && typeof authInfo === 'object') {
         const info = authInfo as { access_token?: string; expires_at?: number };
@@ -36,6 +32,12 @@ const isOAuthCallbackInProgress = () => {
     return params.has('code') || params.has('state') || params.has('error');
 };
 
+const PulseIcon: React.FC<{ size?: number }> = ({ size = 20 }) => (
+    <svg width={size} height={size} viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round' strokeLinejoin='round'>
+        <polyline points='22 12 18 12 15 21 9 3 6 12 2 12' />
+    </svg>
+);
+
 const StandaloneLoginScreen: React.FC = () => {
     const [show, setShow] = useState(() => !isUserLoggedIn() && !isOAuthCallbackInProgress());
     const [visible, setVisible] = useState(false);
@@ -45,14 +47,12 @@ const StandaloneLoginScreen: React.FC = () => {
 
     useEffect(() => {
         if (!show) return;
-        const t = setTimeout(() => setVisible(true), 60);
+        const t = setTimeout(() => setVisible(true), 40);
         return () => clearTimeout(t);
     }, [show]);
 
     useEffect(() => {
         const check = () => {
-            // Re-evaluate on every poll: hide when logged in, and show again
-            // after logout or when the OAuth callback is not in progress.
             setShow(!isUserLoggedIn() && !isOAuthCallbackInProgress());
         };
         const interval = setInterval(check, 800);
@@ -71,7 +71,6 @@ const StandaloneLoginScreen: React.FC = () => {
         try {
             const url = await generateOAuthURL();
             if (url) {
-                // Replace so the OAuth URL doesn't linger in history
                 window.location.replace(url);
             } else {
                 setIsNewLoginLoading(false);
@@ -108,79 +107,114 @@ const StandaloneLoginScreen: React.FC = () => {
 
     return (
         <div className={`login-screen${visible ? ' login-screen--visible' : ''}`}>
-            <div className='login-screen__bg' />
-            <div className='login-screen__bg-overlay' />
-            <div className='login-screen__particles'>
-                {[...Array(PARTICLES)].map((_, i) => (
-                    <div key={i} className='login-screen__particle' style={{
-                        left: `${(i * 3.7 + 1) % 100}%`,
-                        top: `${(i * 5.1 + 3) % 100}%`,
-                        width: `${1.5 + (i % 3) * 1.5}px`,
-                        height: `${1.5 + (i % 3) * 1.5}px`,
-                        animationDelay: `${i * 0.3}s`,
-                        animationDuration: `${4 + (i % 5) * 3}s`,
-                        opacity: 0.15 + (i % 4) * 0.05,
-                    }} />
-                ))}
-            </div>
-
-            <div className='login-screen__top-bar'>
-                <div className='login-screen__top-bar-left'>
-                    <img src='/traderpulse-logo.jpg' alt='TraderPulse' className='login-screen__mini-logo' />
-                    <span className='login-screen__top-brand'>TRADERSPULSE</span>
+            <header className='login-screen__top-bar'>
+                <div className='login-screen__brand'>
+                    <div className='login-screen__brand-icon'>
+                        <PulseIcon size={20} />
+                    </div>
+                    <div className='login-screen__brand-copy'>
+                        <div className='login-screen__brand-name'>TradePulse</div>
+                        <div className='login-screen__brand-tag'>Plan. Track. Perform.</div>
+                    </div>
                 </div>
                 <div className='login-screen__top-bar-right'>
-                    <a href='https://whatsapp.com/channel/0029VbBmfLc3LdQbqcezuz0d'
-                       target='_blank' rel='noopener noreferrer'
-                       className='login-screen__whatsapp-btn'>
-                        <span className='login-screen__whatsapp-icon'>💬</span>
-                        Join WhatsApp Channel
+                    <a
+                        href='https://whatsapp.com/channel/0029VbBmfLc3LdQbqcezuz0d'
+                        target='_blank'
+                        rel='noopener noreferrer'
+                        className='login-screen__whatsapp-btn'
+                    >
+                        <svg width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'>
+                            <path d='M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z' />
+                        </svg>
+                        <span>WhatsApp Channel</span>
                     </a>
                 </div>
-            </div>
+            </header>
 
-            <div className='login-screen__center'>
-                <div className='login-screen__auth-card'>
-                    <div className='login-screen__auth-header'>
-                        <img src='/traderpulse-logo.jpg' alt='' className='login-screen__auth-logo' />
-                        <h2 className='login-screen__auth-title'>Welcome Back</h2>
-                        <p className='login-screen__auth-sub'>Sign in to start trading</p>
+            <main className='login-screen__center'>
+                <div className='login-screen__shell'>
+                    <div className='login-screen__intro'>
+                        <span className='login-screen__eyebrow'>
+                            <span className='login-screen__live-dot' />
+                            TradePulse Workspace
+                        </span>
+                        <h1 className='login-screen__headline'>
+                            Plan. Track. <span>Perform.</span>
+                        </h1>
+                        <p className='login-screen__lead'>
+                            Lock your permanent trading journey, compound daily targets with discipline, and execute automated strategies seamlessly with your Deriv account.
+                        </p>
+
+                        <div className='login-screen__pills'>
+                            <div className='login-screen__pill-card'>
+                                <div className='login-screen__pill-label'>MY JOURNEY</div>
+                                <div className='login-screen__pill-val'>Daily Target Lock</div>
+                            </div>
+                            <div className='login-screen__pill-card'>
+                                <div className='login-screen__pill-label'>MASTER SCHEDULE</div>
+                                <div className='login-screen__pill-val'>Cycle Compounding</div>
+                            </div>
+                            <div className='login-screen__pill-card'>
+                                <div className='login-screen__pill-label'>AUTOMATION</div>
+                                <div className='login-screen__pill-val'>Bots &amp; Scanners</div>
+                            </div>
+                        </div>
                     </div>
 
-                    <button
-                        className={`login-screen__btn login-screen__btn--login${isNewLoginLoading ? ' login-screen__btn--loading' : ''}`}
-                        onClick={handleNewAccountsLogin}
-                        disabled={isNewLoginLoading}
-                    >
-                        <span className='login-screen__btn-text'>{isNewLoginLoading ? 'Connecting...' : 'Login with Deriv'}</span>
-                    </button>
+                    <div className='login-screen__auth-card'>
+                        <div className='login-screen__auth-header'>
+                            <div className='login-screen__auth-badge'>
+                                <PulseIcon size={22} />
+                            </div>
+                            <h2 className='login-screen__auth-title'>Sign in to TradePulse</h2>
+                            <p className='login-screen__auth-sub'>Connect securely with your Deriv account</p>
+                        </div>
 
-                    {newLoginError && <p className='login-screen__error'>{newLoginError}</p>}
+                        <button
+                            className={`login-screen__btn login-screen__btn--login${isNewLoginLoading ? ' login-screen__btn--loading' : ''}`}
+                            onClick={handleNewAccountsLogin}
+                            disabled={isNewLoginLoading}
+                        >
+                            {isNewLoginLoading ? <span className='login-screen__spinner' /> : null}
+                            <span className='login-screen__btn-text'>
+                                {isNewLoginLoading ? 'Connecting to Deriv…' : 'Login with Deriv'}
+                            </span>
+                        </button>
 
-                    <div className='login-screen__divider'><span>New here?</span></div>
+                        {newLoginError && <p className='login-screen__error'>{newLoginError}</p>}
 
-                    <button
-                        className={`login-screen__btn login-screen__btn--create${isNewSignupLoading ? ' login-screen__btn--loading' : ''}`}
-                        onClick={handleNewAccountsSignup}
-                        disabled={isNewSignupLoading}
-                    >
-                        <span className='login-screen__btn-text'>{isNewSignupLoading ? 'Redirecting...' : 'Create Free Account'}</span>
-                    </button>
+                        <div className='login-screen__divider'>
+                            <span>New to Deriv?</span>
+                        </div>
 
-                    <a href='https://whatsapp.com/channel/0029VbBmfLc3LdQbqcezuz0d'
-                       target='_blank' rel='noopener noreferrer'
-                       className='login-screen__whatsapp-link'>
-                        💬 Join our WhatsApp Channel for updates & support
-                    </a>
+                        <button
+                            className={`login-screen__btn login-screen__btn--create${isNewSignupLoading ? ' login-screen__btn--loading' : ''}`}
+                            onClick={handleNewAccountsSignup}
+                            disabled={isNewSignupLoading}
+                        >
+                            <span className='login-screen__btn-text'>
+                                {isNewSignupLoading ? 'Redirecting…' : 'Create Free Account'}
+                            </span>
+                        </button>
+
+                        <a
+                            href='https://whatsapp.com/channel/0029VbBmfLc3LdQbqcezuz0d'
+                            target='_blank'
+                            rel='noopener noreferrer'
+                            className='login-screen__whatsapp-link'
+                        >
+                            Join our WhatsApp Channel for updates &amp; support
+                        </a>
+                    </div>
                 </div>
-            </div>
+            </main>
 
-            <div className='login-screen__bottom-bar'>
-                <span>© 2026 TraderPulse Developers</span>
+            <footer className='login-screen__bottom-bar'>
+                <span>© 2026 TradePulse · Plan. Track. Perform.</span>
                 <span>Contact: +254 799 476 880</span>
-                <span>Version 2.0.0</span>
                 <span>Powered by Deriv</span>
-            </div>
+            </footer>
         </div>
     );
 };

@@ -18,7 +18,7 @@ CONDITIONS FOR OVER PREDICTION:
 
 ENTRY POINT: Wait for the tick pointer to pick the least appearing among digit 1,2 & 3, if within the next 1 tick the pointer picks any digit from 4 to 9, enter immediately.
 
-USE traderpulse.vercel.app TO TRADE
+TradePulse — Plan. Track. Perform.
 
 2. UNDER 8,7,6 STRATEGY
 
@@ -33,7 +33,7 @@ ENTRY POINT: Wait for the tick pointer to pick the least appearing among digit 8
 Proverbs 21:5
 "The plans of the diligent lead surely to abundance, but everyone who is hasty comes only to poverty."
 
-USE traderpulse.vercel.app TO TRADE`;
+TradePulse — Plan. Track. Perform.`;
 
         const blob = new Blob([content], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
@@ -119,7 +119,7 @@ USE traderpulse.vercel.app TO TRADE`;
                                 </p>
                             </div>
 
-                            <p className='strategy-bots'>USE traderpulse.vercel.app TO TRADE</p>
+                            <p className='strategy-bots'>TradePulse — Plan. Track. Perform.</p>
                         </div>
                     </section>
 
@@ -148,7 +148,7 @@ USE traderpulse.vercel.app TO TRADE`;
                                 </p>
                             </div>
 
-                            <p className='strategy-bots'>USE traderpulse.vercel.app TO TRADE</p>
+                            <p className='strategy-bots'>TradePulse — Plan. Track. Perform.</p>
                         </div>
                     </section>
 

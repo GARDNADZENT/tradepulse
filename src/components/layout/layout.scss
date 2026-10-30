@@ -7,9 +7,13 @@
     width: 100%;
     max-width: 100vw;
     overflow-x: hidden;
+    background: var(--tp-bg, #f8fafc);
 
     .deriv-header {
-        background: var(--general-main-1);
+        background: rgba(255, 255, 255, 0.92);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 1px solid #e2e8f0;
         height: 5.6rem;
     }
 
@@ -19,5 +23,14 @@
                 z-index: 10000;
             }
         }
+    }
+}
+
+.theme--dark .layout {
+    background: var(--general-main-1);
+
+    .deriv-header {
+        background: var(--general-main-1);
+        border-bottom-color: var(--general-section-1);
     }
 }

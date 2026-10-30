@@ -111,10 +111,20 @@ const AutoTrades: React.FC = () => {
     return (
         <div className='auto-trades'>
             <div className='auto-trades__header'>
-                <h1 className='auto-trades__title'>Auto Trades</h1>
-                <p className='auto-trades__subtitle'>Automated trading workspace</p>
+                <div className='auto-trades__brand'>
+                    <div className='auto-trades__brand-icon'>
+                        <svg width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round' strokeLinejoin='round'>
+                            <polyline points='22 12 18 12 15 21 9 3 6 12 2 12' />
+                        </svg>
+                    </div>
+                    <div className='auto-trades__brand-copy'>
+                        <h1 className='auto-trades__title'>Auto Trades</h1>
+                        <p className='auto-trades__subtitle'>TradePulse · Plan. Track. Perform.</p>
+                    </div>
+                </div>
                 <div className={`auto-trades__status ${wsReady ? 'auto-trades__status--connected' : 'auto-trades__status--disconnected'}`}>
-                    {wsReady ? '● Connected — tick data streaming' : '○ Connecting to Deriv API…'}
+                    <span className='auto-trades__status-dot' />
+                    {wsReady ? 'Live — tick data streaming' : 'Connecting to Deriv API…'}
                 </div>
             </div>
 

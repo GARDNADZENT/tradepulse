@@ -191,7 +191,11 @@ const AppContent = observer(() => {
                 </Suspense>
             )}
             {is_loading ? (
-                <div className='app-root__loading'>Initializing Deriv Bot account</div>
+                <div className='app-root__loading'>
+                    <div className='app-root__loading-spinner' />
+                    <div className='app-root__loading-brand'>TradePulse</div>
+                    <div className='app-root__loading-sub'>Plan. Track. Perform.</div>
+                </div>
             ) : (
                 <AuthLoadingWrapper>
                     <ThemeProvider theme={is_dark_mode_on ? 'dark' : 'light'}>

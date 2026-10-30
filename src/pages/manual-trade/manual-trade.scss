@@ -1,16 +1,17 @@
 @use 'components/shared/styles/mixins' as *;
 
-$accent:   #f97316;
-$accent2:  #ef4444;
-$bg:       #0f1117;
-$bg2:      #181c27;
-$bg3:      #1e2336;
-$border:   rgba(249,115,22,0.2);
-$text:     #e2e8f0;
-$muted:    #64748b;
-$win:      #22c55e;
-$loss:     #ef4444;
-$radius:   10px;
+$accent: #6366f1;
+$accent2: #4338ca;
+$bg: #f8fafc;
+$surface: #ffffff;
+$well: #f1f5f9;
+$border: #e2e8f0;
+$text: #0f172a;
+$secondary: #475569;
+$muted: #64748b;
+$win: #059669;
+$loss: #e11d48;
+$radius: 20px;
 
 .mt-page {
     height: 100%;
@@ -18,13 +19,15 @@ $radius:   10px;
     flex-direction: column;
     background: $bg;
     color: $text;
-    padding: 12px 16px 80px;
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    padding: 24px 32px 80px;
     overflow-y: auto;
-    gap: 12px;
+    gap: 18px;
+    -webkit-font-smoothing: antialiased;
 
     @include mobile-or-tablet-screen {
-        padding: 8px 10px 16px;
-        gap: 8px;
+        padding: 14px 16px 32px;
+        gap: 12px;
     }
 }
 
@@ -39,14 +42,17 @@ $radius:   10px;
 
 .mt-main {
     display: grid;
-    grid-template-columns: 1fr 320px;
-    gap: 16px;
+    grid-template-columns: 1fr 350px;
+    gap: 20px;
     flex: 1;
     min-height: 0;
+    max-width: 1400px;
+    width: 100%;
+    margin: 0 auto;
 
     @include mobile-or-tablet-screen {
         grid-template-columns: 1fr;
-        gap: 12px;
+        gap: 14px;
     }
 }
 
@@ -54,57 +60,77 @@ $radius:   10px;
 .mt-tick-section {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 16px;
 }
 
 .mt-symbol-bar {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
 }
 
 .mt-select {
     flex: 1;
-    background: $bg2;
+    background: $surface;
     border: 1px solid $border;
-    border-radius: $radius;
+    border-radius: 12px;
     color: $text;
-    padding: 8px 12px;
-    font-size: 13px;
+    font-family: inherit;
+    padding: 11px 14px;
+    font-size: 13.5px;
+    font-weight: 600;
     cursor: pointer;
-    &:focus { outline: none; border-color: $accent; }
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+
+    &:focus {
+        outline: none;
+        border-color: $accent;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+    }
 }
 
 .mt-status {
-    font-size: 11px;
-    padding: 4px 10px;
-    border-radius: 20px;
+    font-size: 12px;
+    padding: 6px 14px;
+    border-radius: 999px;
     font-weight: 600;
-    &--on { background: rgba($win, 0.15); color: $win; }
-    &--off { background: rgba($loss, 0.15); color: $loss; }
+
+    &--on {
+        background: #ecfdf5;
+        border: 1px solid rgba(5, 150, 105, 0.22);
+        color: $win;
+    }
+
+    &--off {
+        background: #fff1f2;
+        border: 1px solid rgba(225, 29, 72, 0.2);
+        color: $loss;
+    }
 }
 
 .mt-tick-display {
-    background: $bg2;
+    background: $surface;
     border: 1px solid $border;
     border-radius: $radius;
-    padding: 20px;
+    padding: 28px 24px;
     text-align: center;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -12px rgba(15, 23, 42, 0.08);
 
     @include mobile-or-tablet-screen {
-        padding: 12px;
+        padding: 18px;
     }
 }
 
 .mt-price {
-    font-size: 28px;
+    font-size: 32px;
     font-weight: 700;
-    color: $accent;
-    font-family: 'Courier New', monospace;
-    letter-spacing: 1px;
+    color: $text;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: -0.02em;
 
     @include mobile-or-tablet-screen {
-        font-size: 22px;
+        font-size: 24px;
     }
 }
 
@@ -113,7 +139,7 @@ $radius:   10px;
     align-items: center;
     justify-content: center;
     gap: 10px;
-    margin-top: 8px;
+    margin-top: 12px;
 }
 
 .mt-last-digit {
@@ -122,55 +148,60 @@ $radius:   10px;
     justify-content: center;
     width: 48px;
     height: 48px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, $accent, $accent2);
+    border-radius: 14px;
+    background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
     color: #fff;
-    font-size: 24px;
-    font-weight: 900;
-    box-shadow: 0 0 16px rgba($accent, 0.4);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px;
+    font-weight: 700;
+    box-shadow: 0 6px 18px -6px rgba(99, 102, 241, 0.45);
 
     @include mobile-or-tablet-screen {
-        width: 36px;
-        height: 36px;
+        width: 38px;
+        height: 38px;
         font-size: 18px;
     }
 }
 
 .mt-digit-label {
-    font-size: 12px;
+    font-size: 12.5px;
+    font-weight: 500;
     color: $muted;
 }
 
 /* ── Digit frequency bars ──────────────────────────── */
 .mt-stats {
-    background: $bg2;
+    background: $surface;
     border: 1px solid $border;
     border-radius: $radius;
-    padding: 12px;
+    padding: 22px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -12px rgba(15, 23, 42, 0.08);
 
     @include mobile-or-tablet-screen {
+        padding: 16px;
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
     }
 }
 
 .mt-stats-header {
-    font-size: 12px;
+    font-size: 11.5px;
+    font-weight: 600;
     color: $muted;
-    margin-bottom: 8px;
+    margin-bottom: 12px;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.06em;
     white-space: nowrap;
 }
 
 .mt-bars {
     display: flex;
     align-items: flex-end;
-    gap: 4px;
-    height: 120px;
+    gap: 8px;
+    height: 132px;
 
     @include mobile-or-tablet-screen {
-        height: 100px;
+        height: 108px;
         min-width: 320px;
     }
 }
@@ -186,76 +217,99 @@ $radius:   10px;
     padding-top: 38px;
 
     &:hover .mt-bar-fill {
-        opacity: 0.8;
+        background: #cbd5e1;
     }
 
     &--sel .mt-bar-fill {
-        background: linear-gradient(180deg, $accent, $accent2) !important;
-        box-shadow: 0 0 8px rgba($accent, 0.5);
+        background: linear-gradient(180deg, #6366f1, #4338ca) !important;
+        box-shadow: 0 4px 12px -2px rgba(99, 102, 241, 0.35);
     }
 }
 
 .mt-bar-fill {
     width: 100%;
-    background: $bg3;
-    border-radius: 3px 3px 0 0;
-    min-height: 2px;
-    transition: height 0.3s, opacity 0.2s;
+    background: #e2e8f0;
+    border-radius: 6px 6px 0 0;
+    min-height: 4px;
+    transition: height 0.3s, background 0.2s;
 }
 
 .mt-badge {
     position: absolute;
     top: 0;
-    font-size: 7px;
-    font-weight: 800;
-    letter-spacing: 0.3px;
-    padding: 1px 3px;
-    border-radius: 3px;
+    font-size: 8.5px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 4px;
     line-height: 1.2;
-    &--hot { background: rgba($win, 0.2); color: $win; }
-    &--low { background: rgba($loss, 0.2); color: $loss; }
+
+    &--hot {
+        background: #ecfdf5;
+        color: $win;
+    }
+
+    &--low {
+        background: #fff1f2;
+        color: $loss;
+    }
 }
 
 .mt-bar-pct {
     font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
     color: $text;
     font-weight: 700;
     position: absolute;
-    top: 11px;
+    top: 13px;
 }
 
 .mt-growth {
     font-size: 9px;
     line-height: 1;
     position: absolute;
-    top: 24px;
-    &--up  { color: $win; }
-    &--dn  { color: $loss; }
-    &--flat { color: $muted; }
+    top: 26px;
+
+    &--up {
+        color: $win;
+    }
+
+    &--dn {
+        color: $loss;
+    }
+
+    &--flat {
+        color: $muted;
+    }
 }
 
 .mt-bar-lbl {
-    font-size: 10px;
-    color: $text;
-    margin-top: 2px;
+    font-size: 11.5px;
+    font-family: 'JetBrains Mono', monospace;
+    color: $secondary;
+    margin-top: 6px;
     font-weight: 600;
-    &--hi { color: $accent; }
+
+    &--hi {
+        color: $accent;
+        font-weight: 700;
+    }
 }
 
 /* ── Trade section (right) ─────────────────────────── */
 .mt-trade-section {
-    background: $bg2;
+    background: $surface;
     border: 1px solid $border;
     border-radius: $radius;
-    padding: 16px;
+    padding: 24px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
     min-height: 0;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -12px rgba(15, 23, 42, 0.08);
 
     @include mobile-or-tablet-screen {
-        padding: 12px;
-        gap: 8px;
+        padding: 16px;
+        gap: 12px;
     }
 }
 
@@ -267,53 +321,56 @@ $radius:   10px;
 
 .mt-chip {
     white-space: nowrap;
-    padding: 6px 14px;
-    border-radius: 20px;
+    padding: 7px 14px;
+    border-radius: 999px;
     border: 1px solid $border;
-    background: transparent;
+    background: $bg;
     color: $muted;
-    font-size: 12px;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.18s;
 
     &--on {
-        background: $accent;
-        color: #fff;
-        border-color: $accent;
+        background: rgba(99, 102, 241, 0.1);
+        color: $accent;
+        border-color: rgba(99, 102, 241, 0.35);
     }
 
     &:hover:not(&--on) {
-        border-color: rgba($accent, 0.5);
+        border-color: #cbd5e1;
         color: $text;
     }
 }
 
 .mt-mode-group {
     display: flex;
-    gap: 6px;
+    gap: 8px;
 }
 
 .mt-mode-btn {
     flex: 1;
-    padding: 8px;
-    border-radius: $radius;
+    padding: 10px;
+    border-radius: 10px;
     border: 1px solid $border;
-    background: transparent;
-    color: $muted;
+    background: $bg;
+    color: $secondary;
+    font-family: inherit;
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.18s;
 
     &--on {
-        background: linear-gradient(135deg, $accent, $accent2);
+        background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
         color: #fff;
         border-color: transparent;
-        box-shadow: 0 0 12px rgba($accent, 0.3);
+        box-shadow: 0 4px 12px -2px rgba(99, 102, 241, 0.4);
     }
 
     &:hover:not(&--on) {
-        border-color: rgba($accent, 0.5);
+        border-color: #cbd5e1;
         color: $text;
     }
 }
@@ -327,86 +384,103 @@ $radius:   10px;
 .mt-field {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 5px;
 }
 
 .mt-label {
     font-size: 11px;
+    font-weight: 600;
     color: $muted;
     text-transform: uppercase;
-    letter-spacing: 0.3px;
+    letter-spacing: 0.05em;
 }
 
 .mt-input {
-    background: $bg3;
-    border: 1px solid transparent;
-    border-radius: 6px;
+    background: $bg;
+    border: 1px solid $border;
+    border-radius: 10px;
     color: $text;
-    padding: 8px 10px;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 10px 12px;
     font-size: 14px;
     font-weight: 600;
-    transition: border-color 0.2s;
+    transition: border-color 0.18s, box-shadow 0.18s;
 
     &:focus {
         outline: none;
+        background: $surface;
         border-color: $accent;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
     }
-
-    &::-webkit-inner-spin-button { opacity: 0.5; }
 }
 
 .mt-prediction {
     font-size: 13px;
-    color: $muted;
+    color: $secondary;
     text-align: center;
-    padding: 8px;
-    background: $bg3;
-    border-radius: 6px;
-    strong { color: $accent; }
+    padding: 10px;
+    background: $bg;
+    border: 1px solid $border;
+    border-radius: 10px;
+
+    strong {
+        color: $accent;
+        font-family: 'JetBrains Mono', monospace;
+    }
 }
 
 .mt-buy-btn {
     width: 100%;
-    padding: 12px;
-    border-radius: $radius;
+    padding: 13px;
+    border-radius: 12px;
     border: none;
-    background: linear-gradient(135deg, $accent, $accent2);
+    background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
     color: #fff;
-    font-size: 15px;
+    font-family: inherit;
+    font-size: 14.5px;
     font-weight: 700;
     cursor: pointer;
-    transition: opacity 0.2s, transform 0.1s;
-    box-shadow: 0 0 20px rgba($accent, 0.3);
+    box-shadow: 0 4px 14px -3px rgba(99, 102, 241, 0.45);
+    transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
 
     &:hover:not(:disabled) {
-        opacity: 0.9;
         transform: translateY(-1px);
+        box-shadow: 0 8px 20px -4px rgba(99, 102, 241, 0.55);
     }
 
     &:disabled {
-        opacity: 0.4;
+        opacity: 0.45;
         cursor: not-allowed;
         box-shadow: none;
     }
 }
 
 .mt-hint {
-    font-size: 11px;
+    font-size: 12px;
     color: $muted;
     text-align: center;
 }
 
 .mt-result {
-    font-size: 12px;
-    padding: 8px 12px;
-    border-radius: 6px;
+    font-size: 12.5px;
+    padding: 10px 12px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
 
-    &--ok { background: rgba($win, 0.1); color: $win; border: 1px solid rgba($win, 0.3); }
-    &--err { background: rgba($loss, 0.1); color: $loss; border: 1px solid rgba($loss, 0.3); }
+    &--ok {
+        background: #ecfdf5;
+        color: $win;
+        border: 1px solid rgba(5, 150, 105, 0.25);
+    }
+
+    &--err {
+        background: #fff1f2;
+        color: $loss;
+        border: 1px solid rgba(225, 29, 72, 0.22);
+    }
 }
 
 .mt-dismiss {
@@ -416,89 +490,116 @@ $radius:   10px;
     font-size: 16px;
     cursor: pointer;
     opacity: 0.6;
-    &:hover { opacity: 1; }
+
+    &:hover {
+        opacity: 1;
+    }
 }
 
 /* ── Positions ─────────────────────────────────────── */
 .mt-positions {
-    background: $bg2;
+    background: $surface;
     border: 1px solid $border;
     border-radius: $radius;
-    padding: 12px;
+    padding: 18px 22px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -12px rgba(15, 23, 42, 0.08);
+    max-width: 1400px;
+    width: 100%;
+    margin: 0 auto;
 }
 
 .mt-positions-header {
-    font-size: 12px;
+    font-size: 11.5px;
+    font-weight: 600;
     color: $muted;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 8px;
+    letter-spacing: 0.06em;
+    margin-bottom: 10px;
 }
 
 .mt-positions-list {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
 }
 
 .mt-pos-row {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 8px;
-    background: $bg3;
-    border-radius: 6px;
-    font-size: 12px;
+    gap: 10px;
+    padding: 9px 12px;
+    background: $bg;
+    border: 1px solid $border;
+    border-radius: 10px;
+    font-size: 12.5px;
 }
 
 .mt-pos-sym {
     font-weight: 600;
     min-width: 60px;
+    color: $text;
 }
 
 .mt-pos-type {
     color: $muted;
-    font-size: 11px;
+    font-size: 11.5px;
     min-width: 60px;
 }
 
 .mt-pos-price {
     min-width: 60px;
     text-align: right;
+    font-family: 'JetBrains Mono', monospace;
 }
 
 .mt-pos-status {
-    font-size: 10px;
+    font-size: 10.5px;
     font-weight: 600;
     padding: 2px 8px;
-    border-radius: 10px;
+    border-radius: 999px;
     min-width: 44px;
     text-align: center;
 
-    &--open { background: rgba($accent, 0.15); color: $accent; }
-    &--sold { background: rgba($muted, 0.15); color: $muted; }
+    &--open {
+        background: rgba(99, 102, 241, 0.1);
+        color: $accent;
+    }
+
+    &--sold {
+        background: $well;
+        color: $muted;
+    }
 }
 
 .mt-pos-profit {
     font-weight: 700;
-    min-width: 50px;
+    font-family: 'JetBrains Mono', monospace;
+    min-width: 54px;
     text-align: right;
-    &--win { color: $win; }
-    &--loss { color: $loss; }
+
+    &--win {
+        color: $win;
+    }
+
+    &--loss {
+        color: $loss;
+    }
 }
 
 .mt-sell-btn {
-    padding: 3px 10px;
-    border-radius: 12px;
-    border: 1px solid $loss;
-    background: transparent;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba($loss, 0.35);
+    background: #fff1f2;
     color: $loss;
     font-size: 11px;
+    font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.18s;
 
     &:hover {
         background: $loss;
+        border-color: $loss;
         color: #fff;
     }
 }

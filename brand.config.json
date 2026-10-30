@@ -1,20 +1,20 @@
 {
-    "brand_name": "YourBrand",
-    "brand_domain": "yourbrand.com",
+    "brand_name": "TradePulse",
+    "brand_domain": "tradepulse.app",
     "brand_hostname": {
-        "staging": "staging.yourbrand.com/dashboard",
-        "production": "yourbrand.com/dashboard"
+        "staging": "staging.tradepulse.app/dashboard",
+        "production": "tradepulse.app/dashboard"
     },
-    "domain_name": "YourBrand.com",
+    "domain_name": "TradePulse",
     "colors": {
-        "primary": "#3B82F6",
+        "primary": "#6366F1",
         "secondary": "#64748b",
         "tertiary": "#8b5cf6",
-        "success": "#10b981",
-        "danger": "#ef4444",
-        "warning": "#f59e0b",
-        "info": "#0ea5e9",
-        "neutral": "#6b7280",
+        "success": "#059669",
+        "danger": "#e11d48",
+        "warning": "#d97706",
+        "info": "#06b6d4",
+        "neutral": "#64748b",
         "black": "#0f172a",
         "white": "#ffffff",
         "grey": {
@@ -33,8 +33,8 @@
     "typography": {
         "font_family": {
             "primary": "Inter",
-            "secondary": "Georgia, 'Times New Roman', Times, serif",
-            "monospace": "'Courier New', Courier, monospace"
+            "secondary": "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
+            "monospace": "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace"
         },
         "font_sizes": {
             "xs": "0.75rem",
@@ -79,17 +79,18 @@
         "css_variable_prefix": "--brand"
     },
     "platform": {
-        "name": "MAKOTI TRADERS",
+        "name": "TradePulse",
+        "tagline": "Plan. Track. Perform.",
         "footer": {
             "enable_language_settings": false,
             "enable_theme_toggle": true
         },
         "hostname": {
             "production": {
-                "com": "bot.yourbrand.com"
+                "com": "app.tradepulse.app"
             },
             "staging": {
-                "com": "staging-bot.yourbrand.com"
+                "com": "staging.tradepulse.app"
             }
         },
         "auth2_url": {
