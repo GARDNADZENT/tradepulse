@@ -81,7 +81,7 @@ const AppWrapper = observer(() => {
         [key: string]: string;
     };
     const { clear } = summary_card;
-    const { DASHBOARD, BOT_BUILDER } = DBOT_TABS;
+    const { DASHBOARD, BOT_BUILDER, FREE_BOTS } = DBOT_TABS;
     const init_render = React.useRef(true);
 
     const hash = [
@@ -250,7 +250,8 @@ const AppWrapper = observer(() => {
 
     React.useEffect(() => {
         const trashcan_init_id = setTimeout(() => {
-            if (active_tab === BOT_BUILDER && Blockly?.derivWorkspace?.trashcan) {
+            const blocklyGlobal = (window as any).Blockly;
+            if (active_tab === BOT_BUILDER && blocklyGlobal?.derivWorkspace?.trashcan) {
                 const trashcanY = window.innerHeight - 250;
                 const trashcanX = is_drawer_open
                     ? isDbotRTL()
@@ -259,7 +260,7 @@ const AppWrapper = observer(() => {
                     : isDbotRTL()
                       ? 20
                       : window.innerWidth - 100;
-                Blockly?.derivWorkspace?.trashcan?.setTrashcanPosition(trashcanX, trashcanY);
+                blocklyGlobal?.derivWorkspace?.trashcan?.setTrashcanPosition(trashcanX, trashcanY);
             }
         }, 100);
         return () => clearTimeout(trashcan_init_id);
