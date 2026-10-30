@@ -2,26 +2,64 @@
 @use 'components/shared/styles/mixins' as *;
 
 .app-header {
+    background: #001840 !important;
+    color: #ffffff;
+
     &__account-settings {
         padding-inline-end: 1.2rem;
-        border-inline-end: 0.1rem solid var(--general-section-1);
+        border-inline-end: 0.1rem solid rgba(255, 255, 255, 0.14);
     }
 
     &__account-settings,
     .notifications__wrapper,
-    &__menu {
+    &__menu,
+    .mobile-menu__toggle {
+        color: #ffffff;
+
         svg > path,
         svg > g > path {
-            fill: var(--text-prominent);
+            fill: #ffffff;
         }
     }
 
     &__brand-text {
-        font-size: 11px;
-        color: var(--text-general);
-        margin-left: 0.8rem;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        color: #ffffff;
+        margin-left: 0.6rem;
         white-space: nowrap;
-        opacity: 0.7;
+        opacity: 0.95;
+    }
+
+    .deriv-account-switcher__button {
+        background: #102A71;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 999px;
+        padding: 0.4rem 1.2rem;
+        color: #ffffff;
+        transition: background 0.18s ease, border-color 0.18s ease;
+
+        &:hover {
+            background: #163791;
+            border-color: rgba(255, 255, 255, 0.32);
+        }
+
+        span,
+        p,
+        .deriv-account-switcher__balance,
+        .deriv-account-switcher__currency {
+            color: #ffffff !important;
+        }
+
+        .deriv-account-switcher__balance + svg > path {
+            fill: #ffffff !important;
+        }
+    }
+
+    .auth-actions button {
+        border-radius: 999px;
+        font-weight: 600;
     }
 }
 

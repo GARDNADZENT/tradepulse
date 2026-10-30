@@ -1,16 +1,16 @@
 @use 'components/shared/styles/mixins' as *;
 
-$accent:   #f97316;
-$accent2:  #ef4444;
-$bg:       #0f1117;
-$bg2:      #181c27;
-$bg3:      #1e2336;
-$border:   rgba(249,115,22,0.2);
-$text:     #e2e8f0;
-$muted:    #64748b;
-$win:      #22c55e;
+$accent:   #2563EB;
+$accent2:  #102A71;
+$bg:       #001840;
+$bg2:      #081e4a;
+$bg3:      #0d265c;
+$border:   rgba(255, 255, 255, 0.14);
+$text:     #ffffff;
+$muted:    #94a3b8;
+$win:      #10b981;
 $loss:     #ef4444;
-$radius:   10px;
+$radius:   12px;
 
 .mt-page {
     height: 100%;

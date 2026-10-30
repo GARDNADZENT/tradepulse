@@ -1,18 +1,18 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap');
 
 :root {
-    --tp-bg: #f5f7fc;
+    --tp-bg: #f4f7fb;
     --tp-surface: #ffffff;
-    --tp-surface-hover: #f8fafc;
-    --tp-border: #e5e9f2;
-    --tp-border-subtle: #f1f5f9;
-    --tp-text-primary: #0f172a;
-    --tp-text-secondary: #334155;
+    --tp-surface-hover: #f8fafd;
+    --tp-border: #e2e8f0;
+    --tp-border-subtle: #eef3f9;
+    --tp-text-primary: #001840;
+    --tp-text-secondary: #1e293b;
     --tp-text-tertiary: #64748b;
     --tp-text-disabled: #94a3b8;
-    --tp-accent: #4f46e5;
-    --tp-accent-bright: #6366f1;
-    --tp-accent-soft: #eef2ff;
+    --tp-accent: #102A71;
+    --tp-accent-bright: #1d4ed8;
+    --tp-accent-soft: #eaf0fa;
     --tp-profit: #059669;
     --tp-profit-bright: #10b981;
     --tp-profit-soft: #ecfdf5;
@@ -20,23 +20,23 @@
     --tp-loss-soft: #fff1f2;
     --tp-warning: #d97706;
     --tp-warning-soft: #fffbeb;
-    --tp-shadow-card: 0 1px 3px rgba(15, 23, 42, 0.04), 0 10px 28px -12px rgba(30, 41, 59, 0.09);
-    --tp-shadow-hover: 0 4px 12px rgba(15, 23, 42, 0.05), 0 18px 36px -14px rgba(79, 70, 229, 0.16);
+    --tp-shadow-card: 0 1px 3px rgba(0, 24, 64, 0.04), 0 10px 28px -12px rgba(0, 24, 64, 0.09);
+    --tp-shadow-hover: 0 4px 12px rgba(0, 24, 64, 0.06), 0 18px 36px -14px rgba(16, 42, 113, 0.18);
 }
 
 .theme--dark .tradepulse {
-    --tp-bg: #0b1120;
-    --tp-surface: #111827;
-    --tp-surface-hover: #1e293b;
-    --tp-border: rgba(148, 163, 184, 0.16);
-    --tp-border-subtle: rgba(148, 163, 184, 0.1);
-    --tp-text-primary: #f8fafc;
+    --tp-bg: #001840;
+    --tp-surface: #081e4a;
+    --tp-surface-hover: #0d265c;
+    --tp-border: rgba(255, 255, 255, 0.14);
+    --tp-border-subtle: rgba(255, 255, 255, 0.08);
+    --tp-text-primary: #ffffff;
     --tp-text-secondary: #cbd5e1;
     --tp-text-tertiary: #94a3b8;
     --tp-text-disabled: #64748b;
-    --tp-accent: #818cf8;
-    --tp-accent-bright: #6366f1;
-    --tp-accent-soft: rgba(99, 102, 241, 0.16);
+    --tp-accent: #60a5fa;
+    --tp-accent-bright: #102A71;
+    --tp-accent-soft: rgba(16, 42, 113, 0.55);
     --tp-profit: #34d399;
     --tp-profit-bright: #10b981;
     --tp-profit-soft: rgba(16, 185, 129, 0.14);
@@ -44,8 +44,8 @@
     --tp-loss-soft: rgba(244, 63, 94, 0.14);
     --tp-warning: #fbbf24;
     --tp-warning-soft: rgba(245, 158, 11, 0.14);
-    --tp-shadow-card: 0 10px 30px -12px rgba(0, 0, 0, 0.45);
-    --tp-shadow-hover: 0 16px 36px -12px rgba(99, 102, 241, 0.25);
+    --tp-shadow-card: 0 10px 30px -12px rgba(0, 12, 36, 0.5);
+    --tp-shadow-hover: 0 16px 36px -12px rgba(16, 42, 113, 0.45);
 }
 
 .tradepulse {
@@ -57,8 +57,8 @@
     overflow-x: hidden;
     background-color: var(--tp-bg);
     background-image:
-        radial-gradient(ellipse 65% 45% at 10% 0%, rgba(99, 102, 241, 0.07) 0%, transparent 70%),
-        radial-gradient(ellipse 55% 45% at 92% 100%, rgba(139, 92, 246, 0.06) 0%, transparent 70%);
+        radial-gradient(ellipse 65% 45% at 10% 0%, rgba(16, 42, 113, 0.06) 0%, transparent 70%),
+        radial-gradient(ellipse 55% 45% at 92% 100%, rgba(0, 24, 64, 0.05) 0%, transparent 70%);
     color: var(--tp-text-primary);
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     font-size: 14px;
@@ -159,9 +159,9 @@
     }
 
     &--active {
-        background: linear-gradient(135deg, #5b4cf5 0%, #4338ca 100%);
+        background: linear-gradient(135deg, #102A71 0%, #001840 100%);
         color: #ffffff;
-        box-shadow: 0 6px 18px -4px rgba(79, 70, 229, 0.48);
+        box-shadow: 0 6px 18px -4px rgba(16, 42, 113, 0.48);
     }
 
     @media (max-width: 640px) {
@@ -334,8 +334,8 @@
 
 /* ---------- Hero Banner (My Journey) ---------- */
 .tp-hero {
-    background: linear-gradient(135deg, #eef2ff 0%, #f3f0ff 52%, #ecfeff 100%);
-    border: 1px solid rgba(99, 102, 241, 0.16);
+    background: linear-gradient(135deg, #102A71 0%, #001840 100%);
+    border: 1px solid rgba(59, 130, 246, 0.28);
     border-radius: 22px;
     padding: 28px 32px;
     display: flex;
@@ -343,11 +343,11 @@
     justify-content: space-between;
     gap: 20px;
     flex-wrap: wrap;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 12px 30px -16px rgba(79, 70, 229, 0.14);
+    box-shadow: 0 12px 32px -12px rgba(0, 24, 64, 0.35);
 
     .theme--dark & {
-        background: linear-gradient(135deg, rgba(79, 70, 229, 0.2) 0%, rgba(17, 24, 39, 0.95) 100%);
-        border-color: rgba(99, 102, 241, 0.28);
+        background: linear-gradient(135deg, #102A71 0%, #06183d 100%);
+        border-color: rgba(96, 165, 250, 0.3);
     }
 
     @media (max-width: 640px) {
@@ -359,7 +359,7 @@
         font-weight: 800;
         letter-spacing: 0.06em;
         text-transform: uppercase;
-        color: var(--tp-text-primary);
+        color: #93c5fd;
         margin-bottom: 6px;
     }
 
@@ -367,7 +367,7 @@
         font-size: 32px;
         font-weight: 800;
         letter-spacing: -0.025em;
-        color: var(--tp-text-primary);
+        color: #ffffff;
         margin: 0 0 8px 0;
         line-height: 1.12;
 
@@ -382,22 +382,22 @@
         gap: 7px;
         font-size: 14.5px;
         font-weight: 500;
-        color: var(--tp-text-secondary);
+        color: rgba(255, 255, 255, 0.85);
         margin: 0;
     }
 
     &__reset-btn {
         appearance: none;
-        background: var(--tp-surface);
-        color: var(--tp-text-primary);
-        border: 1px solid var(--tp-border);
+        background: #ffffff;
+        color: #001840;
+        border: 1px solid rgba(255, 255, 255, 0.25);
         border-radius: 999px;
         padding: 10px 22px;
         font-family: inherit;
         font-size: 13.5px;
-        font-weight: 600;
+        font-weight: 700;
         cursor: pointer;
-        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+        box-shadow: 0 4px 14px rgba(0, 12, 36, 0.22);
         transition: all 0.18s ease;
 
         &:hover {
@@ -489,15 +489,15 @@
     &:hover {
         transform: translateY(-2px);
         box-shadow: var(--tp-shadow-hover);
-        border-color: rgba(99, 102, 241, 0.3);
+        border-color: rgba(16, 42, 113, 0.32);
     }
 
     &--accent {
-        border-color: rgba(99, 102, 241, 0.28);
-        background: linear-gradient(180deg, #ffffff 0%, #fafaff 100%);
+        border-color: rgba(16, 42, 113, 0.26);
+        background: linear-gradient(180deg, #ffffff 0%, #f5f8fd 100%);
 
         .theme--dark & {
-            background: linear-gradient(180deg, rgba(99, 102, 241, 0.14) 0%, #111827 100%);
+            background: linear-gradient(180deg, rgba(16, 42, 113, 0.45) 0%, #081e4a 100%);
         }
     }
 }
@@ -675,7 +675,7 @@
 .tradepulse__progress-fill {
     position: relative;
     height: 100%;
-    background: linear-gradient(90deg, #6366f1 0%, #3b82f6 55%, #10b981 100%);
+    background: linear-gradient(90deg, #102A71 0%, #2563eb 55%, #10b981 100%);
     border-radius: 999px;
     transition: width 0.5s ease;
 
@@ -1086,13 +1086,13 @@
 }
 
 .tradepulse__btn--primary {
-    background: linear-gradient(135deg, #5b4cf5 0%, #4338ca 100%);
+    background: linear-gradient(135deg, #102A71 0%, #001840 100%);
     color: #ffffff;
-    box-shadow: 0 6px 18px -4px rgba(79, 70, 229, 0.45);
+    box-shadow: 0 6px 18px -4px rgba(16, 42, 113, 0.48);
 
     &:hover:not(:disabled) {
         transform: translateY(-1px);
-        box-shadow: 0 10px 24px -4px rgba(79, 70, 229, 0.55);
+        box-shadow: 0 10px 24px -4px rgba(16, 42, 113, 0.62);
     }
 
     &:disabled {
@@ -1242,7 +1242,7 @@
 }
 
 .tradepulse__win-fill--high {
-    background: linear-gradient(90deg, #4338ca, #6366f1);
+    background: linear-gradient(90deg, #001840, #102A71);
 }
 
 .tradepulse__win-fill--mid {

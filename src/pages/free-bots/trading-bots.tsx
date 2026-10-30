@@ -42,7 +42,7 @@ const TradingBots: React.FC = () => {
                         <LabelPairedPuzzlePieceTwoCaptionBoldIcon
                             height='16px'
                             width='16px'
-                            fill={active_tool === 'free-bots' ? '#3b82f6' : '#1e3a8a'}
+                            fill={active_tool === 'free-bots' ? '#ffffff' : '#102A71'}
                         />
                         <span className='trading-bots__card-label'>
                             <Localize i18n_default_text='Free Bots' />
@@ -57,7 +57,7 @@ const TradingBots: React.FC = () => {
                         <LabelPairedPuzzlePieceTwoCaptionBoldIcon
                             height='16px'
                             width='16px'
-                            fill={active_tool === 'speedbots' ? '#3b82f6' : '#1e3a8a'}
+                            fill={active_tool === 'speedbots' ? '#ffffff' : '#102A71'}
                         />
                         <span className='trading-bots__card-label'>
                             <Localize i18n_default_text='SpeedBots' />
@@ -75,7 +75,7 @@ const TradingBots: React.FC = () => {
                         <LabelPairedPuzzlePieceTwoCaptionBoldIcon
                             height='16px'
                             width='16px'
-                            fill={active_tool === 'calculator' ? '#3b82f6' : '#1e3a8a'}
+                            fill={active_tool === 'calculator' ? '#ffffff' : '#102A71'}
                         />
                         <span className='trading-bots__card-label'>
                             <Localize i18n_default_text='Calculator' />
@@ -90,7 +90,7 @@ const TradingBots: React.FC = () => {
                         <LabelPairedPuzzlePieceTwoCaptionBoldIcon
                             height='16px'
                             width='16px'
-                            fill={active_tool === 'strategies' ? '#3b82f6' : '#1e3a8a'}
+                            fill={active_tool === 'strategies' ? '#ffffff' : '#102A71'}
                         />
                         <span className='trading-bots__card-label'>
                             <Localize i18n_default_text='Strategies' />

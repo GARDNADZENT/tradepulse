@@ -126,7 +126,7 @@ const StandaloneLoginScreen: React.FC = () => {
 
             <div className='login-screen__top-bar'>
                 <div className='login-screen__top-bar-left'>
-                    <img src='/traderpulse-logo.jpg' alt='TraderPulse' className='login-screen__mini-logo' />
+                    <img src='/traderpulse-logo.jpg' alt='TradersPulse' className='login-screen__mini-logo' />
                     <span className='login-screen__top-brand'>TRADERSPULSE</span>
                 </div>
                 <div className='login-screen__top-bar-right'>
@@ -176,7 +176,7 @@ const StandaloneLoginScreen: React.FC = () => {
             </div>
 
             <div className='login-screen__bottom-bar'>
-                <span>© 2026 TraderPulse Developers</span>
+                <span>© 2026 TradersPulse Developers</span>
                 <span>Contact: +254 799 476 880</span>
                 <span>Version 2.0.0</span>
                 <span>Powered by Deriv</span>

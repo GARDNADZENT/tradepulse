@@ -37,19 +37,19 @@
 
     /* Brand colors - dynamically generated from brand.config.json */
     --brand-white: #ffffff;
-    --brand-dark-grey: #0f172a;
-    --brand-red-coral: #3B82F6; /* legacy compatibility */
-    --brand-orange: #8b5cf6; /* legacy compatibility */
+    --brand-dark-grey: #001840;
+    --brand-red-coral: #102A71; /* legacy compatibility */
+    --brand-orange: #2563EB; /* legacy compatibility */
 
     /* Dynamic brand colors (set by brand configuration) */
-    --brand-primary: #3B82F6;
-    --brand-secondary: #64748b;
-    --brand-tertiary: #8b5cf6;
+    --brand-primary: #102A71;
+    --brand-secondary: #001840;
+    --brand-tertiary: #2563EB;
     --brand-success: #10b981;
     --brand-danger: #ef4444;
     --brand-warning: #f59e0b;
     --brand-info: #0ea5e9;
-    --brand-neutral: #6b7280;
+    --brand-neutral: #64748b;
 
     /* Brand typography - dynamically generated from brand.config.json */
     --brand-font-primary: Inter;
@@ -68,23 +68,23 @@
         // General
         --general-main-1: #{constants.$color-white};
         --general-main-2: #{constants.$color-white};
-        --general-main-3: #{constants.$color-grey-1};
+        --general-main-3: #cbd5e1;
         --general-main-4: #{constants.$alpha-color-white-4};
-        --general-section-1: #{constants.$color-grey-2};
-        --general-section-2: #{constants.$color-grey-2};
-        --general-section-3: #{constants.$color-grey-11};
-        --general-section-4: #{constants.$color-grey-12};
-        --general-section-5: #{constants.$color-grey-2};
-        --general-section-6: #{constants.$color-grey-2};
+        --general-section-1: #eef3f9;
+        --general-section-2: #e6eef8;
+        --general-section-3: #f4f7fb;
+        --general-section-4: #f8fafd;
+        --general-section-5: #eef3f9;
+        --general-section-6: #e6eef8;
         --general-disabled: #{constants.$color-grey-3};
-        --general-hover: #{constants.$color-grey-4};
-        --general-active: #{constants.$color-grey-5};
+        --general-hover: #e2eaf5;
+        --general-active: #d4e0f0;
 
         // Icons and Texts
-        --text-general: #{constants.$color-black-1};
-        --text-primary: #{constants.$color-grey-1};
-        --text-less-prominent: #{constants.$color-grey-1};
-        --text-prominent: #{constants.$color-black-1};
+        --text-general: #1e293b;
+        --text-primary: #64748b;
+        --text-less-prominent: #64748b;
+        --text-prominent: #001840;
         --text-disabled: #{constants.$color-grey-1};
         --text-disabled-1: #{constants.$color-grey-6};
         --text-loss-danger: #{constants.$color-red-1};
@@ -112,15 +112,15 @@
         --purchase-disabled-section: #{constants.$color-grey-4};
 
         // Buttons
-        --button-primary-default: var(--brand-red-coral);
-        --button-secondary-default: #{constants.$color-grey-1};
+        --button-primary-default: #102A71;
+        --button-secondary-default: #64748b;
         --button-tertiary-default: transparent;
-        --button-primary-light-default: #{constants.$alpha-color-red-2};
-        --button-primary-hover: #{constants.$color-red-5};
-        --button-secondary-hover: #{constants.$alpha-color-black-3};
-        --button-tertiary-hover: #{constants.$alpha-color-red-1};
-        --button-primary-light-hover: #{constants.$alpha-color-red-3};
-        --button-toggle-primary: #{constants.$color-blue-3};
+        --button-primary-light-default: rgba(16, 42, 113, 0.12);
+        --button-primary-hover: #001840;
+        --button-secondary-hover: rgba(0, 24, 64, 0.08);
+        --button-tertiary-hover: rgba(16, 42, 113, 0.08);
+        --button-primary-light-hover: rgba(16, 42, 113, 0.2);
+        --button-toggle-primary: #102A71;
         --button-toggle-secondary: #{constants.$color-grey-5};
         --button-toggle-alternate: #{constants.$color-white};
 
@@ -213,24 +213,24 @@
 
     .theme--dark {
         // General
-        --general-main-1: #{constants.$color-black};
-        --general-main-2: #{constants.$color-black-3};
-        --general-main-3: #{constants.$color-black-4};
-        --general-main-4: #{constants.$alpha-color-black-7};
-        --general-section-1: #{constants.$color-black-3};
-        --general-section-2: #{constants.$color-black};
-        --general-section-3: #{constants.$color-black-5};
-        --general-section-4: #{constants.$color-black-5};
-        --general-section-5: #{constants.$color-black-5};
-        --general-section-6: #{constants.$color-grey-7};
-        --general-disabled: #{constants.$color-black-4};
-        --general-hover: #{constants.$color-black-5};
-        --general-active: #{constants.$color-black-8};
+        --general-main-1: #001840;
+        --general-main-2: #081e4a;
+        --general-main-3: #0d265c;
+        --general-main-4: rgba(0, 24, 64, 0.85);
+        --general-section-1: #0b2258;
+        --general-section-2: #06183d;
+        --general-section-3: #102A71;
+        --general-section-4: #102A71;
+        --general-section-5: #0b2258;
+        --general-section-6: #94a3b8;
+        --general-disabled: #0d265c;
+        --general-hover: #102A71;
+        --general-active: #163791;
 
         // Icons and Texts
         --text-prominent: #{constants.$color-white};
-        --text-general: #{constants.$color-grey};
-        --text-less-prominent: #{constants.$color-grey-7};
+        --text-general: #e2e8f0;
+        --text-less-prominent: #94a3b8;
         --text-primary: #{constants.$color-grey-1};
         --text-disabled: #{constants.$color-black-6};
         --text-disabled-1: #{constants.$color-black-6};
@@ -256,15 +256,15 @@
         --purchase-disabled-section: #{constants.$color-black};
 
         // Buttons
-        --button-primary-default: var(--brand-red-coral);
-        --button-secondary-default: #{constants.$color-grey-7};
+        --button-primary-default: #102A71;
+        --button-secondary-default: #94a3b8;
         --button-tertiary-default: transparent;
-        --button-primary-light-default: #{constants.$alpha-color-red-2};
-        --button-primary-hover: #{constants.$color-red-5};
-        --button-secondary-hover: #{constants.$alpha-color-white-3};
-        --button-tertiary-hover: #{constants.$alpha-color-red-1};
-        --button-primary-light-hover: #{constants.$alpha-color-red-3};
-        --button-toggle-primary: #{constants.$color-blue-3};
+        --button-primary-light-default: rgba(16, 42, 113, 0.35);
+        --button-primary-hover: #1d3f96;
+        --button-secondary-hover: rgba(255, 255, 255, 0.12);
+        --button-tertiary-hover: rgba(255, 255, 255, 0.1);
+        --button-primary-light-hover: rgba(16, 42, 113, 0.5);
+        --button-toggle-primary: #2563EB;
         --button-toggle-secondary: #{constants.$color-black-8};
         --button-toggle-alternate: #{constants.$color-black-8};
         --button-get-started-bg: #{constants.$color-white};

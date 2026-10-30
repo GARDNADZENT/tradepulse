@@ -1,21 +1,21 @@
 {
-    "brand_name": "YourBrand",
-    "brand_domain": "yourbrand.com",
+    "brand_name": "TradersPulse",
+    "brand_domain": "traderspulse.com",
     "brand_hostname": {
-        "staging": "staging.yourbrand.com/dashboard",
-        "production": "yourbrand.com/dashboard"
+        "staging": "staging.traderspulse.com/dashboard",
+        "production": "traderspulse.com/dashboard"
     },
-    "domain_name": "YourBrand.com",
+    "domain_name": "TradersPulse.com",
     "colors": {
-        "primary": "#3B82F6",
-        "secondary": "#64748b",
-        "tertiary": "#8b5cf6",
+        "primary": "#102A71",
+        "secondary": "#001840",
+        "tertiary": "#2563EB",
         "success": "#10b981",
         "danger": "#ef4444",
         "warning": "#f59e0b",
         "info": "#0ea5e9",
-        "neutral": "#6b7280",
-        "black": "#0f172a",
+        "neutral": "#64748b",
+        "black": "#001840",
         "white": "#ffffff",
         "grey": {
             "50": "#f8fafc",
@@ -79,7 +79,7 @@
         "css_variable_prefix": "--brand"
     },
     "platform": {
-        "name": "MAKOTI TRADERS",
+        "name": "TRADERSPULSE",
         "footer": {
             "enable_language_settings": false,
             "enable_theme_toggle": true

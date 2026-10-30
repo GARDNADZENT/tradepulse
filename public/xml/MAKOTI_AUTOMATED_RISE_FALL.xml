@@ -254,7 +254,7 @@
                   <block type="text_print" id="v3+Vv?`b[XbVe(EX}.@e" collapsed="true">
                     <value name="TEXT">
                       <block type="text" id="}dP`@w3wfiGqGp[e1eO2">
-                        <field name="TEXT">CONGRATULATIONS, TAKE PROFIT HITTHANKS AND BUY MAKOTI COFFEE</field>
+                        <field name="TEXT">CONGRATULATIONS, TAKE PROFIT HIT — TRADERSPULSE</field>
                       </block>
                     </value>
                   </block>
@@ -312,7 +312,7 @@
             <field name="NOTIFICATION_SOUND">silent</field>
             <value name="MESSAGE">
               <block type="text" id="~!hOc~=!kK95ZHMFyPr9">
-                <field name="TEXT">ANALYZING WITH MAKOTI..............</field>
+                <field name="TEXT">ANALYZING WITH TRADERSPULSE..............</field>
               </block>
             </value>
             <next>

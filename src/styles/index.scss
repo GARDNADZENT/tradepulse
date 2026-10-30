@@ -10,8 +10,13 @@ html, body {
   font-family: 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #f8fafc;
-  color: #0f172a;
+  background: #f4f7fb;
+  color: #001840;
+}
+
+body.theme--dark {
+  background: #001840;
+  color: #ffffff;
 }
 
 .mono {
@@ -67,7 +72,7 @@ html, body {
 
 /* Progress bar (gradient fill) */
 .progress-bar {
-  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%);
+  background: linear-gradient(90deg, #102A71 0%, #1d4ed8 60%, #10b981 100%);
 }
 
 /* Glass header */
@@ -115,10 +120,10 @@ html, body {
   cursor: pointer;
 }
 .tab-btn:hover {
-  color: #0f172a;
+  color: #001840;
 }
 .tab-btn.active {
-  color: #4338ca;
+  color: #102A71;
   font-weight: 600;
 }
 .tab-btn.active::after {
@@ -128,7 +133,7 @@ html, body {
   right: .75rem;
   bottom: -1px;
   height: 2px;
-  background: #4f46e5;
+  background: #102A71;
   border-radius: 2px 2px 0 0;
 }
 .tab-btn i {
@@ -164,7 +169,7 @@ html, body {
 .tab-btn:focus-visible,
 button:focus-visible,
 input:focus-visible {
-  outline: 2px solid #6366f1;
+  outline: 2px solid #102A71;
   outline-offset: 2px;
   border-radius: 8px;
 }
