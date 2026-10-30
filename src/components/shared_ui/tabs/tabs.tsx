@@ -65,23 +65,39 @@ const Tabs = ({
     const [active_line_style, updateActiveLineStyle] = React.useState({});
     const active_tab_ref = React.useRef<HTMLLIElement>(null);
     const tabs_wrapper_ref = React.useRef<HTMLUListElement>(null);
+    const raf_id_ref = React.useRef<number | null>(null);
+
     const pushHash = (hash: string) => {
         history.replace(`${history.location.pathname}${window.location.search}#${hash}`);
     };
 
     const setActiveLineStyle = React.useCallback(() => {
-        const tabs_wrapper_bounds = tabs_wrapper_ref?.current?.getBoundingClientRect();
-        const active_tab_bounds = active_tab_ref?.current?.getBoundingClientRect();
-        if (tabs_wrapper_bounds && active_tab_bounds) {
-            updateActiveLineStyle({
-                left: active_tab_bounds.left - tabs_wrapper_bounds.left,
-                width: active_tab_bounds.width,
-            });
-        } else {
-            setTimeout(() => {
-                setActiveLineStyle();
-            }, 500);
+        if (!has_active_line || is_scrollable) return;
+        if (raf_id_ref.current !== null) {
+            cancelAnimationFrame(raf_id_ref.current);
         }
+        raf_id_ref.current = requestAnimationFrame(() => {
+            raf_id_ref.current = null;
+            const tabs_wrapper_bounds = tabs_wrapper_ref?.current?.getBoundingClientRect();
+            const active_tab_bounds = active_tab_ref?.current?.getBoundingClientRect();
+            if (tabs_wrapper_bounds && active_tab_bounds) {
+                const nextLeft = active_tab_bounds.left - tabs_wrapper_bounds.left;
+                const nextWidth = active_tab_bounds.width;
+                updateActiveLineStyle((prev: any) =>
+                    prev.left === nextLeft && prev.width === nextWidth
+                        ? prev
+                        : { left: nextLeft, width: nextWidth }
+                );
+            }
+        });
+    }, [has_active_line, is_scrollable]);
+
+    React.useEffect(() => {
+        return () => {
+            if (raf_id_ref.current !== null) {
+                cancelAnimationFrame(raf_id_ref.current);
+            }
+        };
     }, []);
 
     let initial_index_to_show = 0;
@@ -90,7 +106,6 @@ const Tabs = ({
     useConstructor(() => {
         initial_index_to_show = active_index;
         if (should_update_hash) {
-            // if hash is in url, find which tab index correlates to it
             const hash = location.hash.slice(1);
             const hash_index = children.findIndex(child => child && child.props && child.props.hash === hash);
             const has_hash = hash_index > -1;
@@ -98,7 +113,6 @@ const Tabs = ({
             if (has_hash) {
                 initial_index_to_show = hash_index;
             } else {
-                // if no hash is in url but component has passed hash prop, set hash of the tab shown
                 const child_props = children[initial_index_to_show]?.props;
                 const current_id = child_props && child_props.hash;
                 if (current_id) {
@@ -106,32 +120,42 @@ const Tabs = ({
                 }
             }
         }
-        setActiveLineStyle();
     });
 
     const [active_tab_index, setActiveTabIndex] = React.useState(initial_index_to_show);
+    const [highlighted_index, setHighlightedIndex] = React.useState(initial_index_to_show);
 
     React.useEffect(() => {
-        if (active_tab_index >= 0 && active_index !== active_tab_index) {
-            onTabItemClick?.(active_tab_index);
-        }
-        setActiveLineStyle();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [active_tab_index, setActiveLineStyle]);
-
-    React.useEffect(() => {
-        if (active_index >= 0 && active_index !== active_tab_index) {
-            setActiveTabIndex(active_index);
+        if (active_index >= 0) {
+            if (active_index !== highlighted_index) {
+                setHighlightedIndex(active_index);
+            }
+            if (active_index !== active_tab_index) {
+                setActiveTabIndex(active_index);
+            }
+            setActiveLineStyle();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [active_index]);
+    }, [active_index, setActiveLineStyle]);
 
     const onClickTabItem = (index: number) => {
+        if (index === highlighted_index && index === active_tab_index) return;
+
+        // Paint active tab pill immediately (<1 frame) to keep INP minimal
+        setHighlightedIndex(index);
+
         if (should_update_hash) {
             const hash = children[index]?.props['data-hash'];
             pushHash(hash);
         }
-        setActiveTabIndex(index);
+
+        React.startTransition(() => {
+            setActiveTabIndex(index);
+            if (index >= 0 && active_index !== index) {
+                onTabItemClick?.(index);
+            }
+        });
+
         setActiveLineStyle();
     };
 
@@ -177,6 +201,7 @@ const Tabs = ({
                             const { icon, label, id } = child.props;
                             const header_content = child.props['data-header-content'];
                             const count = child.props['data-count'];
+                            const is_tab_highlighted = index === highlighted_index;
                             return (
                                 <Tab
                                     active_icon_color={active_icon_color}
@@ -185,8 +210,8 @@ const Tabs = ({
                                     icon={icon}
                                     icon_color={icon_color}
                                     icon_size={icon_size}
-                                    is_active={index === active_tab_index}
-                                    key={label}
+                                    is_active={is_tab_highlighted}
+                                    key={id || index}
                                     is_label_hidden={children.length === 1 && single_tab_has_no_label}
                                     label={label}
                                     id={id}
@@ -194,7 +219,7 @@ const Tabs = ({
                                     top={top}
                                     bottom={bottom}
                                     header_fit_content={header_fit_content}
-                                    active_tab_ref={index === active_tab_index ? active_tab_ref : null}
+                                    active_tab_ref={is_tab_highlighted ? active_tab_ref : null}
                                     header_content={header_content}
                                     onClick={() => onClickTabItem(index)}
                                     setActiveLineStyle={setActiveLineStyle}
@@ -226,7 +251,7 @@ const Tabs = ({
                     if (index !== active_tab_index) {
                         return undefined;
                     }
-                    return child.props.children;
+                    return <React.Suspense fallback={null}>{child.props.children}</React.Suspense>;
                 })}
             </div>
         </div>

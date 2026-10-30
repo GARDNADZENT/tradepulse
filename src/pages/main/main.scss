@@ -567,6 +567,11 @@
     background: var(--general-main-1);
     height: var(--tab-content-height);
 
+    &:not(.bot-builder--active) {
+        visibility: hidden;
+        pointer-events: none;
+    }
+
     .injectionDiv {
         .blocklyTrash {
             transition: all 0.4s;

@@ -154,6 +154,11 @@ const AIDeveloper = observer(() => {
 
     useEffect(() => {
         let cancelled = false;
+        let lastFlush = 0;
+        let pendingQuote = '';
+        let pendingDigits: number[] | null = null;
+        let flushTimer: number | undefined;
+
         const extract = (sym: string, list: { t: number; price: number }[]) => {
             if (cancelled || sym !== symbol || !list.length) return;
             const pip = derivBus.getPipSize(symbol);
@@ -165,19 +170,47 @@ const AIDeveloper = observer(() => {
                 })
             );
         };
-        const u1 = derivBus.onHistory(extract);
-        const u2 = derivBus.onTick((sym, tk) => {
-            if (cancelled || sym !== symbol) return;
-            const pip = derivBus.getPipSize(symbol);
-            const s = Math.abs(tk.price).toFixed(pip);
-            const d = Number(s.charAt(s.length - 1)) || 0;
-            setLiveQuote(tk.price.toFixed(pip));
-            setLiveDigits(prev => [...prev, d].slice(-200));
+
+        let u1 = () => {};
+        let u2 = () => {};
+        let rel = () => {};
+
+        const rafId = requestAnimationFrame(() => {
+            if (cancelled) return;
+            u1 = derivBus.onHistory(extract);
+            u2 = derivBus.onTick((sym, tk) => {
+                if (cancelled || sym !== symbol) return;
+                const pip = derivBus.getPipSize(symbol);
+                const s = Math.abs(tk.price).toFixed(pip);
+                const d = Number(s.charAt(s.length - 1)) || 0;
+                pendingQuote = tk.price.toFixed(pip);
+                const flush = () => {
+                    flushTimer = undefined;
+                    if (cancelled) return;
+                    lastFlush = performance.now();
+                    if (pendingQuote) setLiveQuote(pendingQuote);
+                    if (pendingDigits) {
+                        const batch = pendingDigits;
+                        pendingDigits = null;
+                        setLiveDigits(prev => [...prev, ...batch].slice(-200));
+                    }
+                };
+                pendingDigits = pendingDigits ? [...pendingDigits, d] : [d];
+                const elapsed = performance.now() - lastFlush;
+                if (elapsed >= 450) {
+                    flush();
+                } else if (flushTimer === undefined) {
+                    flushTimer = window.setTimeout(flush, 450 - elapsed);
+                }
+            });
+            extract(symbol, derivBus.getTicks(symbol));
+            rel = derivBus.subscribe([symbol]);
         });
-        extract(symbol, derivBus.getTicks(symbol));
-        const rel = derivBus.subscribe([symbol]);
+
         return () => {
             cancelled = true;
+            cancelAnimationFrame(rafId);
+            if (flushTimer !== undefined) window.clearTimeout(flushTimer);
             u1();
             u2();
             rel();
@@ -305,7 +338,7 @@ const AIDeveloper = observer(() => {
         setStatusNote('AI prompt parsed and compiled into Deriv Blockly XML blocks.');
     };
 
-    const generatedXml = useMemo(
+    const buildCurrentXml = React.useCallback(
         () =>
             compileAIBotToXml({
                 name: botName,
@@ -349,6 +382,11 @@ const AIDeveloper = observer(() => {
         ]
     );
 
+    const previewXml = useMemo(
+        () => (showXmlPreview ? buildCurrentXml() : ''),
+        [showXmlPreview, buildCurrentXml]
+    );
+
     const handleApplyPreset = (preset: (typeof AI_PRESETS)[number]) => {
         setPrompt(preset.prompt);
         setBotName(preset.config.name);
@@ -371,7 +409,8 @@ const AIDeveloper = observer(() => {
     };
 
     const handleDownloadXml = () => {
-        const blob = new Blob([generatedXml], { type: 'application/xml' });
+        const xml = buildCurrentXml();
+        const blob = new Blob([xml], { type: 'application/xml' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -675,7 +714,7 @@ const AIDeveloper = observer(() => {
                                 className='ai-dev__btn ai-dev__btn--primary'
                                 onClick={() =>
                                     void loadXmlIntoBotBuilder({
-                                        xml: generatedXml,
+                                        xml: buildCurrentXml(),
                                         name: botName,
                                         dashboard,
                                         load_modal,
@@ -691,7 +730,7 @@ const AIDeveloper = observer(() => {
                                 className='ai-dev__btn ai-dev__btn--emerald'
                                 onClick={() =>
                                     void loadXmlIntoBotBuilder({
-                                        xml: generatedXml,
+                                        xml: buildCurrentXml(),
                                         name: botName,
                                         dashboard,
                                         load_modal,
@@ -720,18 +759,18 @@ const AIDeveloper = observer(() => {
                 {showXmlPreview && (
                     <section className='ai-dev__xml-card'>
                         <div className='ai-dev__xml-head'>
-                            <strong>Compiled Deriv Blockly XML ({generatedXml.length} bytes)</strong>
+                            <strong>Compiled Deriv Blockly XML ({previewXml.length} bytes)</strong>
                             <button
                                 type='button'
                                 onClick={() => {
-                                    void navigator.clipboard?.writeText(generatedXml);
+                                    void navigator.clipboard?.writeText(previewXml);
                                     setStatusNote('Copied Blockly XML to clipboard.');
                                 }}
                             >
                                 Copy XML
                             </button>
                         </div>
-                        <pre>{generatedXml}</pre>
+                        <pre>{previewXml}</pre>
                     </section>
                 )}
             </div>

@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { generateOAuthURL } from '@/components/shared';
 import DesktopWrapper from '@/components/shared_ui/desktop-wrapper';
 import Dialog from '@/components/shared_ui/dialog';
@@ -39,20 +39,23 @@ import {
 import { Localize, localize } from '@deriv-com/translations';
 import { useDevice } from '@deriv-com/ui';
 import RunPanel from '../../components/run-panel';
-import AIDeveloper from '../ai-developer';
-import AIBots from '../ai-bots';
-import AnalysisTool from '../analysis-tool';
-import AutoTrades from '../auto-trades/auto-trades';
-import Calculator from '../calculator';
 import ChartModal from '../chart/chart-modal';
-import CopyTrading from '../copy-trading/copy-trading';
 import Dashboard from '../dashboard';
 import RunStrategy from '../dashboard/run-strategy';
-import DigitsAnalysis from '../digits-analysis/digits-analysis';
-import DTrader from '../dtrader';
-import FreeBots from '../free-bots/free-bots';
-import { TradePulse } from '../tradepulse';
 import './main.scss';
+
+const AIDeveloper = React.lazy(() => import('../ai-developer'));
+const AIBots = React.lazy(() => import('../ai-bots'));
+const AnalysisTool = React.lazy(() => import('../analysis-tool'));
+const AutoTrades = React.lazy(() => import('../auto-trades/auto-trades'));
+const Calculator = React.lazy(() => import('../calculator'));
+const CopyTrading = React.lazy(() => import('../copy-trading/copy-trading'));
+const DigitsAnalysis = React.lazy(() => import('../digits-analysis/digits-analysis'));
+const DTrader = React.lazy(() => import('../dtrader'));
+const FreeBots = React.lazy(() => import('../free-bots/free-bots'));
+const TradePulse = React.lazy(() =>
+    import('../tradepulse').then(mod => ({ default: mod.TradePulse }))
+);
 
 const AppWrapper = observer(() => {
     const { connectionStatus } = useApiBase();
@@ -102,7 +105,6 @@ const AppWrapper = observer(() => {
 
     const { isDesktop } = useDevice();
     const location = useLocation();
-    const navigate = useNavigate();
     const [left_tab_shadow, setLeftTabShadow] = useState<boolean>(false);
     const [right_tab_shadow, setRightTabShadow] = useState<boolean>(false);
     const [tradeTypeModalState, setTradeTypeModalState] = useState(getModalState());
@@ -227,7 +229,20 @@ const AppWrapper = observer(() => {
     }, [active_tab, is_loading]);
 
     React.useEffect(() => {
-        updateTabShadowsHeight();
+        const idlePreload = () => {
+            void import('../ai-developer');
+            void import('../free-bots/free-bots');
+            void import('../dtrader');
+            void import('../ai-bots');
+        };
+        const timer = window.setTimeout(idlePreload, 900);
+        return () => window.clearTimeout(timer);
+    }, []);
+
+    React.useEffect(() => {
+        const rafId = requestAnimationFrame(() => {
+            updateTabShadowsHeight();
+        });
         if (is_open) setTourDialogVisibility(false);
 
         if (init_render.current) {
@@ -235,8 +250,14 @@ const AppWrapper = observer(() => {
             if (!isDesktop) handleTabChange(Number(active_hash_tab));
             init_render.current = false;
         } else {
-            const currentSearch = window.location.search;
-            navigate(`${currentSearch}#${hash[active_tab] || hash[0]}`);
+            const targetHash = hash[active_tab] || hash[0];
+            if (window.location.hash !== `#${targetHash}`) {
+                window.history.replaceState(
+                    null,
+                    '',
+                    `${window.location.pathname}${window.location.search}#${targetHash}`
+                );
+            }
         }
         if (active_tour !== '') setActiveTour('');
 
@@ -245,6 +266,7 @@ const AppWrapper = observer(() => {
         if (mainElement instanceof HTMLElement) {
             mainElement.classList.remove('no-scroll');
         }
+        return () => cancelAnimationFrame(rafId);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [active_tab]);
 
@@ -281,17 +303,18 @@ const AppWrapper = observer(() => {
 
     const handleTabChange = React.useCallback(
         (tab_index: number) => {
-            setActiveTab(tab_index);
+            React.startTransition(() => {
+                setActiveTab(tab_index);
+            });
             const el_id = TAB_IDS[tab_index];
             if (el_id) {
-                const el_tab = document.getElementById(el_id);
-                setTimeout(() => {
-                    el_tab?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-                }, 10);
+                requestAnimationFrame(() => {
+                    const el_tab = document.getElementById(el_id);
+                    el_tab?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                });
             }
         },
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [active_tab]
+        [setActiveTab]
     );
 
     const handleLoginGeneration = async () => {
