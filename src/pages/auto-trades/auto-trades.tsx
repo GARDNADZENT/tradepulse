@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { observer } from 'mobx-react-lite';
+import { useStore } from '@/hooks/useStore';
 import { Scanner } from '@/components/makoti-widget/scanner';
 import { MarketKiller } from '@/components/makoti-widget/market-killer';
 import { OverUnderKiller } from '@/components/makoti-widget/over-under-killer';
@@ -7,7 +9,6 @@ import { UnderUnderMarket } from '@/components/makoti-widget/under-under-market'
 import { DiffersAuto } from '@/components/makoti-widget/differs-auto';
 import { ALL_SYMBOLS } from '@/components/makoti-widget/makoti-ws';
 import './auto-trades.scss';
-import '@/components/makoti-widget/makoti-widget.scss';
 
 type Tab = 'scanner' | 'market_killer' | 'over_under' | 'high_low' | 'under_under_market' | 'differs_auto';
 const TRADING_TABS: Tab[] = ['market_killer', 'over_under', 'high_low', 'under_under_market', 'differs_auto'];
@@ -16,9 +17,9 @@ const TAB_OPTIONS: { value: Tab; label: string }[] = [
     { value: 'scanner', label: 'Scanner' },
     { value: 'market_killer', label: 'Market Killer' },
     { value: 'over_under', label: 'O/U Killer' },
-    { value: 'high_low', label: 'HIGH/LOW' },
-    { value: 'under_under_market', label: 'UNDER/UNDER MARKET' },
-    { value: 'differs_auto', label: 'DIFFERS AUTO' },
+    { value: 'high_low', label: 'High / Low' },
+    { value: 'under_under_market', label: 'Under / Under' },
+    { value: 'differs_auto', label: 'Differs Auto' },
 ];
 
 function isLoggedIn(): boolean {
@@ -32,7 +33,10 @@ function isLoggedIn(): boolean {
     }
 }
 
-const AutoTrades: React.FC = () => {
+const AutoTrades: React.FC = observer(() => {
+    const store = useStore();
+    const client = store?.client;
+
     const [tab, setTab] = useState<Tab>(() => (localStorage.getItem('mw_tab') as Tab) || 'scanner');
     const [loggedIn, setLoggedIn] = useState(isLoggedIn());
     const [wsReady, setWsReady] = useState(false);
@@ -40,15 +44,21 @@ const AutoTrades: React.FC = () => {
     const tabDropRef = useRef<HTMLDivElement>(null);
     const subscribedRef = useRef(false);
 
+    const loginid = client?.loginid || localStorage.getItem('active_loginid') || '';
+    const currency = client?.currency || 'USD';
+    const rawBalance = client?.balance ? parseFloat(String(client.balance)) : 0;
+    const isVirtual = Boolean(client?.is_virtual ?? loginid.startsWith('VR'));
+
     useEffect(() => {
-        const check = () => setLoggedIn(isLoggedIn());
+        const check = () => setLoggedIn(isLoggedIn() || Boolean(client?.is_logged_in));
+        check();
         const interval = setInterval(check, 1000);
         window.addEventListener('storage', check);
         return () => {
             clearInterval(interval);
             window.removeEventListener('storage', check);
         };
-    }, []);
+    }, [client?.is_logged_in]);
 
     useEffect(() => {
         const check = () => {
@@ -106,47 +116,65 @@ const AutoTrades: React.FC = () => {
         };
     }, [switchToTab]);
 
-    if (!loggedIn) return null;
+    if (!loggedIn && !loginid) return null;
+
+    const formattedBalance = `${currency} ${Number(rawBalance || 0).toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })}`;
 
     return (
         <div className='auto-trades'>
-            <div className='auto-trades__header'>
-                <h1 className='auto-trades__title'>Auto Trades</h1>
-                <p className='auto-trades__subtitle'>Automated trading workspace</p>
-                <div className={`auto-trades__status ${wsReady ? 'auto-trades__status--connected' : 'auto-trades__status--disconnected'}`}>
-                    {wsReady ? '● Connected — tick data streaming' : '○ Connecting to Deriv API…'}
-                </div>
-            </div>
+            {/* Clean Frosted-White Top Pill Bar — No Inner Logo or Redundant Title */}
+            <header className='auto-trades__topbar'>
+                <div className='auto-trades__topbar-inner'>
+                    <nav className='auto-trades__pills' aria-label='Auto Trades strategies'>
+                        {TAB_OPTIONS.map(opt => (
+                            <button
+                                key={opt.value}
+                                type='button'
+                                className={`auto-trades__pill${tab === opt.value ? ' auto-trades__pill--active' : ''}`}
+                                onClick={() => {
+                                    setTab(opt.value);
+                                    setTabOpen(false);
+                                }}
+                            >
+                                {opt.label}
+                            </button>
+                        ))}
+                    </nav>
 
-            <div className='auto-trades__tabs'>
-                {TAB_OPTIONS.map(opt => (
-                    <button
-                        key={opt.value}
-                        className={`auto-trades__tab ${tab === opt.value ? 'auto-trades__tab--active' : ''}`}
-                        onClick={() => { setTab(opt.value); setTabOpen(false); }}
-                    >
-                        {opt.label}
-                    </button>
-                ))}
-            </div>
+                    <div className='auto-trades__topbar-right'>
+                        <div className={`auto-trades__live-pill${wsReady ? ' auto-trades__live-pill--on' : ''}`}>
+                            <span className='auto-trades__live-dot' />
+                            <span>{wsReady ? 'Live • Streaming' : 'Connecting…'}</span>
+                        </div>
 
-            <div className='auto-trades__body'>
-                {tab !== 'scanner' && (
-                    <div className={`auto-trades__preconnect ${wsReady ? 'auto-trades__preconnect--ok' : ''}`}>
-                        {wsReady
-                            ? '● Connected — tick data streaming'
-                            : '○ Connecting to Deriv API…'}
+                        {loginid && (
+                            <div className='auto-trades__acct-chip'>
+                                <span className={`auto-trades__acct-type ${!isVirtual ? 'auto-trades__acct-type--real' : 'auto-trades__acct-type--demo'}`}>
+                                    {!isVirtual ? 'REAL' : 'DEMO'}
+                                </span>
+                                <span className='auto-trades__acct-sep'>•</span>
+                                <span className='auto-trades__acct-id'>{loginid}</span>
+                                <span className='auto-trades__acct-sep auto-trades__acct-sep--accent'>•</span>
+                                <span className='auto-trades__acct-bal'>{formattedBalance}</span>
+                            </div>
+                        )}
                     </div>
-                )}
+                </div>
+            </header>
+
+            <main className='auto-trades__main'>
                 {tab === 'scanner' && <Scanner />}
                 {tab === 'market_killer' && <MarketKiller />}
                 {tab === 'over_under' && <OverUnderKiller />}
                 {tab === 'high_low' && <HighLow />}
                 {tab === 'under_under_market' && <UnderUnderMarket />}
                 {tab === 'differs_auto' && <DiffersAuto />}
-            </div>
+            </main>
         </div>
     );
-};
+});
 
 export default AutoTrades;

@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ALL_SYMBOLS, SYMBOL_LABELS, PIP_SIZES, openMakotiWS, MakotiWS } from './makoti-ws';
 import { recordOutcome } from './prediction-engine';
 import { sendViaNewSystemWithPromise, onNewSystemMessage } from '@/auth/NewDerivAuth';
@@ -553,121 +553,325 @@ export const MarketKiller: React.FC = () => {
     const winRate = totalTrades > 0 ? (totalWins / totalTrades * 100).toFixed(1) : '\u2014';
     const isVirtual = vhStateRef.current.enabled && vhStateRef.current.isVirtual;
 
+    const winRateNum = totalTrades > 0 ? (totalWins / totalTrades) * 100 : 0;
+
     return (
-        <div className='mw-killer'>
-            <div className='mw-killer__fields'>
-                <div className='mw-field'>
-                    <label className='mw-label'>Stake ($)</label>
-                    <input className='mw-input' type='number' min='0.35' step='0.01'
-                        value={stake} onChange={e => setStake(e.target.value)} disabled={running} />
-                </div>
-                <div className='mw-field'>
-                    <label className='mw-label'>Martingale x</label>
-                    <input className='mw-input' type='number' min='1' step='0.1'
-                        value={martingale} onChange={e => setMartingale(e.target.value)} disabled={running} />
-                </div>
-                <div className='mw-field'>
-                    <label className='mw-label'>Take Profit ($)</label>
-                    <input className='mw-input' type='number' min='0.5' step='0.5'
-                        value={takeProfit} onChange={e => setTakeProfit(e.target.value)} disabled={running} />
-                </div>
-                <div className='mw-field'>
-                    <label className='mw-label'>Stop Loss ($)</label>
-                    <input className='mw-input' type='number' min='0.5' step='0.5'
-                        value={stopLoss} onChange={e => setStopLoss(e.target.value)} disabled={running} />
-                </div>
-                <div className='mw-field'>
-                    <label className='mw-label'>Max Tick Direction</label>
-                    <input className='mw-input' type='number' min='2' max='20' step='1'
-                        value={maxDir} onChange={e => setMaxDir(e.target.value)} disabled={running} />
-                </div>
-            </div>
-            <div className='mw-killer__vh'>
-                <label className='mw-killer__vh-toggle'>
-                    <input type='checkbox' checked={vhEnabled}
-                        onChange={e => setVhEnabled(e.target.checked)} disabled={running} />
-                    <span>Virtual Hook</span>
-                </label>
-                {vhEnabled && (
-                    <div className='mw-field mw-killer__vh-threshold'>
-                        <label className='mw-label'>Loss Threshold:</label>
-                        <input className='mw-input' type='number' min='1' step='1'
-                            value={vhThreshold} onChange={e => setVhThreshold(e.target.value)} disabled={running} />
-                    </div>
-                )}
-            </div>
-            <button className={`mw-btn${running ? ' mw-btn--stop' : ' mw-btn--kill'}`}
-                onClick={running ? stopKiller : startKiller}>
-                {running ? <><span className='mw-pulse' /> STOP KILLER</> : 'KILL MARKET'}
-            </button>
-            {running && (
-                <div className='mw-killer__mode-note'>
-                    Tick Direction \u2014 trade opposite after N consecutive ticks
-                    {isVirtual && <span className='mw-da__prog-status--recovery'> VIRTUAL MODE</span>}
-                    {!isVirtual && vhStateRef.current.enabled && <span className='mw-win'> REAL MODE</span>}
-                </div>
-            )}
-            {(running || totalTrades > 0) && (
-                <div className='mw-killer__stats'>
-                    <div className={`mw-killer__pnl${pnl >= 0 ? ' mw-killer__pnl--pos' : ' mw-killer__pnl--neg'}`}>
-                        {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}
-                    </div>
-                    <div className='mw-killer__meta'>
-                        <span>Trades: {totalTrades}</span>
-                        <span>W/L: {totalWins}/{totalLosses}</span>
-                        <span>Win rate: {winRate}%</span>
-                        <span>Stake: ${currentStakeRef.current.toFixed(2)}</span>
+        <div className='at-view'>
+            {/* 4-Card Session KPI Strip */}
+            <section className='at-kpi-grid'>
+                <div className='at-kpi-card'>
+                    <span className='at-kpi-card__label'>Session P/L:</span>
+                    <div
+                        className={`at-kpi-card__val at-kpi-card__val--mono ${
+                            pnl >= 0 ? 'at-kpi-card__val--pos' : 'at-kpi-card__val--neg'
+                        }`}
+                    >
+                        {pnl >= 0 ? '+' : ''}USD {pnl.toFixed(2)}
                     </div>
                 </div>
-            )}
-            <div className='mw-killer__symbols'>
-                <div className='mw-da__progress-title'>Volatility Directions</div>
-                {ALL_SYMBOLS.map(sym => {
-                    const ss = symDisplay[sym];
-                    if (!ss) return (
-                        <div key={sym} className='mw-killer__sym-row'>
-                            <span className='mw-killer__sym-name'>{SYMBOL_LABELS[sym]}</span>
-                            <span className='mw-killer__sym-signal'>\u2014</span>
+
+                <div className='at-kpi-card'>
+                    <span className='at-kpi-card__label'>Total Trades: {totalTrades}</span>
+                    <div className='at-kpi-card__sub'>
+                        ({totalWins}W / {totalLosses}L)
+                    </div>
+                </div>
+
+                <div className='at-kpi-card'>
+                    <span className='at-kpi-card__label'>Win Rate:</span>
+                    <div className='at-kpi-card__row'>
+                        <span className='at-kpi-card__val'>
+                            {totalTrades > 0 ? `${winRate}%` : '0.0%'}
+                        </span>
+                        <div className='at-kpi-card__bar'>
+                            <div
+                                className='at-kpi-card__bar-fill'
+                                style={{ width: `${Math.min(100, winRateNum)}%` }}
+                            />
                         </div>
-                    );
-                    const baseStake = parseFloat(stake) || 0.35;
-                    const isMgActive = ss.stake > baseStake + 0.001;
-                    const dirPct = maxDirRef.current > 0 ? Math.min((ss.dirCount / maxDirRef.current) * 100, 100) : 0;
-                    return (
-                        <div key={sym} className='mw-killer__sym-row'>
-                            <span className='mw-killer__sym-name'>{SYMBOL_LABELS[sym]}</span>
-                            <span className='mw-killer__sym-digit' title='Last digit'>{ss.digit ?? '\u2014'}</span>
-                            <span className='mw-killer__sym-signal' title='Direction'>
-                                {ss.dir === 'up' ? '\u2191' : ss.dir === 'down' ? '\u2193' : '\u2014'}{ss.dirCount}
-                            </span>
-                            <div style={{ width: 60, height: 6, background: '#1e293b', borderRadius: 3, overflow: 'hidden' }}>
-                                <div style={{ width: `${dirPct}%`, height: '100%', background: dirPct >= 100 ? '#ef4444' : '#f97316', borderRadius: 3, transition: 'width 0.3s' }} />
-                            </div>
-                            <span className='mw-killer__sym-wl'>
-                                <span className='mw-win'>{ss.wins}W</span>
-                                <span className='mw-loss'>{ss.losses}L</span>
-                            </span>
-                            {isMgActive && <span className='mw-killer__sym-stake'>${ss.stake.toFixed(2)}</span>}
-                        </div>
-                    );
-                })}
-            </div>
-            {logs.length > 0 && (
-                <div className='mw-killer__log-wrap'>
-                    <div className='mw-killer__log-header'>
-                        <span className='mw-killer__log-title'>Activity Log</span>
-                        <button className='mw-btn-clear' onClick={clearLogs}>Clear</button>
-                    </div>
-                    <div className='mw-killer__log'>
-                        {logs.map((l, i) => (
-                            <div key={i} className={`mw-log-line mw-log-line--${l.type}`}>
-                                <span className='mw-log-time'>{l.time}</span>
-                                <span className='mw-log-msg'>{l.msg}</span>
-                            </div>
-                        ))}
                     </div>
                 </div>
-            )}
+
+                <div className='at-kpi-card'>
+                    <span className='at-kpi-card__label'>Active Stake:</span>
+                    <div className='at-kpi-card__row'>
+                        <span className='at-kpi-card__val at-kpi-card__val--mono'>
+                            USD {(running ? currentStakeRef.current : parseFloat(stake) || 0).toFixed(2)}
+                        </span>
+                        <span
+                            className={`at-pill-badge ${
+                                isVirtual
+                                    ? 'at-pill-badge--amber-soft'
+                                    : 'at-pill-badge--indigo-soft'
+                            }`}
+                        >
+                            {isVirtual ? 'Virtual Mode' : 'Real Mode'}
+                        </span>
+                    </div>
+                </div>
+            </section>
+
+            {/* 2-Column Execution Workspace */}
+            <div className='at-split'>
+                {/* Left Column: Execution Parameters Card */}
+                <div className='at-col'>
+                    <section className='at-card'>
+                        <div className='at-card__header'>
+                            <div>
+                                <h2 className='at-card__title'>Execution Parameters</h2>
+                                <p className='at-card__subtitle'>
+                                    Tick Direction — trades opposite after N consecutive ticks
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className='at-param-box'>
+                            <div className='at-param-row'>
+                                <span className='at-param-row__label'>Stake ($):</span>
+                                <div className='at-param-row__control'>
+                                    <input
+                                        className='mw-input'
+                                        type='number'
+                                        min='0.35'
+                                        step='0.01'
+                                        value={stake}
+                                        onChange={e => setStake(e.target.value)}
+                                        disabled={running}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className='at-param-row'>
+                                <span className='at-param-row__label'>Martingale (x):</span>
+                                <div className='at-param-row__control'>
+                                    <input
+                                        className='mw-input'
+                                        type='number'
+                                        min='1'
+                                        step='0.1'
+                                        value={martingale}
+                                        onChange={e => setMartingale(e.target.value)}
+                                        disabled={running}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className='at-param-row'>
+                                <span className='at-param-row__label'>Take Profit ($):</span>
+                                <div className='at-param-row__control'>
+                                    <input
+                                        className='mw-input'
+                                        type='number'
+                                        min='0.5'
+                                        step='0.5'
+                                        value={takeProfit}
+                                        onChange={e => setTakeProfit(e.target.value)}
+                                        disabled={running}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className='at-param-row'>
+                                <span className='at-param-row__label'>Stop Loss ($):</span>
+                                <div className='at-param-row__control'>
+                                    <input
+                                        className='mw-input'
+                                        type='number'
+                                        min='0.5'
+                                        step='0.5'
+                                        value={stopLoss}
+                                        onChange={e => setStopLoss(e.target.value)}
+                                        disabled={running}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className='at-param-row'>
+                                <span className='at-param-row__label'>Max Tick Direction:</span>
+                                <div className='at-param-row__control'>
+                                    <input
+                                        className='mw-input'
+                                        type='number'
+                                        min='2'
+                                        max='20'
+                                        step='1'
+                                        value={maxDir}
+                                        onChange={e => setMaxDir(e.target.value)}
+                                        disabled={running}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className='at-toggle-card'>
+                            <label className='at-toggle-row'>
+                                <div className='at-toggle-row__info'>
+                                    <span className='at-toggle-row__title'>Virtual Hook</span>
+                                    <span className='at-toggle-row__sub'>
+                                        Loss Threshold: {vhThreshold}
+                                    </span>
+                                </div>
+                                <span className='at-switch'>
+                                    <input
+                                        type='checkbox'
+                                        checked={vhEnabled}
+                                        onChange={e => setVhEnabled(e.target.checked)}
+                                        disabled={running}
+                                    />
+                                    <span className='at-switch__slider' />
+                                </span>
+                            </label>
+
+                            {vhEnabled && (
+                                <div className='mw-field'>
+                                    <label className='mw-label'>Loss Threshold</label>
+                                    <input
+                                        className='mw-input'
+                                        type='number'
+                                        min='1'
+                                        step='1'
+                                        value={vhThreshold}
+                                        onChange={e => setVhThreshold(e.target.value)}
+                                        disabled={running}
+                                    />
+                                </div>
+                            )}
+                        </div>
+
+                        <button
+                            type='button'
+                            className={`mw-btn${running ? ' mw-btn--stop' : ' mw-btn--kill'}`}
+                            onClick={running ? stopKiller : startKiller}
+                        >
+                            {running ? (
+                                <>
+                                    <span className='mw-pulse' /> STOP KILLER
+                                </>
+                            ) : (
+                                'RUN MARKET KILLER'
+                            )}
+                        </button>
+                    </section>
+                </div>
+
+                {/* Right Column: Live Volatility Directions + Activity Log */}
+                <div className='at-col'>
+                    <section className='at-card'>
+                        <div className='at-card__header'>
+                            <div>
+                                <h2 className='at-card__title'>Live Volatility Directions</h2>
+                                <p className='at-card__subtitle'>
+                                    Real-time directional streaks across all 10 Volatility indices
+                                </p>
+                            </div>
+                            {running && (
+                                <span className='at-pill-badge at-pill-badge--emerald-soft'>
+                                    STREAMING
+                                </span>
+                            )}
+                        </div>
+
+                        <div className='at-vol-list'>
+                            {ALL_SYMBOLS.map(sym => {
+                                const ss = symDisplay[sym];
+                                if (!ss) {
+                                    return (
+                                        <div key={sym} className='at-vol-row'>
+                                            <span className='at-vol-row__sym'>
+                                                {SYMBOL_LABELS[sym]}
+                                            </span>
+                                            <div className='at-vol-row__track'>
+                                                <div
+                                                    className='at-vol-row__fill'
+                                                    style={{ width: '0%' }}
+                                                />
+                                            </div>
+                                            <span className='at-vol-row__badge'>—</span>
+                                            <span className='at-vol-row__wl'>0W / 0L</span>
+                                        </div>
+                                    );
+                                }
+                                const baseStake = parseFloat(stake) || 0.35;
+                                const isMgActive = ss.stake > baseStake + 0.001;
+                                const targetMax =
+                                    maxDirRef.current > 0
+                                        ? maxDirRef.current
+                                        : parseInt(maxDir) || 5;
+                                const dirPct = Math.min((ss.dirCount / targetMax) * 100, 100);
+                                const isReady = dirPct >= 100;
+
+                                return (
+                                    <div key={sym} className='at-vol-row'>
+                                        <span className='at-vol-row__sym'>
+                                            {SYMBOL_LABELS[sym]}
+                                        </span>
+                                        <div className='at-vol-row__track'>
+                                            <div
+                                                className={`at-vol-row__fill${
+                                                    isReady ? ' at-vol-row__fill--ready' : ''
+                                                }`}
+                                                style={{ width: `${dirPct}%` }}
+                                            />
+                                        </div>
+                                        {isReady ? (
+                                            <span className='at-pill-badge at-pill-badge--rose-soft'>
+                                                Direction Streak READY
+                                            </span>
+                                        ) : (
+                                            <span className='at-vol-row__badge'>
+                                                {ss.dir === 'up'
+                                                    ? '↑'
+                                                    : ss.dir === 'down'
+                                                    ? '↓'
+                                                    : '—'}
+                                                {ss.dirCount}
+                                                {ss.digit != null ? ` • D${ss.digit}` : ''}
+                                            </span>
+                                        )}
+                                        <span className='at-vol-row__wl'>
+                                            <span className='mw-win'>{ss.wins}W</span> /{' '}
+                                            <span className='mw-loss'>{ss.losses}L</span>
+                                            {isMgActive ? ` ($${ss.stake.toFixed(2)})` : ''}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </section>
+
+                    <section className='at-card'>
+                        <div className='at-log-header'>
+                            <h3 className='at-card__title'>Activity Log</h3>
+                            {logs.length > 0 && (
+                                <button
+                                    type='button'
+                                    className='mw-btn-clear'
+                                    onClick={clearLogs}
+                                >
+                                    Clear
+                                </button>
+                            )}
+                        </div>
+                        {logs.length === 0 ? (
+                            <div className='at-log-empty'>
+                                Start Market Killer to stream live execution events here.
+                            </div>
+                        ) : (
+                            <div className='at-log-list'>
+                                {logs.map((l, i) => (
+                                    <div
+                                        key={i}
+                                        className={`mw-log-line mw-log-line--${l.type}`}
+                                    >
+                                        <span className='mw-log-time'>{l.time}</span>
+                                        <span className='mw-log-msg'>{l.msg}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                </div>
+            </div>
         </div>
     );
 };

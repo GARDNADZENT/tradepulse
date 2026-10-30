@@ -422,85 +422,209 @@ export const Scanner: React.FC = () => {
     }, []);
 
     return (
-        <div className='mw-scanner'>
+        <div className='at-view'>
             {notification && (
-                <div className={`mw-scanner__notif mw-scanner__notif--${notification.type}`}>{notification.msg}</div>
+                <div className={`at-scanner-notif${notification.type === 'warn' ? ' at-scanner-notif--warn' : ''}`}>
+                    {notification.msg}
+                </div>
             )}
-            <div className='mw-scanner__controls'>
-                <div className='mw-field'>
-                    <label className='mw-label'>Bot Selection</label>
-                    <MwSelect value={bot} options={[{ value: 'pvty_kill', label: 'Poverty Killer' }, { value: 'rf_v4', label: 'Rise/Fall V4' }]}
-                        onChange={v => setBot(v as BotId)} disabled={scanning} />
+
+            {/* Horizontal Strategy Scanner Control Bar */}
+            <section className='at-scanner-bar'>
+                <div className='at-scanner-bar__col'>
+                    <label className='mw-label'>Bot Strategy</label>
+                    <MwSelect
+                        value={bot}
+                        options={[
+                            { value: 'pvty_kill', label: 'Poverty Killer (1,000 Ticks Digit 7/8/9 Filter)' },
+                            { value: 'rf_v4', label: 'Rise/Fall V4 (60-Tick Micro-Choppiness)' },
+                        ]}
+                        onChange={v => setBot(v as BotId)}
+                        disabled={scanning}
+                    />
                 </div>
-                <div className='mw-scanner__desc'>
-                    {bot === 'pvty_kill'
-                        ? 'Scans 1 000 ticks per volatility. Finds markets where digits 7, 8 and 9 each stay below 10%.'
-                        : 'Analyses 60 recent ticks per volatility (current candle). Finds choppy micro-markets — auto-switches every 3s.'}
-                </div>
-                {bot === 'rf_v4' && (
-                    <label className='mw-switch-row'>
-                        <span className='mw-switch-label'>Auto Switcher</span>
-                        <div className='mw-toggle' onClick={toggleAutoSwitch}>
-                            <div className={`mw-toggle__track${autoSwitch ? ' mw-toggle__track--on' : ''}`}>
-                                <div className={`mw-toggle__thumb${autoSwitch ? ' mw-toggle__thumb--on' : ''}`} />
-                            </div>
-                        </div>
-                        {autoSwitcherActive && <span className='mw-switch-active'>ACTIVE</span>}
-                        {pendingSymbol && <span className='mw-switch-pending'>⏳ WIN REQUIRED</span>}
-                    </label>
-                )}
-                <button className={`mw-btn mw-btn--scan${scanning ? ' mw-btn--busy' : ''}`} onClick={analyze} disabled={scanning}>
-                    {scanning ? <><span className='mw-spin' /> Analyzing…</> : 'Analyze'}
-                </button>
-                {progress && <div className='mw-scanner__progress'>{progress}</div>}
-            </div>
-            {results.length > 0 && (
-                <div className='mw-scanner__results'>
-                    <div className='mw-scanner__results-head'>
-                        {bot === 'pvty_kill'
-                            ? 'Digit 7 / 8 / 9 Distribution (1 000 ticks)'
-                                                         : `Micro-Choppiness (current candle, 60 ticks) ${autoSwitcherActive ? '— Auto-switching ON' : ''}`}
+
+                <div className='at-scanner-bar__col at-scanner-bar__col--mid'>
+                    <div className='at-scanner-bar__switch-head'>
+                        {bot === 'rf_v4' ? (
+                            <>
+                                <label className='at-switch at-switch--emerald'>
+                                    <input
+                                        type='checkbox'
+                                        checked={autoSwitch}
+                                        onChange={toggleAutoSwitch}
+                                    />
+                                    <span className='at-switch__slider' />
+                                </label>
+                                <span style={{ fontWeight: 700, fontSize: '14px' }}>Auto Switcher</span>
+                                {autoSwitcherActive && (
+                                    <span className='at-pill-badge at-pill-badge--emerald-soft'>ACTIVE</span>
+                                )}
+                                {pendingSymbol && (
+                                    <span className='at-pill-badge at-pill-badge--amber-soft'>WIN REQUIRED</span>
+                                )}
+                            </>
+                        ) : (
+                            <>
+                                <span style={{ fontWeight: 700, fontSize: '14px' }}>Digit 7 / 8 / 9 Filter</span>
+                                <span className='at-pill-badge at-pill-badge--emerald-soft'>1,000 TICKS</span>
+                            </>
+                        )}
                     </div>
-                    {bestSymbols.length > 0 && (
-                        <div className='mw-scanner__best'>
-                            <span className='mw-scanner__best-lbl'>Best:</span>
-                            {bestSymbols.map(s => <span key={s} className='mw-scanner__badge'>{SYMBOL_LABELS[s]}</span>)}
+                    <p className='at-scanner-bar__desc'>
+                        {bot === 'pvty_kill'
+                            ? 'Scans 1,000 ticks across all 10 Volatility indices to find calm digit 7, 8, 9 distributions under 10%.'
+                            : 'Analyses 60 recent ticks per Volatility index to pinpoint choppy micro-markets — auto-switches every 3s.'}
+                    </p>
+                </div>
+
+                <div className='at-scanner-bar__col'>
+                    <button
+                        type='button'
+                        className={`mw-btn mw-btn--scan${scanning ? ' mw-btn--busy' : ''}`}
+                        onClick={analyze}
+                        disabled={scanning}
+                    >
+                        {scanning ? (
+                            <>
+                                <span className='mw-spin' /> Analyzing Markets…
+                            </>
+                        ) : (
+                            'Analyze Markets'
+                        )}
+                    </button>
+
+                    {(bestSymbols.length > 0 || progress) && (
+                        <div className='at-scanner-bar__status-pill'>
+                            <span>
+                                {bestSymbols.length > 0
+                                    ? `Best Match: ${bestSymbols.map(s => SYMBOL_LABELS[s]).join(', ')}${progress ? ` • ${progress.replace(/^Top:\s*[^()]+/, '').replace(/[()]/g, '').trim()}` : ''}`
+                                    : progress}
+                            </span>
                         </div>
                     )}
-                    <div className='mw-scanner__list'>
-                        {results.map((r, idx) => (
-                            <div key={r.symbol} className={`mw-scanner__row${idx === 0 ? ' mw-scanner__row--match' : ''}`}>
-                                <div className='mw-scanner__row-head'>
-                                    <span className='mw-scanner__sym'>{r.label}</span>
-                                    <span className='mw-scanner__row-detail'>{r.detail}</span>
-                                    {idx === 0 && <span className='mw-scanner__tag'>BEST</span>}
-                                </div>
-                                {isDigitResult(r) && (
-                                    <div className='mw-scanner__bars'>
-                                        {r.pcts.map((p, i) => (
-                                            <div key={i} className={`mw-scanner__bar-wrap${[7, 8, 9].includes(i) ? ' mw-scanner__bar-wrap--hi' : ''}`} title={`Digit ${i}: ${p.toFixed(2)}%`}>
-                                                <div className='mw-scanner__bar-fill' style={{ height: `${Math.min(100, p * 4)}%` }} />
-                                                <span className='mw-scanner__bar-pct'>{p.toFixed(1)}%</span>
-                                                <span className='mw-scanner__bar-lbl'>{i}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                                {!isDigitResult(r) && (() => {
-                                    const dr = r as SymbolDirectionResult;
-                                    return (
-                                        <div className='mw-scanner__dir-bar'>
-                                            <div className='mw-scanner__dir-fill' style={{
-                                                width: `${dr.choppinessScore}%`,
-                                                background: dr.choppinessScore >= 70 ? 'linear-gradient(90deg, #22c55e, #16a34a)' : dr.choppinessScore >= 55 ? 'linear-gradient(90deg, #eab308, #ca8a04)' : 'linear-gradient(90deg, #ef4444, #dc2626)',
-                                            }} />
-                                        </div>
-                                    );
-                                })()}
-                            </div>
-                        ))}
-                    </div>
                 </div>
+            </section>
+
+            {/* 3-Column Volatility Market Cards Grid */}
+            {results.length === 0 ? (
+                <div className='at-empty-scan'>
+                    <h3 className='at-empty-scan__title'>Ready to Scan All 10 Volatility Indices</h3>
+                    <p className='at-empty-scan__sub'>
+                        Click &ldquo;Analyze Markets&rdquo; above to stream tick history and rank every synthetic market in real time.
+                    </p>
+                </div>
+            ) : (
+                <section className='at-scanner-grid'>
+                    {results.map((r, idx) => {
+                        const isBest = idx === 0 || bestSymbols.includes(r.symbol);
+                        const tickSub = r.symbol.startsWith('1HZ') ? '10 indices • 1s tick' : '10 indices • 2s tick';
+
+                        return (
+                            <div
+                                key={r.symbol}
+                                className={`at-market-card${idx === 0 ? ' at-market-card--best' : ''}`}
+                            >
+                                <div className='at-market-card__head'>
+                                    <div>
+                                        <h3 className='at-market-card__title'>{r.label}</h3>
+                                        <div className='at-market-card__meta'>
+                                            {tickSub} • {r.detail}
+                                        </div>
+                                    </div>
+                                    {idx === 0 ? (
+                                        <span className='at-pill-badge at-pill-badge--emerald'>
+                                            ★ BEST
+                                        </span>
+                                    ) : isBest ? (
+                                        <span className='at-pill-badge at-pill-badge--emerald-soft'>
+                                            MATCH
+                                        </span>
+                                    ) : null}
+                                </div>
+
+                                {isDigitResult(r) ? (
+                                    <div className='at-market-card__bars'>
+                                        {r.pcts.map((p, i) => {
+                                            const isTarget = i >= 7;
+                                            const isHot = isTarget && p >= 10;
+                                            return (
+                                                <div
+                                                    key={i}
+                                                    className='at-market-card__bar-col'
+                                                    title={`Digit ${i}: ${p.toFixed(2)}%`}
+                                                >
+                                                    <span
+                                                        className={`at-market-card__bar-pct${
+                                                            isHot
+                                                                ? ' at-market-card__bar-pct--hot'
+                                                                : isTarget
+                                                                ? ' at-market-card__bar-pct--hi'
+                                                                : ''
+                                                        }`}
+                                                    >
+                                                        {p.toFixed(1)}%
+                                                    </span>
+                                                    <div className='at-market-card__bar-track'>
+                                                        <div
+                                                            className={`at-market-card__bar-fill${
+                                                                isHot
+                                                                    ? ' at-market-card__bar-fill--hot'
+                                                                    : isTarget
+                                                                    ? ' at-market-card__bar-fill--target'
+                                                                    : ''
+                                                            }`}
+                                                            style={{
+                                                                height: `${Math.max(
+                                                                    12,
+                                                                    Math.min(100, p * 6.5)
+                                                                )}%`,
+                                                            }}
+                                                        />
+                                                    </div>
+                                                    <span className='at-market-card__bar-digit'>{i}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    (() => {
+                                        const dr = r as SymbolDirectionResult;
+                                        return (
+                                            <div className='at-market-card__chop'>
+                                                <div
+                                                    style={{
+                                                        display: 'flex',
+                                                        justifyContent: 'space-between',
+                                                        fontSize: '13px',
+                                                        fontWeight: 700,
+                                                    }}
+                                                >
+                                                    <span>Choppiness Score</span>
+                                                    <span>{dr.choppinessScore}%</span>
+                                                </div>
+                                                <div className='at-market-card__chop-track'>
+                                                    <div
+                                                        className='at-market-card__chop-fill'
+                                                        style={{
+                                                            width: `${dr.choppinessScore}%`,
+                                                            background:
+                                                                dr.choppinessScore >= 70
+                                                                    ? '#10b981'
+                                                                    : dr.choppinessScore >= 55
+                                                                    ? '#f59e0b'
+                                                                    : '#e11d48',
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        );
+                                    })()
+                                )}
+                            </div>
+                        );
+                    })}
+                </section>
             )}
         </div>
     );
