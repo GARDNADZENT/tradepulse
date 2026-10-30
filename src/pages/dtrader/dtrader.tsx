@@ -5,6 +5,11 @@ import { api_base } from '@/external/bot-skeleton';
 import chart_api from '@/external/bot-skeleton/services/api/chart-api';
 import { useStore } from '@/hooks/useStore';
 import { derivBus } from '@/lib/deriv/tick-bus';
+import {
+    executeLiveDerivTrade,
+    extractDerivApiError,
+    normalizeDerivContractParams,
+} from '@/utils/ai-bot-xml-builder';
 import './dtrader.scss';
 
 type Tick = { epoch: number; quote: number; digit: number };
@@ -375,6 +380,9 @@ export default observer(function DTrader() {
         };
     }, [symbol]);
 
+    const isAuthorizedSession = Boolean(client?.is_logged_in || api_base?.is_authorized);
+    const activeCurrency = client?.currency || (api_base?.account_info as any)?.currency || 'USD';
+
     useEffect(() => {
         const transport = getTransport();
         if (!transport?.send) {
@@ -386,31 +394,41 @@ export default observer(function DTrader() {
             if (buyInFlightRef.current) return;
             setLoading(true);
             try {
-                const payload: Record<string, any> = {
-                    proposal: 1,
-                    amount: stake,
-                    basis: 'stake',
-                    contract_type: type,
-                    currency: client?.currency || 'USD',
+                const spec = normalizeDerivContractParams({
+                    contractType: type,
                     duration,
-                    duration_unit: 't',
-                    symbol,
+                    barrier,
+                });
+                const buildProposalReq = (useUnderlying: boolean) => {
+                    const req: Record<string, any> = {
+                        proposal: 1,
+                        amount: Math.max(0.35, Number(stake) || 1),
+                        basis: 'stake',
+                        contract_type: spec.apiContractType,
+                        currency: activeCurrency,
+                        duration: spec.duration,
+                        duration_unit: spec.durationUnit,
+                    };
+                    if (useUnderlying) req.underlying_symbol = symbol;
+                    else req.symbol = symbol;
+                    if (spec.barrier !== undefined) req.barrier = spec.barrier;
+                    return req;
                 };
-                if (
-                    [
-                        'DIGITOVER',
-                        'DIGITUNDER',
-                        'DIGITMATCH',
-                        'DIGITDIFF',
-                        'HIGHER',
-                        'LOWER',
-                        'TOUCH',
-                        'NOTOUCH',
-                    ].includes(type)
-                ) {
-                    payload.barrier = String(barrier);
+
+                let res: any;
+                try {
+                    res = await sendWithTimeout(transport.send.bind(transport), buildProposalReq(true));
+                    if (res?.error?.code === 'InputValidationFailed') {
+                        res = await sendWithTimeout(transport.send.bind(transport), buildProposalReq(false));
+                    }
+                } catch (firstErr: any) {
+                    const code = firstErr?.error?.code || firstErr?.code || '';
+                    if (code === 'InputValidationFailed') {
+                        res = await sendWithTimeout(transport.send.bind(transport), buildProposalReq(false));
+                    } else {
+                        throw firstErr;
+                    }
                 }
-                const res = await sendWithTimeout(transport.send.bind(transport), payload);
                 if (!cancelled) setProposal(res?.proposal || null);
             } catch {
                 if (!cancelled) setProposal(null);
@@ -422,7 +440,7 @@ export default observer(function DTrader() {
             cancelled = true;
             window.clearTimeout(timer);
         };
-    }, [client?.is_logged_in, client?.currency, symbol, type, barrier, duration, stake]);
+    }, [isAuthorizedSession, activeCurrency, symbol, type, barrier, duration, stake]);
 
     const contractSubscriptionsRef = useRef(
         new Map<number, { api: any; id: string | null; messageUnsub: (() => void) | null; binding: boolean }>()
@@ -502,58 +520,43 @@ export default observer(function DTrader() {
     }
 
     async function buy() {
-        if (!client?.is_logged_in) {
+        if (!isAuthorizedSession) {
             setMessage('Log in to your Deriv account before buying.');
             return;
         }
-        const transport = getTransport();
-        if (!transport?.send || buyInFlightRef.current) return;
+        if (buyInFlightRef.current) return;
         buyInFlightRef.current = true;
         setLoading(true);
+        setMessage('');
         try {
-            const payload: Record<string, any> = {
-                proposal: 1,
-                amount: stake,
-                basis: 'stake',
-                contract_type: type,
-                currency: client.currency || 'USD',
-                duration,
-                duration_unit: 't',
+            const { contractId, buyPrice, payout, longcode } = await executeLiveDerivTrade({
                 symbol,
-            };
-            if (
-                [
-                    'DIGITOVER',
-                    'DIGITUNDER',
-                    'DIGITMATCH',
-                    'DIGITDIFF',
-                    'HIGHER',
-                    'LOWER',
-                    'TOUCH',
-                    'NOTOUCH',
-                ].includes(type)
-            ) {
-                payload.barrier = String(barrier);
-            }
-            const fresh = await sendWithTimeout(transport.send.bind(transport), payload);
-            const p = fresh?.proposal;
-            if (!p?.id) throw new Error(fresh?.error?.message || 'Could not obtain a live price right now.');
-            const res = await sendWithTimeout(transport.send.bind(transport), {
-                buy: p.id,
-                price: Number(p.ask_price),
+                contractType: type,
+                stake,
+                duration,
+                barrier,
+                currency: activeCurrency,
             });
-            const id = Number(res?.buy?.contract_id);
-            if (!id) throw new Error(res?.error?.message || 'Deriv did not return a contract ID.');
             setOpenContracts(prev =>
-                [{ id, label: labelFor(type, barrier), status: 'open', profit: 0, bid: Number(p.ask_price) }, ...prev].slice(
-                    0,
-                    20
-                )
+                [
+                    {
+                        id: contractId,
+                        label: labelFor(type, barrier),
+                        status: 'open',
+                        profit: 0,
+                        bid: buyPrice,
+                        payout,
+                    },
+                    ...prev,
+                ].slice(0, 20)
             );
-            setMessage('Contract purchased: #' + id);
-            void bindContractStatus(id, transport);
+            setMessage(longcode ? `Bought: ${longcode}` : `Contract purchased: #${contractId}`);
+            const transport = getTransport();
+            if (transport?.send) {
+                void bindContractStatus(contractId, transport);
+            }
         } catch (e: any) {
-            setMessage(typeof e?.message === 'string' && e.message ? e.message : 'Purchase failed — please try again.');
+            setMessage(extractDerivApiError(e, 'Purchase failed — please try again.'));
         } finally {
             buyInFlightRef.current = false;
             setLoading(false);
@@ -567,7 +570,7 @@ export default observer(function DTrader() {
             await sendWithTimeout(transport.send.bind(transport), { sell: contractId, price: 0 });
             setMessage('Sell order submitted for #' + contractId);
         } catch (e: any) {
-            setMessage(e?.message || 'Sell request failed.');
+            setMessage(extractDerivApiError(e, 'Sell request failed.'));
         }
     }
 
@@ -833,7 +836,11 @@ export default observer(function DTrader() {
                                 key={c.id}
                                 type='button'
                                 className={type === c.id ? 'active' : ''}
-                                onClick={() => setType(c.id)}
+                                onClick={() => {
+                                    setType(c.id);
+                                    if (c.id === 'DIGITOVER' && barrier > 8) setBarrier(8);
+                                    if (c.id === 'DIGITUNDER' && barrier < 1) setBarrier(1);
+                                }}
                             >
                                 {c.label}
                             </button>
@@ -876,7 +883,7 @@ export default observer(function DTrader() {
                         ))}
                     </div>
 
-                    <label>STAKE ({client?.currency || 'USD'})</label>
+                    <label>STAKE ({activeCurrency})</label>
                     <input
                         type='number'
                         value={stake}
@@ -898,7 +905,7 @@ export default observer(function DTrader() {
                         <button
                             type='button'
                             className={'dtrader__run' + (armed ? ' active' : '')}
-                            disabled={entryDigit === '' || !client?.is_logged_in}
+                            disabled={entryDigit === '' || !isAuthorizedSession}
                             onClick={() => setArmed(v => !v)}
                         >
                             {armed ? `ARMED (${entryDigit})` : 'ARM DIGIT'}
@@ -914,17 +921,17 @@ export default observer(function DTrader() {
                         />
                         <Metric
                             l='PROPOSAL PAYOUT'
-                            v={proposal?.payout != null ? Number(proposal.payout).toFixed(2) + ' ' + (client?.currency || 'USD') : '—'}
+                            v={proposal?.payout != null ? Number(proposal.payout).toFixed(2) + ' ' + activeCurrency : '—'}
                         />
                     </div>
 
                     <button
                         type='button'
                         className='dtrader__buy'
-                        onClick={client?.is_logged_in ? () => void buy() : () => void connectAccount()}
-                        disabled={client?.is_logged_in ? loading || !isBarrierValid() : false}
+                        onClick={isAuthorizedSession ? () => void buy() : () => void connectAccount()}
+                        disabled={isAuthorizedSession ? loading || !isBarrierValid() : false}
                     >
-                        {client?.is_logged_in
+                        {isAuthorizedSession
                             ? '▶ RUN ' + labelFor(type, barrier).toUpperCase()
                             : 'CONNECT DERIV ACCOUNT'}
                     </button>

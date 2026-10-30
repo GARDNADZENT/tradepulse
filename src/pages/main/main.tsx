@@ -306,13 +306,16 @@ const AppWrapper = observer(() => {
         listEl.scrollBy({ left: dir === 'left' ? -260 : 260, behavior: 'smooth' });
     };
 
-    const isExecSurface = [DASHBOARD, BOT_BUILDER].includes(active_tab);
+    const isExecSurface = [DASHBOARD, BOT_BUILDER, FREE_BOTS].includes(active_tab);
+    const isExecScrollTab = active_tab === FREE_BOTS;
 
     return (
         <React.Fragment>
             <div
                 className={classNames('main', {
                     'main--has-exec-dock': isExecSurface,
+                    'main--exec-scroll-tab': isExecScrollTab,
+                    'main--drawer-open': isExecScrollTab && is_drawer_open && isDesktop,
                     'main--full-page-tab': !isExecSurface,
                 })}
             >

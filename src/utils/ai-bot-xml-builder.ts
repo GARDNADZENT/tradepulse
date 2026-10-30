@@ -427,6 +427,67 @@ export async function loadXmlIntoBotBuilder(options: {
     }
 }
 
+export function extractDerivApiError(err: any, fallback = 'Purchase failed — please try again.'): string {
+    if (!err) return fallback;
+    const msg =
+        err?.error?.message_to_client ||
+        err?.error?.message ||
+        err?.localizedMessage ||
+        (typeof err?.message === 'string' ? err.message : '') ||
+        (typeof err === 'string' ? err : '');
+    return msg ? String(msg) : fallback;
+}
+
+export function normalizeDerivContractParams(params: {
+    contractType: string;
+    duration?: number;
+    barrier?: number | string;
+}): { apiContractType: string; duration: number; durationUnit: 't'; barrier?: string } {
+    const rawType = String(params.contractType || 'DIGITOVER').toUpperCase();
+    const rawDur = Math.max(1, Math.round(Number(params.duration) || 1));
+    const numBarrier = Number(params.barrier);
+
+    switch (rawType) {
+        case 'DIGITOVER': {
+            const b = Number.isFinite(numBarrier) ? Math.min(8, Math.max(0, Math.round(numBarrier))) : 3;
+            return { apiContractType: 'DIGITOVER', duration: Math.min(10, rawDur), durationUnit: 't', barrier: String(b) };
+        }
+        case 'DIGITUNDER': {
+            const b = Number.isFinite(numBarrier) ? Math.min(9, Math.max(1, Math.round(numBarrier))) : 6;
+            return { apiContractType: 'DIGITUNDER', duration: Math.min(10, rawDur), durationUnit: 't', barrier: String(b) };
+        }
+        case 'DIGITMATCH':
+        case 'DIGITDIFF': {
+            const b = Number.isFinite(numBarrier) ? Math.min(9, Math.max(0, Math.round(numBarrier))) : 5;
+            return { apiContractType: rawType, duration: Math.min(10, rawDur), durationUnit: 't', barrier: String(b) };
+        }
+        case 'DIGITEVEN':
+        case 'DIGITODD':
+            return { apiContractType: rawType, duration: Math.min(10, rawDur), durationUnit: 't' };
+        case 'HIGHER': {
+            const offset = Number.isFinite(numBarrier) && numBarrier !== 0 ? Math.abs(numBarrier) : 0.1;
+            return { apiContractType: 'CALL', duration: Math.max(5, rawDur), durationUnit: 't', barrier: `+${offset}` };
+        }
+        case 'LOWER': {
+            const offset = Number.isFinite(numBarrier) && numBarrier !== 0 ? Math.abs(numBarrier) : 0.1;
+            return { apiContractType: 'PUT', duration: Math.max(5, rawDur), durationUnit: 't', barrier: `-${offset}` };
+        }
+        case 'TOUCH':
+        case 'ONETOUCH': {
+            const offset = Number.isFinite(numBarrier) && numBarrier !== 0 ? Math.abs(numBarrier) : 0.5;
+            return { apiContractType: 'ONETOUCH', duration: Math.max(5, rawDur), durationUnit: 't', barrier: `+${offset}` };
+        }
+        case 'NOTOUCH': {
+            const offset = Number.isFinite(numBarrier) && numBarrier !== 0 ? Math.abs(numBarrier) : 0.5;
+            return { apiContractType: 'NOTOUCH', duration: Math.max(5, rawDur), durationUnit: 't', barrier: `+${offset}` };
+        }
+        case 'CALL':
+        case 'PUT':
+        default:
+            return { apiContractType: rawType === 'PUT' ? 'PUT' : 'CALL', duration: rawDur, durationUnit: 't' };
+    }
+}
+
 export async function executeLiveDerivTrade(params: {
     symbol: string;
     contractType: string;
@@ -434,48 +495,77 @@ export async function executeLiveDerivTrade(params: {
     duration?: number;
     barrier?: number | string;
     currency?: string;
-}): Promise<{ contractId: number; buyPrice: number; payout: number }> {
+}): Promise<{ contractId: number; buyPrice: number; payout: number; longcode?: string }> {
+    if (!api_base?.api || (api_base.api as any)?.connection?.readyState !== 1) {
+        try {
+            await api_base.init();
+        } catch {
+            // handled below if transport still unavailable
+        }
+    }
     const transport: any = api_base?.api?.send ? api_base.api : chart_api?.api;
     if (!transport?.send) {
         throw new Error('Connect your Deriv account first to execute live trades.');
     }
 
-    const payload: Record<string, any> = {
-        proposal: 1,
-        amount: Math.max(0.35, Number(params.stake) || 1),
-        basis: 'stake',
-        contract_type: params.contractType,
-        currency: params.currency || 'USD',
-        duration: Math.max(1, Number(params.duration) || 1),
-        duration_unit: 't',
-        symbol: params.symbol,
+    const stakeAmount = Math.max(0.35, Number(params.stake) || 1);
+    const activeCurrency =
+        params.currency || (api_base?.account_info as any)?.currency || 'USD';
+    const spec = normalizeDerivContractParams({
+        contractType: params.contractType,
+        duration: params.duration,
+        barrier: params.barrier,
+    });
+
+    const buildParameters = (useUnderlyingSymbol: boolean) => {
+        const p: Record<string, any> = {
+            amount: stakeAmount,
+            basis: 'stake',
+            contract_type: spec.apiContractType,
+            currency: activeCurrency,
+            duration: spec.duration,
+            duration_unit: spec.durationUnit,
+        };
+        if (useUnderlyingSymbol) p.underlying_symbol = params.symbol;
+        else p.symbol = params.symbol;
+        if (spec.barrier !== undefined) p.barrier = spec.barrier;
+        return p;
     };
 
-    if (
-        ['DIGITOVER', 'DIGITUNDER', 'DIGITMATCH', 'DIGITDIFF', 'HIGHER', 'LOWER', 'TOUCH', 'NOTOUCH'].includes(
-            params.contractType
-        ) &&
-        params.barrier !== undefined &&
-        params.barrier !== ''
-    ) {
-        payload.barrier = String(params.barrier);
+    let buyRes: any;
+    try {
+        buyRes = await transport.send({
+            buy: '1',
+            price: stakeAmount,
+            parameters: buildParameters(true),
+        });
+        if (buyRes?.error?.code === 'InputValidationFailed') {
+            buyRes = await transport.send({
+                buy: '1',
+                price: stakeAmount,
+                parameters: buildParameters(false),
+            });
+        }
+    } catch (firstErr: any) {
+        const code = firstErr?.error?.code || firstErr?.code || '';
+        const msg = extractDerivApiError(firstErr, '');
+        if (code === 'InputValidationFailed' || /underlying_symbol|symbol/i.test(msg)) {
+            try {
+                buyRes = await transport.send({
+                    buy: '1',
+                    price: stakeAmount,
+                    parameters: buildParameters(false),
+                });
+            } catch (secondErr: any) {
+                throw new Error(extractDerivApiError(secondErr));
+            }
+        } else {
+            throw new Error(extractDerivApiError(firstErr));
+        }
     }
 
-    const propRes = await transport.send(payload);
-    if (propRes?.error) {
-        throw new Error(propRes.error.message || 'Proposal failed.');
-    }
-    const prop = propRes?.proposal;
-    if (!prop?.id) {
-        throw new Error('Unable to obtain a live proposal from Deriv.');
-    }
-
-    const buyRes = await transport.send({
-        buy: prop.id,
-        price: Number(prop.ask_price),
-    });
     if (buyRes?.error) {
-        throw new Error(buyRes.error.message || 'Buy order rejected.');
+        throw new Error(extractDerivApiError(buyRes));
     }
     const contractId = Number(buyRes?.buy?.contract_id);
     if (!contractId) {
@@ -484,7 +574,8 @@ export async function executeLiveDerivTrade(params: {
 
     return {
         contractId,
-        buyPrice: Number(buyRes.buy.buy_price ?? prop.ask_price),
-        payout: Number(buyRes.buy.payout ?? prop.payout),
+        buyPrice: Number(buyRes.buy.buy_price ?? stakeAmount),
+        payout: Number(buyRes.buy.payout ?? 0),
+        longcode: buyRes.buy.longcode,
     };
 }

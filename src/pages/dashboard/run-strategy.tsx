@@ -1,16 +1,22 @@
 import React from 'react';
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
-import Money from '@/components/shared_ui/money';
 import { DBOT_TABS } from '@/constants/bot-contents';
 import { useStore } from '@/hooks/useStore';
 import { LabelPairedPlayLgFillIcon, LabelPairedSquareLgFillIcon } from '@deriv/quill-icons/LabelPaired';
 import { Localize, localize } from '@deriv-com/translations';
 import './run-strategy.scss';
 
+const formatDockMoney = (value: number | undefined | null, signed = false) => {
+    const num = Number(value || 0);
+    if (!Number.isFinite(num) || num === 0) return '0.00';
+    const abs = Math.abs(num).toFixed(2);
+    if (signed) return num > 0 ? `+${abs}` : `-${abs}`;
+    return num.toFixed(2);
+};
+
 const RunStrategy = observer(() => {
-    const { run_panel, transactions, client, dashboard, blockly_store } = useStore();
-    const { currency } = client;
+    const { run_panel, transactions, dashboard, blockly_store } = useStore();
     const { active_tab } = dashboard;
     const { has_active_bot, has_saved_bots } = blockly_store;
     const {
@@ -159,53 +165,51 @@ const RunStrategy = observer(() => {
                 </button>
             </div>
 
-            <div className='tp-exec-dock__stats'>
-                <div className='tp-exec-dock__stat-box'>
-                    <span className='tp-exec-dock__stat-label'>{localize('Stake')}</span>
-                    <span className='tp-exec-dock__stat-val'>
-                        <Money amount={total_stake} currency={currency} show_currency />
-                    </span>
-                </div>
-                <div className='tp-exec-dock__stat-box'>
-                    <span className='tp-exec-dock__stat-label'>{localize('Payout')}</span>
-                    <span className='tp-exec-dock__stat-val'>
-                        <Money amount={total_payout} currency={currency} show_currency />
-                    </span>
-                </div>
-                <div className='tp-exec-dock__stat-box'>
-                    <span className='tp-exec-dock__stat-label'>{localize('Runs')}</span>
-                    <span className='tp-exec-dock__stat-val'>{number_of_runs}</span>
-                </div>
-                <div className='tp-exec-dock__stat-box'>
-                    <span className='tp-exec-dock__stat-label'>{localize('Won')}</span>
-                    <span
-                        className={classNames('tp-exec-dock__stat-val', {
-                            'tp-exec-dock__stat-val--pos': won_contracts > 0,
-                        })}
-                    >
-                        {won_contracts}
-                    </span>
-                </div>
-                <div className='tp-exec-dock__stat-box'>
-                    <span className='tp-exec-dock__stat-label'>{localize('Lost')}</span>
-                    <span
-                        className={classNames('tp-exec-dock__stat-val', {
-                            'tp-exec-dock__stat-val--neg': lost_contracts > 0,
-                        })}
-                    >
-                        {lost_contracts}
-                    </span>
-                </div>
-                <div className='tp-exec-dock__stat-box'>
-                    <span className='tp-exec-dock__stat-label'>{localize('P/L')}</span>
-                    <span
-                        className={classNames('tp-exec-dock__stat-val', {
-                            'tp-exec-dock__stat-val--pos': total_profit > 0,
-                            'tp-exec-dock__stat-val--neg': total_profit < 0,
-                        })}
-                    >
-                        <Money amount={total_profit} currency={currency} has_sign show_currency />
-                    </span>
+            <div className='tp-exec-dock__stats-shell'>
+                <div className='tp-exec-dock__stats'>
+                    <div className='tp-exec-dock__stat-box'>
+                        <span className='tp-exec-dock__stat-label'>{localize('Stake')}</span>
+                        <span className='tp-exec-dock__stat-val'>{formatDockMoney(total_stake)}</span>
+                    </div>
+                    <div className='tp-exec-dock__stat-box'>
+                        <span className='tp-exec-dock__stat-label'>{localize('Payout')}</span>
+                        <span className='tp-exec-dock__stat-val'>{formatDockMoney(total_payout)}</span>
+                    </div>
+                    <div className='tp-exec-dock__stat-box'>
+                        <span className='tp-exec-dock__stat-label'>{localize('Runs')}</span>
+                        <span className='tp-exec-dock__stat-val'>{number_of_runs}</span>
+                    </div>
+                    <div className='tp-exec-dock__stat-box'>
+                        <span className='tp-exec-dock__stat-label'>{localize('Won')}</span>
+                        <span
+                            className={classNames('tp-exec-dock__stat-val', {
+                                'tp-exec-dock__stat-val--pos': won_contracts > 0,
+                            })}
+                        >
+                            {won_contracts}
+                        </span>
+                    </div>
+                    <div className='tp-exec-dock__stat-box'>
+                        <span className='tp-exec-dock__stat-label'>{localize('Lost')}</span>
+                        <span
+                            className={classNames('tp-exec-dock__stat-val', {
+                                'tp-exec-dock__stat-val--neg': lost_contracts > 0,
+                            })}
+                        >
+                            {lost_contracts}
+                        </span>
+                    </div>
+                    <div className='tp-exec-dock__stat-box'>
+                        <span className='tp-exec-dock__stat-label'>{localize('P/L')}</span>
+                        <span
+                            className={classNames('tp-exec-dock__stat-val', {
+                                'tp-exec-dock__stat-val--pos': total_profit > 0,
+                                'tp-exec-dock__stat-val--neg': total_profit < 0,
+                            })}
+                        >
+                            {formatDockMoney(total_profit, true)}
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>

@@ -7,15 +7,25 @@
     height: 0;
 
     &__container {
-        height: calc(100vh - 16.4rem) !important;
+        height: calc(100vh - 15.4rem) !important;
         top: 9.6rem !important;
         width: 36.6rem !important;
         right: 0;
-        border-inline-start: 1px solid rgba(148, 163, 184, 0.16);
+        border-inline-start: 1px solid #141e30;
 
         .theme--dark & {
-            background: #0a0e17 !important;
-            border-inline-start-color: rgba(255, 255, 255, 0.08);
+            background: #05070d !important;
+            border-inline-start-color: #141e30;
+        }
+
+        .dc-drawer__toggle {
+            background-color: #05070d;
+            border-left: 1px solid #141e30;
+            border-right: 1px solid #141e30;
+
+            svg {
+                fill: #f59e0b;
+            }
         }
 
         &--mobile {
@@ -159,11 +169,11 @@
 
     &-tab {
         &__content {
-            height: calc(100vh - 20.6rem);
+            height: calc(100vh - 19.6rem);
             overflow: hidden;
 
             &--no-stat {
-                height: calc(100vh - 20.6rem);
+                height: calc(100vh - 19.6rem);
             }
 
             &--mobile {
