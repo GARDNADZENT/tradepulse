@@ -389,15 +389,36 @@ const AppWrapper = observer(() => {
         }
     };
     // [/AI]
+    const scrollMainTabs = (dir: 'left' | 'right') => {
+        const listEl = document.querySelector('.dc-tabs__list--header--main__tabs') as HTMLElement | null;
+        if (!listEl) return;
+        listEl.scrollBy({ left: dir === 'left' ? -260 : 260, behavior: 'smooth' });
+    };
+
     return (
         <React.Fragment>
-            <div className={classNames('main', { 'main--manual-trade-active': active_tab === MANUAL_TRADE })}>
+            <div
+                className={classNames('main', {
+                    'main--manual-trade-active': active_tab === MANUAL_TRADE,
+                    'main--has-exec-dock': [DASHBOARD, BOT_BUILDER, CHART].includes(active_tab),
+                })}
+            >
                 <div
                     className={classNames('main__container', {
                         'main__container--active': active_tour && active_tab === DASHBOARD && !isDesktop,
                     })}
                 >
-                    <div>
+                    <div className='main__nav-shell'>
+                        {isDesktop && (
+                            <button
+                                type='button'
+                                className='main__nav-arrow main__nav-arrow--left'
+                                onClick={() => scrollMainTabs('left')}
+                                aria-label='Scroll navigation left'
+                            >
+                                ‹
+                            </button>
+                        )}
                         {!isDesktop && left_tab_shadow && <span className='tabs-shadow tabs-shadow--left' />}{' '}
                         <Tabs
                             active_index={active_tab}
@@ -440,7 +461,7 @@ const AppWrapper = observer(() => {
                                         <svg width='15' height='15' viewBox='0 0 24 24' fill='none'>
                                             <path d='M12 2.5l2.85 5.77 6.37.93-4.61 4.49 1.09 6.34L12 17.04l-5.7 2.99 1.09-6.34L2.78 9.2l6.37-.93L12 2.5z' />
                                         </svg>
-                                        <Localize i18n_default_text='Special Bots' />
+                                        <Localize i18n_default_text='Free Bots' />
                                     </>
                                 }
                                 id='id-trading-bots'
@@ -481,7 +502,7 @@ const AppWrapper = observer(() => {
                                         <svg width='15' height='15' viewBox='0 0 24 24' fill='none'>
                                             <path d='M12 2L4 5.4v6.1c0 5.05 3.41 9.77 8 10.9 4.59-1.13 8-5.85 8-10.9V5.4L12 2zm1 14h-2v-3H8v-2h3V8h2v3h3v2h-3v3z' />
                                         </svg>
-                                        <Localize i18n_default_text='Risk Calculator' />
+                                        <Localize i18n_default_text='Calculator' />
                                     </>
                                 }
                                 id='id-risk-calculator'
@@ -496,7 +517,7 @@ const AppWrapper = observer(() => {
                                             width='16px'
                                             fill='var(--text-general)'
                                         />
-                                        <Localize i18n_default_text='Trading View' />
+                                        <Localize i18n_default_text='TradingView' />
                                     </>
                                 }
                                 id='id-trading-view'
@@ -504,7 +525,7 @@ const AppWrapper = observer(() => {
                                 <div
                                     style={{
                                         width: '100%',
-                                        height: 'var(--tab-content-height, calc(100vh - 13rem))',
+                                        height: 'var(--tab-content-height, calc(100vh - 9.6rem))',
                                     }}
                                 >
                                     <TradingViewComponent />
@@ -518,7 +539,7 @@ const AppWrapper = observer(() => {
                                             width='16px'
                                             fill='var(--text-general)'
                                         />
-                                        <Localize i18n_default_text='Charts' />
+                                        <Localize i18n_default_text='Analysis Tool' />
                                     </>
                                 }
                                 id={
@@ -539,7 +560,7 @@ const AppWrapper = observer(() => {
                                             width='15px'
                                             fill='var(--text-general)'
                                         />
-                                        <Localize i18n_default_text='Manual Trade' />
+                                        <Localize i18n_default_text='DTrader' />
                                     </>
                                 }
                                 id='id-manual-trade'
@@ -599,6 +620,16 @@ const AppWrapper = observer(() => {
                                 </div>
                             </div>
                         </Tabs>
+                        {isDesktop && (
+                            <button
+                                type='button'
+                                className='main__nav-arrow main__nav-arrow--right'
+                                onClick={() => scrollMainTabs('right')}
+                                aria-label='Scroll navigation right'
+                            >
+                                ›
+                            </button>
+                        )}
                         {!isDesktop && right_tab_shadow && <span className='tabs-shadow tabs-shadow--right' />}{' '}
                     </div>
                 </div>

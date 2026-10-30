@@ -7,10 +7,16 @@
     height: 0;
 
     &__container {
-        height: var(--bot-content-height) !important;
-        top: 10.4rem !important;
+        height: calc(100vh - 16.4rem) !important;
+        top: 9.6rem !important;
         width: 36.6rem !important;
         right: 0;
+        border-inline-start: 1px solid rgba(148, 163, 184, 0.16);
+
+        .theme--dark & {
+            background: #0a0e17 !important;
+            border-inline-start-color: rgba(255, 255, 255, 0.08);
+        }
 
         &--mobile {
             position: absolute;
@@ -153,11 +159,11 @@
 
     &-tab {
         &__content {
-            height: calc(100vh - 42rem);
+            height: calc(100vh - 20.6rem);
             overflow: hidden;
 
             &--no-stat {
-                height: var(--drawer-content-height-no-stat);
+                height: calc(100vh - 20.6rem);
             }
 
             &--mobile {

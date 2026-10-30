@@ -30,6 +30,30 @@ export default Engine =>
                     if (!lastTick) return;
                     const { epoch } = lastTick;
                     this.store.dispatch({ type: constants.NEW_TICK, payload: epoch });
+
+                    try {
+                        const currentScope = this.store?.getState?.()?.scope;
+                        const isBotActive = currentScope && currentScope !== constants.STOP;
+                        if (isBotActive && epoch && this._lastJournalTickEpoch !== epoch) {
+                            this._lastJournalTickEpoch = epoch;
+                            const windowSize = Math.max(1, Math.min(10, Number(this.journal_digit_window) || 2));
+                            const pipSize = this.getPipSize() ?? 2;
+                            const recentDigits = ticks
+                                .slice(-windowSize)
+                                .map(t => getLastDigit(Number(t.quote).toFixed(pipSize)));
+                            if (recentDigits.length > 0) {
+                                globalObserver.emit('ui.log.success', {
+                                    log_type: 'tick_digits',
+                                    extra: {
+                                        window_size: windowSize,
+                                        digits: recentDigits,
+                                    },
+                                });
+                            }
+                        }
+                    } catch (e) {
+                        // non-blocking journal tick telemetry
+                    }
                 };
 
                 const key = await ticksService.monitor({ symbol, callback });
@@ -99,16 +123,20 @@ export default Engine =>
         }
 
         async areLastDigitsEven(count) {
+            const safeCount = Math.max(1, Number(count) || 2);
+            this.journal_digit_window = safeCount;
             const digits = await this.getLastDigitList();
-            const last_n = digits.slice(-count);
+            const last_n = digits.slice(-safeCount);
             const result = last_n.length > 0 && last_n.every(d => d % 2 === 0);
             this.logLastDigitsAnalysis('ALL_EVEN', last_n, result);
             return result;
         }
 
         async areLastDigitsOdd(count) {
+            const safeCount = Math.max(1, Number(count) || 2);
+            this.journal_digit_window = safeCount;
             const digits = await this.getLastDigitList();
-            const last_n = digits.slice(-count);
+            const last_n = digits.slice(-safeCount);
             const result = last_n.length > 0 && last_n.every(d => d % 2 !== 0);
             this.logLastDigitsAnalysis('ALL_ODD', last_n, result);
             return result;
@@ -116,15 +144,6 @@ export default Engine =>
 
         logLastDigitsAnalysis(condition, digits, result) {
             const conditionText = condition === 'ALL_EVEN' ? 'all even' : condition === 'ALL_ODD' ? 'all odd' : condition;
-            globalObserver.emit('ui.log.success', {
-                log_type: 'digits_analysis',
-                extra: { condition: conditionText, digits, result },
-            });
-        }
-
-        logLastDigitsAnalysis(condition, digits, result) {
-            const conditionText = condition === 'ALL_EVEN' ? 'all even' : condition === 'ALL_ODD' ? 'all odd' : condition;
-            const resultText = result ? 'TRUE' : 'FALSE';
             globalObserver.emit('ui.log.success', {
                 log_type: 'digits_analysis',
                 extra: { condition: conditionText, digits, result },

@@ -74,7 +74,25 @@ export type TJournalItemProps = {
     measure: () => void;
 };
 
-export type TJournalItemExtra = TExtraFilterMessage & TExtraJournal & { sold_for: string; current_currency?: string };
+export type TJournalItemExtra = TExtraFilterMessage &
+    TExtraJournal & {
+        sold_for: string;
+        current_currency?: string;
+        condition?: string;
+        digits?: Array<number | string>;
+        result?: boolean;
+        window_size?: number;
+        event?: string;
+        mode?: string;
+        enter_losses?: number;
+        return_wins?: number;
+        is_win?: boolean;
+        contract_type?: string;
+        barrier?: number | string | null;
+        digit?: number | string;
+        win_progress?: string;
+        switched_to_real?: boolean;
+    };
 
 export type TFormatMessageProps = {
     logType: string;

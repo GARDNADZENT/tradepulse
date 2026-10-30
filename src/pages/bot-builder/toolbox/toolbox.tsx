@@ -3,19 +3,17 @@ import React from 'react';
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
 import Text from '@/components/shared_ui/text';
+import { DBOT_TABS } from '@/constants/bot-contents';
 import { useStore } from '@/hooks/useStore';
 import { LabelPairedChevronDownMdFillIcon } from '@deriv/quill-icons/LabelPaired';
 import { localize } from '@deriv-com/translations';
 import { useDevice } from '@deriv-com/ui';
-/* [AI] - Analytics event tracking removed - see migrate-docs/MONITORING_PACKAGES.md for re-implementation guide */
-/* [/AI] */
-import ToolbarButton from '../toolbar/toolbar-button';
 import SearchBox from './search-box';
 import { ToolboxItems } from './toolbox-items';
 
 const Toolbox = observer(() => {
     const { isDesktop } = useDevice();
-    const { toolbox, flyout, quick_strategy } = useStore();
+    const { toolbox, flyout, quick_strategy, dashboard } = useStore();
     const {
         hasSubCategory,
         is_search_loading,
@@ -45,20 +43,15 @@ const Toolbox = observer(() => {
 
     const handleQuickStrategyOpen = () => {
         setFormVisibility(true);
-        /* [AI] - Analytics event tracking removed - see migrate-docs/MONITORING_PACKAGES.md for re-implementation guide */
-        /* [/AI] */
+    };
+
+    const handleOpenRiskCalculator = () => {
+        dashboard?.setActiveTab?.(DBOT_TABS.RISK_CALCULATOR);
     };
 
     if (isDesktop) {
         return (
             <div className='db-toolbox' data-testid='dashboard__toolbox'>
-                <ToolbarButton
-                    popover_message={localize('Click here to start building your Deriv Bot.')}
-                    button_id='db-toolbar__get-started-button'
-                    button_classname='toolbar__btn toolbar__btn--icon toolbar__btn--start'
-                    buttonOnClick={handleQuickStrategyOpen}
-                    button_text={localize('Quick strategy')}
-                />
                 <div id='gtm-toolbox' className='db-toolbox__content'>
                     <div className='db-toolbox__header'>
                         <div
@@ -69,13 +62,13 @@ const Toolbox = observer(() => {
                                 setVisibility(false);
                             }}
                         >
-                            {localize('Blocks menu')}
+                            {localize('Blocks Menu')}
                             <span
                                 className={classNames('db-toolbox__title__chevron', {
                                     'db-toolbox__title__chevron--active': is_open,
                                 })}
                             >
-                                <LabelPairedChevronDownMdFillIcon fill='var(--text-general)' />
+                                <LabelPairedChevronDownMdFillIcon fill='#ffffff' />
                             </span>
                         </div>
                     </div>
@@ -170,6 +163,25 @@ const Toolbox = observer(() => {
                                 })}
                         </div>
                     </div>
+                </div>
+                <div className='db-toolbox__quick-pills'>
+                    <button
+                        type='button'
+                        className='db-toolbox__risk-pill'
+                        onClick={handleOpenRiskCalculator}
+                        title={localize('Open Risk Calculator')}
+                    >
+                        Risk
+                    </button>
+                    <button
+                        type='button'
+                        id='db-toolbar__get-started-button'
+                        className='db-toolbox__qs-pill'
+                        onClick={handleQuickStrategyOpen}
+                        title={localize('Open Quick Strategy')}
+                    >
+                        Quick Strategy
+                    </button>
                 </div>
             </div>
         );

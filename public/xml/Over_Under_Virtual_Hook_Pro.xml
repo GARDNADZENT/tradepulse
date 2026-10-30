@@ -1,0 +1,317 @@
+<xml xmlns="http://www.w3.org/1999/xhtml" collection="false" is_dbot="true">
+  <variables>
+    <variable id="var_base_stake">Base Stake</variable>
+    <variable id="var_pred_before">Prediction Before Loss</variable>
+    <variable id="var_pred_after">Prediction After Loss</variable>
+    <variable id="var_tp">Take Profit</variable>
+    <variable id="var_sl">Stop Loss</variable>
+    <variable id="var_martingale">Martingale Split</variable>
+    <variable id="var_cushion">Recovery Cushion (%)</variable>
+    <variable id="var_active_stake">Active Stake</variable>
+    <variable id="var_active_pred">Active Prediction</variable>
+  </variables>
+  <block type="trade_definition" id="td_root" x="0" y="0">
+    <statement name="TRADE_OPTIONS">
+      <block type="trade_definition_market" id="td_market" deletable="false" movable="false">
+        <field name="MARKET_LIST">synthetic_index</field>
+        <field name="SUBMARKET_LIST">random_index</field>
+        <field name="SYMBOL_LIST">1HZ10V</field>
+        <next>
+          <block type="trade_definition_tradetype" id="td_tradetype" deletable="false" movable="false">
+            <field name="TRADETYPECAT_LIST">digits</field>
+            <field name="TRADETYPE_LIST">overunder</field>
+            <next>
+              <block type="trade_definition_contracttype" id="td_contracttype" deletable="false" movable="false">
+                <field name="TYPE_LIST">both</field>
+                <next>
+                  <block type="trade_definition_candleinterval" id="td_candle" deletable="false" movable="false">
+                    <field name="CANDLEINTERVAL_LIST">60</field>
+                    <next>
+                      <block type="trade_definition_restartbuysell" id="td_restartbs" deletable="false" movable="false">
+                        <field name="TIME_MACHINE_ENABLED">FALSE</field>
+                        <next>
+                          <block type="trade_definition_restartonerror" id="td_restarterr" deletable="false" movable="false">
+                            <field name="RESTARTONERROR">TRUE</field>
+                          </block>
+                        </next>
+                      </block>
+                    </next>
+                  </block>
+                </next>
+              </block>
+            </next>
+          </block>
+        </next>
+      </block>
+    </statement>
+    <statement name="INITIALIZATION">
+      <block type="variables_set" id="init_base_stake">
+        <field name="VAR" id="var_base_stake">Base Stake</field>
+        <value name="VALUE">
+          <block type="math_number" id="num_base_stake">
+            <field name="NUM">4</field>
+          </block>
+        </value>
+        <next>
+          <block type="variables_set" id="init_pred_before">
+            <field name="VAR" id="var_pred_before">Prediction Before Loss</field>
+            <value name="VALUE">
+              <block type="math_number" id="num_pred_before">
+                <field name="NUM">8</field>
+              </block>
+            </value>
+            <next>
+              <block type="variables_set" id="init_pred_after">
+                <field name="VAR" id="var_pred_after">Prediction After Loss</field>
+                <value name="VALUE">
+                  <block type="math_number" id="num_pred_after">
+                    <field name="NUM">6</field>
+                  </block>
+                </value>
+                <next>
+                  <block type="variables_set" id="init_tp">
+                    <field name="VAR" id="var_tp">Take Profit</field>
+                    <value name="VALUE">
+                      <block type="math_number" id="num_tp">
+                        <field name="NUM">4</field>
+                      </block>
+                    </value>
+                    <next>
+                      <block type="variables_set" id="init_sl">
+                        <field name="VAR" id="var_sl">Stop Loss</field>
+                        <value name="VALUE">
+                          <block type="math_number" id="num_sl">
+                            <field name="NUM">1000</field>
+                          </block>
+                        </value>
+                        <next>
+                          <block type="variables_set" id="init_martingale">
+                            <field name="VAR" id="var_martingale">Martingale Split</field>
+                            <value name="VALUE">
+                              <block type="math_number" id="num_martingale">
+                                <field name="NUM">2</field>
+                              </block>
+                            </value>
+                            <next>
+                              <block type="variables_set" id="init_cushion">
+                                <field name="VAR" id="var_cushion">Recovery Cushion (%)</field>
+                                <value name="VALUE">
+                                  <block type="math_number" id="num_cushion">
+                                    <field name="NUM">5</field>
+                                  </block>
+                                </value>
+                                <next>
+                                  <block type="virtual_hook_config" id="init_vh_config">
+                                    <field name="VH_ENABLED">ENABLED</field>
+                                    <field name="START_MODE">virtual</field>
+                                    <value name="ENTER_AFTER_LOSSES">
+                                      <block type="math_number" id="num_vh_losses">
+                                        <field name="NUM">2</field>
+                                      </block>
+                                    </value>
+                                    <value name="RETURN_AFTER_WINS">
+                                      <block type="math_number" id="num_vh_wins">
+                                        <field name="NUM">1</field>
+                                      </block>
+                                    </value>
+                                    <next>
+                                      <block type="variables_set" id="init_active_stake">
+                                        <field name="VAR" id="var_active_stake">Active Stake</field>
+                                        <value name="VALUE">
+                                          <block type="variables_get" id="get_init_stake">
+                                            <field name="VAR" id="var_base_stake">Base Stake</field>
+                                          </block>
+                                        </value>
+                                        <next>
+                                          <block type="variables_set" id="init_active_pred">
+                                            <field name="VAR" id="var_active_pred">Active Prediction</field>
+                                            <value name="VALUE">
+                                              <block type="variables_get" id="get_init_pred">
+                                                <field name="VAR" id="var_pred_before">Prediction Before Loss</field>
+                                              </block>
+                                            </value>
+                                          </block>
+                                        </next>
+                                      </block>
+                                    </next>
+                                  </block>
+                                </next>
+                              </block>
+                            </next>
+                          </block>
+                        </next>
+                      </block>
+                    </next>
+                  </block>
+                </next>
+              </block>
+            </next>
+          </block>
+        </next>
+      </block>
+    </statement>
+    <statement name="SUBMARKET">
+      <block type="trade_definition_tradeoptions" id="td_options">
+        <mutation has_first_barrier="false" has_second_barrier="false" has_prediction="true"></mutation>
+        <field name="DURATIONTYPE_LIST">t</field>
+        <field name="CURRENCY_LIST">USD</field>
+        <value name="DURATION">
+          <shadow type="math_number_positive" id="shad_dur">
+            <field name="NUM">1</field>
+          </shadow>
+        </value>
+        <value name="AMOUNT">
+          <shadow type="math_number_positive" id="shad_amt">
+            <field name="NUM">4</field>
+          </shadow>
+          <block type="variables_get" id="opt_get_stake">
+            <field name="VAR" id="var_active_stake">Active Stake</field>
+          </block>
+        </value>
+        <value name="PREDICTION">
+          <shadow type="math_number_positive" id="shad_pred" inline="true">
+            <field name="NUM">8</field>
+          </shadow>
+          <block type="variables_get" id="opt_get_pred">
+            <field name="VAR" id="var_active_pred">Active Prediction</field>
+          </block>
+        </value>
+      </block>
+    </statement>
+  </block>
+  <block type="during_purchase" id="dp_root" x="760" y="0">
+    <statement name="DURING_PURCHASE_STACK">
+      <block type="controls_if" id="dp_if">
+        <value name="IF0">
+          <block type="check_sell" id="dp_check_sell"></block>
+        </value>
+      </block>
+    </statement>
+  </block>
+  <block type="after_purchase" id="ap_root" x="760" y="220">
+    <statement name="AFTERPURCHASE_STACK">
+      <block type="controls_if" id="ap_win_loss" collapsed="false">
+        <mutation else="1"></mutation>
+        <value name="IF0">
+          <block type="contract_check_result" id="ap_is_win">
+            <field name="CHECK_RESULT">win</field>
+          </block>
+        </value>
+        <statement name="DO0">
+          <block type="variables_set" id="win_reset_stake">
+            <field name="VAR" id="var_active_stake">Active Stake</field>
+            <value name="VALUE">
+              <block type="variables_get" id="win_get_base">
+                <field name="VAR" id="var_base_stake">Base Stake</field>
+              </block>
+            </value>
+            <next>
+              <block type="variables_set" id="win_reset_pred">
+                <field name="VAR" id="var_active_pred">Active Prediction</field>
+                <value name="VALUE">
+                  <block type="variables_get" id="win_get_pred_before">
+                    <field name="VAR" id="var_pred_before">Prediction Before Loss</field>
+                  </block>
+                </value>
+              </block>
+            </next>
+          </block>
+        </statement>
+        <statement name="ELSE">
+          <block type="variables_set" id="loss_set_pred">
+            <field name="VAR" id="var_active_pred">Active Prediction</field>
+            <value name="VALUE">
+              <block type="variables_get" id="loss_get_pred_after">
+                <field name="VAR" id="var_pred_after">Prediction After Loss</field>
+              </block>
+            </value>
+            <next>
+              <block type="variables_set" id="loss_set_stake">
+                <field name="VAR" id="var_active_stake">Active Stake</field>
+                <value name="VALUE">
+                  <block type="math_arithmetic" id="loss_mult_stake">
+                    <field name="OP">MULTIPLY</field>
+                    <value name="A">
+                      <block type="variables_get" id="loss_curr_stake">
+                        <field name="VAR" id="var_active_stake">Active Stake</field>
+                      </block>
+                    </value>
+                    <value name="B">
+                      <block type="variables_get" id="loss_martingale_factor">
+                        <field name="VAR" id="var_martingale">Martingale Split</field>
+                      </block>
+                    </value>
+                  </block>
+                </value>
+              </block>
+            </next>
+          </block>
+        </statement>
+        <next>
+          <block type="controls_if" id="ap_tp_sl_check">
+            <mutation elseif="1" else="1"></mutation>
+            <value name="IF0">
+              <block type="logic_compare" id="cmp_tp">
+                <field name="OP">GTE</field>
+                <value name="A">
+                  <block type="total_profit" id="get_total_profit_1"></block>
+                </value>
+                <value name="B">
+                  <block type="variables_get" id="get_tp_val">
+                    <field name="VAR" id="var_tp">Take Profit</field>
+                  </block>
+                </value>
+              </block>
+            </value>
+            <statement name="DO0">
+              <block type="text_print" id="print_tp">
+                <value name="TEXT">
+                  <shadow type="text" id="txt_tp">
+                    <field name="TEXT">Take Profit Reached!</field>
+                  </shadow>
+                </value>
+              </block>
+            </statement>
+            <value name="IF1">
+              <block type="logic_compare" id="cmp_sl">
+                <field name="OP">LTE</field>
+                <value name="A">
+                  <block type="total_profit" id="get_total_profit_2"></block>
+                </value>
+                <value name="B">
+                  <block type="math_single" id="neg_sl">
+                    <field name="OP">NEG</field>
+                    <value name="NUM">
+                      <block type="variables_get" id="get_sl_val">
+                        <field name="VAR" id="var_sl">Stop Loss</field>
+                      </block>
+                    </value>
+                  </block>
+                </value>
+              </block>
+            </value>
+            <statement name="DO1">
+              <block type="text_print" id="print_sl">
+                <value name="TEXT">
+                  <shadow type="text" id="txt_sl">
+                    <field name="TEXT">Stop Loss Reached!</field>
+                  </shadow>
+                </value>
+              </block>
+            </statement>
+            <statement name="ELSE">
+              <block type="trade_again" id="ap_trade_again"></block>
+            </statement>
+          </block>
+        </next>
+      </block>
+    </statement>
+  </block>
+  <block type="before_purchase" id="bp_root" x="0" y="760">
+    <statement name="BEFOREPURCHASE_STACK">
+      <block type="purchase" id="bp_purchase">
+        <field name="PURCHASE_LIST">DIGITUNDER</field>
+      </block>
+    </statement>
+  </block>
+</xml>

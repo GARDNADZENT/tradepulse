@@ -1,0 +1,265 @@
+@use 'components/shared/styles/devices' as *;
+
+.tp-exec-dock {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 6.8rem;
+    z-index: 25;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.6rem;
+    padding: 0 1.6rem;
+    background: #ffffff;
+    border-top: 1px solid rgba(15, 23, 42, 0.12);
+    box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.06);
+
+    .theme--dark & {
+        background: #070b14;
+        border-top-color: rgba(255, 255, 255, 0.09);
+        box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.65);
+    }
+
+    @include mobile-or-tablet-screen {
+        display: none;
+    }
+
+    &__controls {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-shrink: 0;
+    }
+
+    &__reset-btn {
+        height: 4.2rem;
+        padding: 0 1.6rem;
+        border-radius: 8px;
+        border: 1px solid rgba(148, 163, 184, 0.3);
+        background: #f1f5f9;
+        color: #0f172a;
+        font-size: 1.3rem;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+        cursor: pointer;
+        transition: all 0.15s ease;
+
+        .theme--dark & {
+            background: #111827;
+            border-color: rgba(255, 255, 255, 0.14);
+            color: #f8fafc;
+        }
+
+        &:hover:not(:disabled) {
+            border-color: #0066ff;
+        }
+
+        &:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+    }
+
+    &__run-btn {
+        height: 4.2rem;
+        min-width: 10.6rem;
+        padding: 0 2.2rem;
+        border-radius: 8px;
+        border: none;
+        background: #0066ff;
+        color: #ffffff;
+        font-size: 1.4rem;
+        font-weight: 800;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.7rem;
+        cursor: pointer;
+        box-shadow: 0 4px 16px rgba(0, 102, 255, 0.4);
+        transition: background 0.15s ease, transform 0.12s ease;
+
+        &:hover:not(:disabled) {
+            background: #1a75ff;
+            transform: translateY(-1px);
+        }
+
+        &--stop {
+            background: #ef4444;
+            box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4);
+
+            &:hover:not(:disabled) {
+                background: #dc2626;
+            }
+        }
+
+        &:disabled {
+            opacity: 0.48;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+    }
+
+    &__pause-btn {
+        height: 4.2rem;
+        width: 4.2rem;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: #1e293b;
+        color: #ffffff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+
+        &:hover {
+            border-color: #f59e0b;
+        }
+    }
+
+    &__fast-card {
+        height: 4.2rem;
+        padding: 0 1.2rem;
+        border-radius: 8px;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        background: #f8fafc;
+        display: inline-flex;
+        align-items: center;
+        gap: 1.2rem;
+        cursor: pointer;
+        transition: border-color 0.15s ease, background 0.15s ease;
+
+        .theme--dark & {
+            background: #0e1525;
+            border-color: rgba(255, 255, 255, 0.12);
+        }
+
+        &--active {
+            border-color: rgba(16, 185, 129, 0.45);
+
+            .theme--dark & {
+                border-color: rgba(16, 185, 129, 0.45);
+                background: rgba(16, 185, 129, 0.08);
+            }
+        }
+    }
+
+    &__fast-text {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        line-height: 1.15;
+    }
+
+    &__fast-kicker {
+        font-size: 0.92rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        color: #64748b;
+
+        .theme--dark & {
+            color: #94a3b8;
+        }
+    }
+
+    &__fast-mode {
+        font-size: 1.18rem;
+        font-weight: 800;
+        color: #0f172a;
+
+        .theme--dark & {
+            color: #ffffff;
+        }
+    }
+
+    &__switch {
+        position: relative;
+        width: 3.4rem;
+        height: 1.9rem;
+        border-radius: 999px;
+        background: #475569;
+        transition: background 0.18s ease;
+
+        &--on {
+            background: #10b981;
+        }
+    }
+
+    &__switch-knob {
+        position: absolute;
+        top: 0.2rem;
+        left: 0.2rem;
+        width: 1.5rem;
+        height: 1.5rem;
+        border-radius: 50%;
+        background: #ffffff;
+        transition: transform 0.18s ease;
+
+        .tp-exec-dock__switch--on & {
+            transform: translateX(1.5rem);
+        }
+    }
+
+    &__stats {
+        flex: 1;
+        min-width: 0;
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 0.8rem;
+    }
+
+    &__stat-box {
+        height: 4.6rem;
+        padding: 0 1.2rem;
+        border-radius: 8px;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        background: #f8fafc;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: flex-start;
+        min-width: 0;
+
+        .theme--dark & {
+            background: #0d1320;
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+    }
+
+    &__stat-label {
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: #64748b;
+        line-height: 1.2;
+
+        .theme--dark & {
+            color: #8b9bb4;
+        }
+    }
+
+    &__stat-val {
+        font-size: 1.32rem;
+        font-weight: 800;
+        color: #0f172a;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+        margin-top: 0.15rem;
+
+        .theme--dark & {
+            color: #ffffff;
+        }
+
+        &--pos {
+            color: #10b981 !important;
+        }
+
+        &--neg {
+            color: #ef4444 !important;
+        }
+    }
+}

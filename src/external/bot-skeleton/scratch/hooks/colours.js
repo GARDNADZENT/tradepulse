@@ -1,40 +1,41 @@
-const lightMode = () => {
+const applyBlocklyPalette = () => {
     const workspace = Blockly;
+    // Electric Royal Blue (#0066FF) outer root frames + crisp white inner blocks with obsidian pill inputs
     workspace.Colours.RootBlock = {
-        colour: '#064e72',
-        colourSecondary: '#064e72',
-        colourTertiary: '#6d7278',
+        colour: '#0066ff',
+        colourSecondary: '#0052cc',
+        colourTertiary: '#1d4ed8',
     };
 
     workspace.Colours.Base = {
-        colour: '#e5e5e5',
-        colourSecondary: '#ffffff',
-        colourTertiary: '#6d7278',
+        colour: '#ffffff',
+        colourSecondary: '#0f172a',
+        colourTertiary: '#cbd5e1',
     };
 
     workspace.Colours.Special1 = {
-        colour: '#e5e5e5',
-        colourSecondary: '#ffffff',
-        colourTertiary: '#6d7278',
+        colour: '#ffffff',
+        colourSecondary: '#0f172a',
+        colourTertiary: '#cbd5e1',
     };
 
     workspace.Colours.Special2 = {
-        colour: '#e5e5e5',
-        colourSecondary: '#ffffff',
-        colourTertiary: '#6d7278',
+        colour: '#ffffff',
+        colourSecondary: '#0f172a',
+        colourTertiary: '#cbd5e1',
     };
 
     workspace.Colours.Special3 = {
-        colour: '#e5e5e5',
-        colourSecondary: '#ffffff',
-        colourTertiary: '#6d7278',
+        colour: '#ffffff',
+        colourSecondary: '#0f172a',
+        colourTertiary: '#cbd5e1',
     };
 
     workspace.Colours.Special4 = {
-        colour: '#e5e5e5',
-        colourSecondary: '#000000',
-        colourTertiary: '#0e0e0e',
+        colour: '#ffffff',
+        colourSecondary: '#0f172a',
+        colourTertiary: '#cbd5e1',
     };
 };
 
-export const setColors = () => lightMode();
+export const setColors = () => applyBlocklyPalette();

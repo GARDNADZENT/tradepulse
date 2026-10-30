@@ -37,18 +37,18 @@
 
     /* Brand colors - dynamically generated from brand.config.json */
     --brand-white: #ffffff;
-    --brand-dark-grey: #001840;
-    --brand-red-coral: #102A71; /* legacy compatibility */
-    --brand-orange: #2563EB; /* legacy compatibility */
+    --brand-dark-grey: #050914;
+    --brand-red-coral: #0066FF; /* legacy compatibility */
+    --brand-orange: #2986FF; /* legacy compatibility */
 
     /* Dynamic brand colors (set by brand configuration) */
-    --brand-primary: #102A71;
-    --brand-secondary: #001840;
-    --brand-tertiary: #2563EB;
+    --brand-primary: #0066FF;
+    --brand-secondary: #050914;
+    --brand-tertiary: #2986FF;
     --brand-success: #10b981;
     --brand-danger: #ef4444;
     --brand-warning: #f59e0b;
-    --brand-info: #0ea5e9;
+    --brand-info: #2986ff;
     --brand-neutral: #64748b;
 
     /* Brand typography - dynamically generated from brand.config.json */
@@ -112,12 +112,12 @@
         --purchase-disabled-section: #{constants.$color-grey-4};
 
         // Buttons
-        --button-primary-default: #102A71;
+        --button-primary-default: #0066ff;
         --button-secondary-default: #64748b;
         --button-tertiary-default: transparent;
-        --button-primary-light-default: rgba(16, 42, 113, 0.12);
-        --button-primary-hover: #001840;
-        --button-secondary-hover: rgba(0, 24, 64, 0.08);
+        --button-primary-light-default: rgba(0, 102, 255, 0.12);
+        --button-primary-hover: #0052cc;
+        --button-secondary-hover: rgba(5, 9, 20, 0.08);
         --button-tertiary-hover: rgba(16, 42, 113, 0.08);
         --button-primary-light-hover: rgba(16, 42, 113, 0.2);
         --button-toggle-primary: #102A71;
@@ -213,19 +213,19 @@
 
     .theme--dark {
         // General
-        --general-main-1: #001840;
-        --general-main-2: #081e4a;
-        --general-main-3: #0d265c;
-        --general-main-4: rgba(0, 24, 64, 0.85);
-        --general-section-1: #0b2258;
-        --general-section-2: #06183d;
-        --general-section-3: #102A71;
-        --general-section-4: #102A71;
-        --general-section-5: #0b2258;
-        --general-section-6: #94a3b8;
-        --general-disabled: #0d265c;
-        --general-hover: #102A71;
-        --general-active: #163791;
+        --general-main-1: #0a0e17;
+        --general-main-2: #0d1320;
+        --general-main-3: #111827;
+        --general-main-4: rgba(5, 9, 20, 0.88);
+        --general-section-1: #0f172a;
+        --general-section-2: #080c14;
+        --general-section-3: #050914;
+        --general-section-4: #0d1320;
+        --general-section-5: #0f172a;
+        --general-section-6: #64748b;
+        --general-disabled: #1e293b;
+        --general-hover: #152238;
+        --general-active: #1d3557;
 
         // Icons and Texts
         --text-prominent: #{constants.$color-white};
@@ -256,15 +256,15 @@
         --purchase-disabled-section: #{constants.$color-black};
 
         // Buttons
-        --button-primary-default: #102A71;
+        --button-primary-default: #0066ff;
         --button-secondary-default: #94a3b8;
         --button-tertiary-default: transparent;
-        --button-primary-light-default: rgba(16, 42, 113, 0.35);
-        --button-primary-hover: #1d3f96;
+        --button-primary-light-default: rgba(0, 102, 255, 0.22);
+        --button-primary-hover: #1a75ff;
         --button-secondary-hover: rgba(255, 255, 255, 0.12);
         --button-tertiary-hover: rgba(255, 255, 255, 0.1);
-        --button-primary-light-hover: rgba(16, 42, 113, 0.5);
-        --button-toggle-primary: #2563EB;
+        --button-primary-light-hover: rgba(0, 102, 255, 0.35);
+        --button-toggle-primary: #0066ff;
         --button-toggle-secondary: #{constants.$color-black-8};
         --button-toggle-alternate: #{constants.$color-black-8};
         --button-get-started-bg: #{constants.$color-white};

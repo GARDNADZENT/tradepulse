@@ -1,17 +1,17 @@
 .app-header {
     &__logo {
-        padding-inline-start: 1.6rem;
-        padding-inline-end: 1.6rem;
-        height: 32px;
+        padding-inline-start: 1.4rem;
+        padding-inline-end: 0.8rem;
+        height: 4rem;
         display: flex;
         align-items: center;
         text-decoration: none;
     }
 
-    // Logo + app name mark (shared by the header and the mobile drawer).
     &__logo-mark {
         display: flex;
         align-items: center;
+        gap: 1rem;
         min-width: 0;
     }
 
@@ -19,55 +19,63 @@
         width: auto;
         max-width: 160px;
         object-fit: contain;
-        border-radius: 6px;
+        border-radius: 50%;
     }
 
-    // Letter-badge fallback shown when no logo file/data URL is available.
     &__logo-badge {
         display: flex;
         align-items: center;
         justify-content: center;
         flex: none;
-        border-radius: 0.8rem;
-        background: #102A71;
-        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 50%;
+        background: radial-gradient(circle at 30% 30%, #1a75ff 0%, #051329 75%);
+        border: 2px solid #0066ff;
+        box-shadow: 0 0 12px rgba(0, 102, 255, 0.5);
         color: #ffffff;
-        font-weight: 800;
-        font-size: 1.4rem;
+        font-weight: 900;
+        font-size: 1.2rem;
+        letter-spacing: 0.04em;
         line-height: 1;
     }
 
-    &__logo-text {
-        margin-left: 1.2rem;
-        color: #ffffff;
-        font-weight: 800;
-        font-size: 1.65rem;
-        letter-spacing: 0.04em;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 240px;
+    &__logo-stack {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        min-width: 0;
     }
 
-    // On mobile the mark sits next to the hamburger and the account section, so
-    // tighten the padding and show the logo only — the app name is desktop-only
-    // here to avoid crowding. (The mobile drawer header still shows the name.)
+    &__logo-text {
+        color: #ffffff;
+        font-weight: 800;
+        font-size: 1.45rem;
+        letter-spacing: 0.05em;
+        line-height: 1.15;
+        white-space: nowrap;
+    }
+
+    &__logo-sub {
+        color: #38bdf8;
+        font-weight: 600;
+        font-size: 0.92rem;
+        letter-spacing: 0.08em;
+        line-height: 1.15;
+        white-space: nowrap;
+        opacity: 0.9;
+    }
+
     &--mobile {
         .app-header__logo {
-            padding-inline-start: 0.8rem;
-            padding-inline-end: 0.8rem;
+            padding-inline-start: 0.6rem;
+            padding-inline-end: 0.6rem;
         }
 
-        .app-header__logo-text {
+        .app-header__logo-stack {
             display: none;
         }
     }
 }
 
-// The same mark inside the mobile drawer header shows the app name (the header's
-// --mobile rule hides it, but the drawer has room) and can use the full available width.
-.mobile-menu__header .app-header__logo-text {
-    display: block;
-    max-width: 180px;
-    color: var(--text-prominent);
+.mobile-menu__header .app-header__logo-stack {
+    display: flex;
 }

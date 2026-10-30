@@ -547,3 +547,194 @@ window.Blockly.Blocks.active_symbol_changer = {
 
 getGenerator().forBlock.active_symbol_changer = () => '';
 
+// 10. RiskManager Pro Virtual Hook Block (matches riskmanagers.site Startup Virtual Hook card)
+window.Blockly.Blocks.virtual_hook_config = {
+    init() {
+        this.jsonInit({
+            message0: localize('Virtual Hook %1'),
+            args0: [
+                {
+                    type: 'field_dropdown',
+                    name: 'VH_ENABLED',
+                    options: [
+                        [localize('Enabled'), 'ENABLED'],
+                        [localize('Disabled'), 'DISABLED'],
+                    ],
+                },
+            ],
+            message1: localize('Start execution %1'),
+            args1: [
+                {
+                    type: 'field_dropdown',
+                    name: 'START_MODE',
+                    options: [
+                        [localize('Virtual'), 'virtual'],
+                        [localize('Real'), 'real'],
+                    ],
+                },
+            ],
+            message2: localize('Enter after actual losses %1'),
+            args2: [
+                {
+                    type: 'input_value',
+                    name: 'ENTER_AFTER_LOSSES',
+                    check: 'Number',
+                },
+            ],
+            message3: localize('Return to real after consecutive virtual wins %1'),
+            args3: [
+                {
+                    type: 'input_value',
+                    name: 'RETURN_AFTER_WINS',
+                    check: 'Number',
+                },
+            ],
+            inputsInline: false,
+            previousStatement: null,
+            nextStatement: null,
+            colour: window.Blockly.Colours.Special1.colour,
+            colourSecondary: window.Blockly.Colours.Special1.colourSecondary,
+            colourTertiary: window.Blockly.Colours.Special1.colourTertiary,
+            tooltip: localize(
+                'Configures Virtual Hook execution: simulates contracts on live market ticks until virtual win criteria are met.'
+            ),
+            category: window.Blockly.Categories.Tick_Analysis,
+        });
+    },
+    meta() {
+        return {
+            display_name: localize('Virtual Hook'),
+            description: localize(
+                'Enables Virtual Hook protection with virtual start mode, loss trigger, and consecutive virtual win recovery.'
+            ),
+        };
+    },
+    customContextMenu(menu) {
+        modifyContextMenu(menu);
+    },
+};
+
+getGenerator().forBlock.virtual_hook_config = block => {
+    const enabled = (block.getFieldValue('VH_ENABLED') || 'ENABLED') === 'ENABLED';
+    const startMode = block.getFieldValue('START_MODE') || 'virtual';
+    const enterLosses =
+        getGenerator().valueToCode(block, 'ENTER_AFTER_LOSSES', getGenerator().ORDER_ATOMIC) || '2';
+    const returnWins =
+        getGenerator().valueToCode(block, 'RETURN_AFTER_WINS', getGenerator().ORDER_ATOMIC) || '1';
+    return (
+        'Bot.setVirtualHook({ enabled: ' +
+        (enabled ? 'true' : 'false') +
+        ", startMode: '" +
+        startMode +
+        "', enterAfterActualLosses: Number(" +
+        enterLosses +
+        ') || 2, returnAfterVirtualWins: Number(' +
+        returnWins +
+        ') || 1 });\n'
+    );
+};
+
+// 11. Compatibility Blocks: vh_settings & enable_virtual_hook
+window.Blockly.Blocks.vh_settings = {
+    init() {
+        this.jsonInit({
+            message0: localize('set Virtual Hook Settings'),
+            message1: localize('No. of Virtual losses %1'),
+            args1: [{ type: 'input_value', name: 'MAX_STEPS', check: 'Number' }],
+            message2: localize('No. of Wins on Real Trades %1'),
+            args2: [{ type: 'input_value', name: 'MIN_TRADES', check: 'Number' }],
+            inputsInline: true,
+            previousStatement: null,
+            nextStatement: null,
+            colour: window.Blockly.Colours.Special1.colour,
+            colourSecondary: window.Blockly.Colours.Special1.colourSecondary,
+            colourTertiary: window.Blockly.Colours.Special1.colourTertiary,
+            tooltip: localize('Configure virtual loss and real-trade win thresholds.'),
+            category: window.Blockly.Categories.Tick_Analysis,
+        });
+    },
+    customContextMenu(menu) {
+        modifyContextMenu(menu);
+    },
+};
+
+getGenerator().forBlock.vh_settings = block => {
+    const maxSteps = getGenerator().valueToCode(block, 'MAX_STEPS', getGenerator().ORDER_ATOMIC) || '2';
+    const minTrades = getGenerator().valueToCode(block, 'MIN_TRADES', getGenerator().ORDER_ATOMIC) || '1';
+    return (
+        'Bot.setVirtualHook({ threshold: Number(' +
+        maxSteps +
+        ') || 2, minTradesOnReal: Number(' +
+        minTrades +
+        ') || 1 });\n'
+    );
+};
+
+window.Blockly.Blocks.enable_virtual_hook = {
+    init() {
+        this.jsonInit({
+            message0: localize('Enable/Disable VH %1'),
+            args0: [
+                {
+                    type: 'field_dropdown',
+                    name: 'ENABLE_VIRTUAL_HOOK',
+                    options: [
+                        [localize('enable'), 'enable'],
+                        [localize('disable'), 'disable'],
+                    ],
+                },
+            ],
+            previousStatement: null,
+            nextStatement: null,
+            colour: window.Blockly.Colours.Special1.colour,
+            colourSecondary: window.Blockly.Colours.Special1.colourSecondary,
+            colourTertiary: window.Blockly.Colours.Special1.colourTertiary,
+            tooltip: localize('Enable or disable Virtual Hook.'),
+            category: window.Blockly.Categories.Tick_Analysis,
+        });
+    },
+    customContextMenu(menu) {
+        modifyContextMenu(menu);
+    },
+};
+
+getGenerator().forBlock.enable_virtual_hook = block => {
+    const enabled = block.getFieldValue('ENABLE_VIRTUAL_HOOK') === 'enable';
+    return 'Bot.setVirtualHook({ enabled: ' + (enabled ? 'true' : 'false') + ' });\n';
+};
+
+// 12. Journal Live Digit Window Configurer
+window.Blockly.Blocks.journal_digit_window = {
+    init() {
+        this.jsonInit({
+            message0: localize('Journal live stream: Last %1 digits'),
+            args0: [
+                {
+                    type: 'field_number',
+                    name: 'DIGIT_WINDOW',
+                    value: 2,
+                    min: 1,
+                    max: 10,
+                    precision: 1,
+                },
+            ],
+            previousStatement: null,
+            nextStatement: null,
+            colour: window.Blockly.Colours.Special1.colour,
+            colourSecondary: window.Blockly.Colours.Special1.colourSecondary,
+            colourTertiary: window.Blockly.Colours.Special1.colourTertiary,
+            tooltip: localize('Sets how many recent tick digits are streamed to the Journal on every tick.'),
+            category: window.Blockly.Categories.Tick_Analysis,
+        });
+    },
+    customContextMenu(menu) {
+        modifyContextMenu(menu);
+    },
+};
+
+getGenerator().forBlock.journal_digit_window = block => {
+    const win = Math.max(1, Math.min(10, Number(block.getFieldValue('DIGIT_WINDOW')) || 2));
+    return 'Bot.setJournalDigitWindow(' + win + ');\n';
+};
+
+

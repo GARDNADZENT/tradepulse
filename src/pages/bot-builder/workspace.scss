@@ -3,23 +3,61 @@
 
 #scratch_div {
     position: relative;
-    width: calc(100vw - 3.2rem);
+    width: 100vw;
     height: var(--bot-content-height);
     top: 0;
+    background: #f8fafc;
+
+    .theme--dark & {
+        background: #000000;
+    }
 
     @include mobile-or-tablet-screen {
         width: 100%;
     }
 }
 
+.blocklySvg {
+    background-color: #f8fafc !important;
+
+    .theme--dark & {
+        background-color: #000000 !important;
+    }
+}
+
+.blocklyMainBackground {
+    stroke: none !important;
+    fill: #f8fafc !important;
+
+    .theme--dark & {
+        fill: #000000 !important;
+    }
+}
+
+.blocklyText {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+    font-weight: 600;
+    fill: #0f172a;
+}
+
+.blocklyEditableText > rect,
+.blocklyDropdownRect {
+    fill: #0f172a !important;
+    rx: 6px;
+    ry: 6px;
+}
+
+.blocklyEditableText > text,
+.blocklyDropdownText {
+    fill: #ffffff !important;
+    font-weight: 600 !important;
+}
+
 .blocklyText.blocklyTextRootBlockHeader {
-    font-size: calc(var(--text-size-sm) * 0.9);
-    font-weight: normal;
-    font-stretch: normal;
-    font-style: normal;
+    font-size: calc(var(--text-size-sm) * 0.85);
+    font-weight: 700 !important;
     line-height: 1.43;
-    letter-spacing: normal;
-    fill: $color-white;
+    fill: #ffffff !important;
 }
 
 .blocklyMainWorkspaceScrollbar {
@@ -27,7 +65,7 @@
 }
 
 .injectionDiv {
-    height: calc(100vh - 16.4rem);
+    height: var(--bot-content-height, calc(100vh - 16.4rem));
     position: relative;
     touch-action: none;
     overflow: hidden;

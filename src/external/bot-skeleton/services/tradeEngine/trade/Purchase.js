@@ -221,6 +221,8 @@ export default Engine =>
                 is_sold: true,
                 entry_spot: entry_spot_str,
                 exit_spot: end_spot_str,
+                last_digit,
+                prediction_barrier,
                 is_virtual: true,
                 contract_type: trade_contract_type,
                 symbol: this.tradeOptions.symbol,
@@ -229,14 +231,15 @@ export default Engine =>
             this.updateVirtualTotals(simulated_contract);
             this.store.dispatch(sell());
 
+            const isFastExecution =
+                typeof window === 'undefined' || window.__tpExecutionFast !== false;
+            const restartDelay = isFastExecution ? 10 : 650;
+
             setTimeout(() => {
                 const resolve = this.vh_state.virtual_resolve;
                 this.resetVirtualTrade();
                 if (resolve) resolve();
 
-                // For virtual trades, do NOT run the bot's after_purchase blocks
-                // (e.g. martingale logic) — virtual results should not affect
-                // real trading stake calculations.
                 try {
                     if (typeof console !== 'undefined') {
                         console.debug('[Virtual Hook] Skipping afterPromise for virtual trade');
@@ -247,7 +250,7 @@ export default Engine =>
 
                 setTimeout(() => {
                     this.store.dispatch(start());
-                }, 10);
+                }, restartDelay);
             }, 0);
         }
 
@@ -268,18 +271,52 @@ export default Engine =>
 
         updateVirtualTotals(contract) {
             const win = contract.profit > 0;
+            const targetVirtualWins = Math.max(1, Number(this.vh_state.return_after_virtual_wins) || 1);
+            let switchedToReal = false;
 
-            if (win) {
+            if (this.vh_state.threshold > 0) {
+                if (win) {
+                    this.vh_state.loss_count = 0;
+                    this.vh_state.current_stake = this.vh_state.initial_stake;
+                } else {
+                    this.vh_state.loss_count++;
+                    if (this.vh_state.loss_count >= this.vh_state.threshold) {
+                        this.vh_state.is_virtual = false;
+                        this.vh_state.needs_stake_reset = true;
+                        this.vh_state.real_loss_count = 0;
+                        this.resetStakeVariableForRealTrading();
+                        switchedToReal = true;
+                    }
+                }
+            } else if (win) {
+                this.vh_state.virtual_win_count = (this.vh_state.virtual_win_count || 0) + 1;
                 this.vh_state.loss_count = 0;
                 this.vh_state.current_stake = this.vh_state.initial_stake;
-            } else {
-                this.vh_state.loss_count++;
-                if (this.vh_state.threshold > 0 && this.vh_state.loss_count >= this.vh_state.threshold) {
+                if (this.vh_state.virtual_win_count >= targetVirtualWins) {
                     this.vh_state.is_virtual = false;
+                    this.vh_state.virtual_win_count = 0;
+                    this.vh_state.real_loss_count = 0;
                     this.vh_state.needs_stake_reset = true;
                     this.resetStakeVariableForRealTrading();
+                    switchedToReal = true;
                 }
+            } else {
+                this.vh_state.virtual_win_count = 0;
+                this.vh_state.loss_count = (this.vh_state.loss_count || 0) + 1;
             }
+
+            globalObserver.emit('ui.log.success', {
+                log_type: 'virtual_hook',
+                extra: {
+                    event: 'virtual_settled',
+                    is_win: win,
+                    contract_type: contract.contract_type,
+                    barrier: Number.isNaN(contract.prediction_barrier) ? null : contract.prediction_barrier,
+                    digit: contract.last_digit,
+                    win_progress: `${ switchedToReal ? targetVirtualWins : this.vh_state.virtual_win_count || 0}/${targetVirtualWins}`,
+                    switched_to_real: switchedToReal,
+                },
+            });
 
             const now = Math.floor(Date.now() / 1000);
             const virtual_id = `virtual_${now}_${Math.random()}`;
@@ -370,11 +407,34 @@ export default Engine =>
 
             this.vh_state.real_trade_count = (this.vh_state.real_trade_count || 0) + 1;
 
+            if (this.vh_state.threshold > 0) {
+                if (win) {
+                    this.vh_state.is_virtual = true;
+                    this.vh_state.loss_count = 0;
+                    this.vh_state.step_count = 0;
+                    this.vh_state.current_stake = this.vh_state.initial_stake;
+                }
+                return;
+            }
+
+            const enterLosses = Math.max(1, Number(this.vh_state.enter_after_actual_losses) || 2);
             if (win) {
-                this.vh_state.is_virtual = true;
-                this.vh_state.loss_count = 0;
-                this.vh_state.step_count = 0;
-                this.vh_state.current_stake = this.vh_state.initial_stake;
+                this.vh_state.real_loss_count = 0;
+            } else {
+                this.vh_state.real_loss_count = (this.vh_state.real_loss_count || 0) + 1;
+                if (this.vh_state.real_loss_count >= enterLosses) {
+                    this.vh_state.is_virtual = true;
+                    this.vh_state.virtual_win_count = 0;
+                    this.vh_state.real_loss_count = 0;
+                    globalObserver.emit('ui.log.success', {
+                        log_type: 'virtual_hook',
+                        extra: {
+                            event: 'entered_virtual',
+                            enter_losses: enterLosses,
+                            return_wins: this.vh_state.return_after_virtual_wins || 1,
+                        },
+                    });
+                }
             }
         }
 

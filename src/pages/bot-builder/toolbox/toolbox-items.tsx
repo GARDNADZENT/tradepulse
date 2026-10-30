@@ -53,6 +53,81 @@ const Xml = ({ ...props }) => {
 export const ToolboxItems = () =>
     ReactDomServer.renderToStaticMarkup(
         <Xml xmlns='http://www.w3.org/1999/xhtml' id='toolbox'>
+            <Category id='virtual_hook' name={localize('Virtual hook')}>
+                <Block type='virtual_hook_config'>
+                    <Field name='VH_ENABLED'>ENABLED</Field>
+                    <Field name='START_MODE'>virtual</Field>
+                    <Value name='ENTER_AFTER_LOSSES'>
+                        <Shadow type='math_number'>
+                            <Field name='NUM'>2</Field>
+                        </Shadow>
+                    </Value>
+                    <Value name='RETURN_AFTER_WINS'>
+                        <Shadow type='math_number'>
+                            <Field name='NUM'>1</Field>
+                        </Shadow>
+                    </Value>
+                </Block>
+                <Block type='vh_virtual_streak_ready' />
+                <Block type='vh_stake_router'>
+                    <Value name='HOOK_READY'>
+                        <Block type='vh_virtual_streak_ready' />
+                    </Value>
+                </Block>
+                <Block type='enable_virtual_hook'>
+                    <Field name='ENABLE_VIRTUAL_HOOK'>enable</Field>
+                </Block>
+                <Block type='vh_settings'>
+                    <Value name='MAX_STEPS'>
+                        <Shadow type='math_number'>
+                            <Field name='NUM'>2</Field>
+                        </Shadow>
+                    </Value>
+                    <Value name='MIN_TRADES'>
+                        <Shadow type='math_number'>
+                            <Field name='NUM'>1</Field>
+                        </Shadow>
+                    </Value>
+                </Block>
+            </Category>
+            <Category id='analysis_logics' name={localize('Analysis Logics 🔥')}>
+                <Block type='journal_digit_window'>
+                    <Field name='DIGIT_WINDOW'>2</Field>
+                </Block>
+                <Block type='last_digits_condition'>
+                    <Value name='N'>
+                        <Shadow type='math_number'>
+                            <Field name='NUM'>2</Field>
+                        </Shadow>
+                    </Value>
+                    <Field name='CONDITION'>ALL_EVEN</Field>
+                </Block>
+                <Block type='al_parity_majority' />
+                <Block type='al_over_under_majority' />
+                <Block type='al_extreme_digit' />
+                <Block type='digit_frequency_analysis'>
+                    <Field name='ANALYSIS_TYPE'>MOST_FREQUENT</Field>
+                    <Value name='N'>
+                        <Shadow type='math_number'>
+                            <Field name='NUM'>25</Field>
+                        </Shadow>
+                    </Value>
+                </Block>
+                <Block type='last_digit' />
+                <Block type='lastDigitList' />
+                <Block type='btnotify'>
+                    <Field name='NOTIFICATION_TYPE'>info</Field>
+                    <Field name='NOTIFICATION_SOUND'>silent</Field>
+                    <Value name='MESSAGE'>
+                        <Shadow type='text'>
+                            <Field name='TEXT'>Signal Ready</Field>
+                        </Shadow>
+                    </Value>
+                </Block>
+                <Block type='active_symbol_changer'>
+                    <Field name='SYMBOL_ACTIVE_TYPE'>1HZ10V</Field>
+                </Block>
+            </Category>
             <Category id='trade_parameters' name={localize('Trade parameters')}>
                 <Block type='trade_definition'>
                     <Statement name='TRADE_OPTIONS'>
@@ -169,23 +244,6 @@ export const ToolboxItems = () =>
             <Category id='trade_results' name={localize('Restart trading conditions')}>
                 <Block type='after_purchase' />
                 <Block type='trade_again' />
-            </Category>
-
-            <Category id='virtual_hook' name={localize('Virtual Hook')}>
-                <Block type='vh_virtual_streak_ready' />
-                <Block type='vh_stake_router'>
-                    <Value name='HOOK_READY'>
-                        <Block type='vh_virtual_streak_ready' />
-                    </Value>
-                </Block>
-            </Category>
-
-            <Category id='analysis_logics' name={localize('Analysis Logics 🔥')}>
-                <Block type='al_parity_majority' />
-                <Block type='al_over_under_majority' />
-                <Block type='al_extreme_digit' />
-                <Block type='last_digit' />
-                <Block type='lastDigitList' />
             </Category>
 
             <Category id='analysis' name={localize('Analysis')}>

@@ -158,7 +158,9 @@ const DrawerContent = ({ active_index, is_drawer_open, active_tour, setActiveTab
                     <Journal />
                 </div>
             </Tabs>
-            {((is_drawer_open && active_index !== 2) || active_tour) && <StatisticsSummary {...props} />}
+            {!isDesktop && ((is_drawer_open && active_index !== 2) || active_tour) && (
+                <StatisticsSummary {...props} />
+            )}
         </>
     );
 };
@@ -325,7 +327,7 @@ const RunPanel = observer(() => {
                     })}
                     contentClassName='run-panel__content'
                     header={header}
-                    footer={isDesktop && footer}
+                    footer={undefined}
                     is_open={is_drawer_open}
                     toggleDrawer={toggleDrawer}
                     width={366}

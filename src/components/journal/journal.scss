@@ -6,23 +6,30 @@
  */
 @keyframes move-in {
     0% {
-        transform: translateX(300px);
+        transform: translateY(-6px);
         opacity: 0;
     }
 
     100% {
-        transform: translateX(0);
+        transform: translateY(0);
         opacity: 1;
     }
 }
 
 .journal {
+    background: var(--general-main-1);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+
+    .theme--dark & {
+        background: #0a0e17;
+    }
+
     .ReactVirtualized__Grid__innerScrollContainer {
-        & > :first-child,
-        :before,
-        :after {
+        & > :first-child {
             box-sizing: border-box;
-            animation: move-in 0.4s ease-in forwards;
+            animation: move-in 0.2s ease-out forwards;
         }
     }
 
@@ -31,6 +38,7 @@
         display: flex;
         flex-direction: column;
         justify-content: center;
+        padding: 2rem;
 
         svg {
             g {
@@ -68,10 +76,18 @@
     }
 
     &__item {
-        padding: 16px;
+        padding: 11px 16px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+        transition: background 0.14s ease;
+
+        .theme--dark & {
+            border-bottom-color: rgba(255, 255, 255, 0.06);
+        }
 
         &-list {
-            height: calc(100% - 7.2rem);
+            flex: 1;
+            min-height: 0;
+            height: calc(100% - 4.8rem);
         }
 
         &-content {
@@ -84,7 +100,11 @@
     &__data-list {
         .ReactVirtualized__Grid__innerScrollContainer {
             > div:nth-child(even) {
-                background: var(--general-section-2);
+                background: rgba(148, 163, 184, 0.04);
+
+                .theme--dark & {
+                    background: rgba(255, 255, 255, 0.02);
+                }
             }
         }
     }
@@ -92,31 +112,80 @@
     &-tools {
         &__container {
             display: flex;
+            align-items: center;
             justify-content: space-between;
-            padding: 12px;
-            padding-left: 16px;
-            border: solid 1px var(--general-section-1);
+            padding: 8px 14px;
+            background: var(--general-section-1);
+            border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+
+            .theme--dark & {
+                background: #0d1320;
+                border-bottom-color: rgba(255, 255, 255, 0.08);
+            }
 
             &-filter {
                 @include flex-center(flex-end);
 
                 cursor: pointer;
-                flex: 1;
+                padding: 4px 10px;
+                border-radius: 6px;
+                border: 1px solid rgba(148, 163, 184, 0.2);
+                background: rgba(255, 255, 255, 0.03);
+                transition: border-color 0.15s ease, background 0.15s ease;
+
+                &:hover {
+                    border-color: #0066ff;
+                    background: rgba(0, 102, 255, 0.1);
+                }
 
                 &--label {
-                    margin-inline-end: 0.8rem;
+                    margin-inline-end: 0.6rem;
+                    font-weight: 600 !important;
                 }
 
                 .deriv-text {
-                    font-weight: lighter;
+                    font-weight: 500;
                 }
             }
         }
     }
 
+    &__tick-digits {
+        color: #0066ff;
+        font-weight: 600;
+        font-size: 1.25rem;
+        letter-spacing: 0.01em;
+
+        .theme--dark & {
+            color: #2986ff;
+        }
+    }
+
+    &__vh-entry {
+        font-size: 1.2rem;
+        font-weight: 600;
+        line-height: 1.45;
+
+        &--info {
+            color: #38bdf8;
+        }
+
+        &--win {
+            color: #10b981;
+        }
+
+        &--loss {
+            color: #38bdf8;
+        }
+
+        &--warn {
+            color: #f59e0b;
+        }
+    }
+
     &__text {
-        font-size: var(--text-size-xxs);
-        line-height: 1.5;
+        font-size: 1.22rem;
+        line-height: 1.45;
         display: inline;
         color: var(--text-general);
 
@@ -130,25 +199,31 @@
         }
 
         &-datetime {
-            color: var(--text-less-prominent);
-            font-size: var(--text-size--xxxs);
-            margin-top: 6px;
+            color: #64748b;
+            font-size: 1.08rem;
+            margin-top: 4px;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+            .theme--dark & {
+                color: #7c8aa5;
+            }
         }
 
         &--error {
-            color: var(--status-danger);
+            color: #ef4444;
+            font-weight: 600;
         }
 
         &--warn {
-            color: var(--status-warning);
+            color: #f59e0b;
         }
 
         &--info {
-            color: var(--status-info);
+            color: #2986ff;
         }
 
         &--success {
-            color: var(--status-success);
+            color: #10b981;
         }
 
         &--bold {
@@ -168,7 +243,6 @@
     }
 }
 
-// Modal styling for journal stats
 .journal-modal {
     &__content {
         padding: 0 16px;
@@ -182,17 +256,22 @@
 .filter-dialog {
     position: fixed;
     display: grid;
-    grid-gap: 1.6rem;
+    grid-gap: 1.4rem;
     background: var(--general-main-2);
-    border-radius: $BORDER_RADIUS;
-    box-shadow: 0 4px 16px 0 var(--shadow-menu);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
     transition:
-        transform 0.3s cubic-bezier(0.25, 0.1, 0.25, 1),
-        opacity 0.25s linear;
-    padding: 1.6rem 0.8rem;
-    padding-inline-end: 3.6rem;
+        transform 0.25s cubic-bezier(0.25, 0.1, 0.25, 1),
+        opacity 0.2s linear;
+    padding: 1.4rem 1.2rem;
+    padding-inline-end: 3.2rem;
     inset-inline-end: 16px;
-    z-index: 99;
+    z-index: 999;
+
+    .theme--dark & {
+        background: #0f172a;
+    }
 
     &--enter-done {
         opacity: 1;
@@ -202,7 +281,7 @@
     &--enter,
     &--exit {
         opacity: 0;
-        transform: translate3d(0, -20px, 0);
+        transform: translate3d(0, -14px, 0);
     }
 
     &__input {

@@ -21,6 +21,18 @@ interface SpecialBotEntry {
 
 const SPECIAL_BOTS_CATALOG: SpecialBotEntry[] = [
     {
+        id: 'over-under-virtual-hook-pro',
+        name: 'Over/Under Virtual Hook Pro',
+        file: 'Over_Under_Virtual_Hook_Pro.xml',
+        avatar: 'VH',
+        badge: '🔥 VIRTUAL HOOK PRO',
+        category: ['special', 'virtual-hook'],
+        strategy: 'Virtual Hook + Split Recovery',
+        description:
+            'Starts in live Virtual simulation mode, streams per-tick digits to Journal, and enters real execution after consecutive virtual wins.',
+        features: ['Virtual Hook Engine', 'Live Digit Journal', 'Prediction Shift 8→6'],
+    },
+    {
         id: 'best-of-3',
         name: 'Best of 3',
         file: 'special-bots/Best of 3.xml',
