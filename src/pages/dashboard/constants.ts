@@ -8,27 +8,27 @@ export type TSidebarItem = {
 
 export const SIDEBAR_INTRO = (): TSidebarItem[] => [
     {
-        label: localize('Welcome to TradePulse!'),
+        label: localize('Welcome to Deriv Bot!'),
         content: [
             {
                 data: localize(
-                    'Plan. Track. Perform. Automate your trading strategy and track every milestone in one workspace.'
+                    'Ready to automate your trading strategy without writing any code? You’ve come to the right place.'
                 ),
             },
-            { data: localize('Explore these guides and FAQs to start building and deploying your strategy:') },
+            { data: localize('Check out these guides and FAQs to learn more about building your bot:') },
         ],
         link: false,
     },
     {
         label: localize('Guide'),
-        content: [{ data: localize('TradePulse — Plan. Track. Perform.') }],
+        content: [{ data: localize('Deriv Bot - your automated trading partner') }],
         link: true,
     },
     {
         label: localize('FAQs'),
         content: [
             {
-                data: localize('How does the Bot Builder work?'),
+                data: localize('What is Deriv Bot?'),
                 faq_id: 'faq-0',
             },
             {

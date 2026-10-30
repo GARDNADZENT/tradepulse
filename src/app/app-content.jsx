@@ -191,7 +191,7 @@ const AppContent = observer(() => {
                 </Suspense>
             )}
             {is_loading ? (
-                <div className='app-root__loading'>Initializing TradePulse workspace…</div>
+                <div className='app-root__loading'>Initializing Deriv Bot account</div>
             ) : (
                 <AuthLoadingWrapper>
                     <ThemeProvider theme={is_dark_mode_on ? 'dark' : 'light'}>

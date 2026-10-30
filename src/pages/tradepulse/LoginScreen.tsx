@@ -64,13 +64,13 @@ const LoginScreen = () => {
                             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
                         </svg>
                     </div>
-                    <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--brand-primary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Secure Connect</div>
-                    <h2 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-prominent)', margin: 0 }}>Connect with Deriv</h2>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--brand-primary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Secure Connect</div>
+                    <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-prominent)', margin: 0 }}>Connect with Deriv</h2>
                 </div>
 
                 <form onSubmit={handleSubmit}>
                     <div style={{ marginBottom: 16 }}>
-                        <label style={{ display: 'block', fontSize: '13.5px', fontWeight: 600, color: 'var(--text-general)', marginBottom: 6 }}>API Token</label>
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-general)', marginBottom: 6 }}>API Token</label>
                         <input
                             type='password'
                             value={token}
@@ -79,7 +79,7 @@ const LoginScreen = () => {
                             style={{
                                 width: '100%', padding: '12px 16px', borderRadius: 12,
                                 background: 'var(--general-main-1)', border: '1px solid var(--border-normal)',
-                                color: 'var(--text-prominent)', fontSize: '15px', outline: 'none',
+                                color: 'var(--text-prominent)', fontSize: '1rem', outline: 'none',
                                 fontFamily: 'JetBrains Mono, monospace',
                             }}
                             required
@@ -88,7 +88,7 @@ const LoginScreen = () => {
 
                     <div style={{
                         padding: 12, borderRadius: 10, background: 'rgba(99,102,241,.08)',
-                        border: '1px solid rgba(99,102,241,.15)', fontSize: '13px', color: 'var(--text-general)',
+                        border: '1px solid rgba(99,102,241,.15)', fontSize: '0.8rem', color: 'var(--text-general)',
                         marginBottom: 16, lineHeight: 1.5,
                     }}>
                         Configure <b>trade</b> and <b>account_manage</b> scopes when generating your PAT at the{' '}
@@ -101,7 +101,7 @@ const LoginScreen = () => {
                     {error && (
                         <div style={{
                             padding: 12, borderRadius: 10, background: 'rgba(239,68,68,.08)',
-                            border: '1px solid rgba(239,68,68,.2)', fontSize: '13.5px', color: '#f87171',
+                            border: '1px solid rgba(239,68,68,.2)', fontSize: '0.85rem', color: '#f87171',
                             marginBottom: 16,
                         }}>
                             {error}
@@ -114,7 +114,7 @@ const LoginScreen = () => {
                         style={{
                             width: '100%', padding: '12px 16px', borderRadius: 12,
                             background: 'var(--brand-primary)', color: '#fff', border: 'none',
-                            fontSize: '15px', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
+                            fontSize: '1rem', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
                             opacity: loading ? 0.6 : 1, marginBottom: 10,
                         }}
                     >
@@ -128,7 +128,7 @@ const LoginScreen = () => {
                         style={{
                             width: '100%', padding: '12px 16px', borderRadius: 12,
                             background: 'transparent', color: 'var(--text-general)',
-                            border: '1px solid var(--border-normal)', fontSize: '15px', fontWeight: 600,
+                            border: '1px solid var(--border-normal)', fontSize: '1rem', fontWeight: 600,
                             cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1,
                         }}
                     >

@@ -42,8 +42,8 @@ const Sidebar = () => {
                         </svg>
                     </div>
                     <div className='tradepulse__sidebar-brand'>
-                        <div className='tradepulse__sidebar-brand-name'>TradePulse</div>
-                        <div className='tradepulse__sidebar-brand-tag'>Plan. Track. Perform.</div>
+                        <div className='tradepulse__sidebar-brand-name'>TradersPulse</div>
+                        <div className='tradepulse__sidebar-brand-tag'>Capital-First Analytics</div>
                     </div>
                 </div>
 

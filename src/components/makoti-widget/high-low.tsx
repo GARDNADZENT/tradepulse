@@ -526,7 +526,7 @@ export const HighLow: React.FC = () => {
                     <div className='mw-killer__signal-detail'>{status}</div>
                     {currentSymbol && (
                         <div className='mw-killer__signal-strength'>
-                            <span style={{ color: currentConfidence >= cfg.minConfidence ? '#22c55e' : '#6366f1' }}>
+                            <span style={{ color: currentConfidence >= cfg.minConfidence ? '#22c55e' : '#f97316' }}>
                                 {SYMBOL_LABELS[currentSymbol] || currentSymbol}
                             </span>
                             <span style={{ color: '#facc15', marginLeft: 8 }}>
@@ -551,7 +551,7 @@ export const HighLow: React.FC = () => {
                             )}
                             <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4, display: 'flex', gap: 12 }}>
                                 <span>Flat: <span style={{ color: currentFlatTickRate > 0.2 ? '#ef4444' : '#22c55e' }}>{(currentFlatTickRate * 100).toFixed(0)}%</span></span>
-                                <span>Mom: <span style={{ color: currentMomentumStrength >= 0.5 ? '#22c55e' : '#6366f1' }}>{(currentMomentumStrength * 100).toFixed(0)}%</span></span>
+                                <span>Mom: <span style={{ color: currentMomentumStrength >= 0.5 ? '#22c55e' : '#f97316' }}>{(currentMomentumStrength * 100).toFixed(0)}%</span></span>
                                 <span>Noise: <span style={{ color: currentNoiseLevel > 0.4 ? '#ef4444' : '#22c55e' }}>{(currentNoiseLevel * 100).toFixed(0)}%</span></span>
                             </div>
                             {inTrade && <span className='mw-killer__active-dot'> LIVE</span>}

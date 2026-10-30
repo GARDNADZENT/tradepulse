@@ -140,7 +140,7 @@ const MyJourney = observer(() => {
                             </svg>
                         </div>
                         <h3 className='tradepulse__section-title' style={{ margin: '0 0 12px', textAlign: 'center' }}>{localize('No Journey Locked')}</h3>
-                        <p style={{ fontSize: '15px', color: 'var(--tp-text-secondary)', maxWidth: '440px', margin: '0 auto 28px', lineHeight: 1.7 }}>
+                        <p style={{ fontSize: '0.95rem', color: 'var(--tp-text-secondary)', maxWidth: '440px', margin: '0 auto 28px', lineHeight: 1.7 }}>
                             {localize('Create your permanent trading plan. Set your goals, lock your journey, and track your progress automatically.')}
                         </p>
                         <button
@@ -243,13 +243,13 @@ const MyJourney = observer(() => {
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                         <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                     </svg>
-                    <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--tp-accent)' }}>
+                    <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--tp-accent)' }}>
                         {localize('Journey Locked')}
                     </span>
-                    <span style={{ fontSize: '14px', color: 'var(--tp-text-secondary)', marginLeft: '4px' }}>
+                    <span style={{ fontSize: '0.875rem', color: 'var(--tp-text-secondary)', marginLeft: '4px' }}>
                         {localize('Your plan is active and linked to your account.')}
                     </span>
-                    <button onClick={() => setShowResetModal(true)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--tp-text-tertiary)', cursor: 'pointer', padding: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '14px', fontWeight: 500 }}>
+                    <button onClick={() => setShowResetModal(true)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--tp-text-tertiary)', cursor: 'pointer', padding: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.875rem', fontWeight: 500 }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12"></path>
                             <path d="M3 5v7h7"></path>

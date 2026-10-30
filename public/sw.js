@@ -1,4 +1,4 @@
-/* Service worker for TradePulse PWA
+/* Service worker for MAKOTI TRADERS PWA
  *
  * Strategy:
  * - Navigations (HTML): network-first, falling back to the cached app shell so the
@@ -8,7 +8,7 @@
  * - Cross-origin requests (Deriv WS API, GTM, LiveChat, fonts, CDNs): never touched,
  *   always go straight to the network.
  */
-const CACHE_NAME = 'tradepulse-v3';
+const CACHE_NAME = 'makoti-traders-v2';
 
 self.addEventListener('install', (event) => {
     event.waitUntil(

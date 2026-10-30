@@ -665,7 +665,7 @@ export const DiffersAuto: React.FC = () => {
                         <div key={sym} className={`mw-da__prog-row ${isReady ? 'mw-da__prog-row--ready' : ''} ${isRecovery ? 'mw-da__prog-row--trading' : ''}`}>
                             <span className='mw-da__prog-sym'>{SYMBOL_LABELS[sym]}</span>
                             <div className='mw-da__prog-bar-wrap'>
-                                <div className='mw-da__prog-bar' style={{ width: `${streakPct}%`, background: isReady ? '#ef4444' : '#6366f1' }} />
+                                <div className='mw-da__prog-bar' style={{ width: `${streakPct}%`, background: isReady ? '#ef4444' : '#f97316' }} />
                             </div>
                             <span className='mw-da__prog-digit'>{p && p.streakDigit != null ? p.streakDigit : '—'}</span>
                             <span className='mw-da__prog-count'>{p?.streakCount || 0}/{cfgRef.current.max}</span>

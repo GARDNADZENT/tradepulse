@@ -51,11 +51,6 @@ const Footer = () => {
             <ServerTime />
             <div className='app-footer__vertical-line' />
             <NetworkStatus />
-            <div className='app-footer__brand'>
-                <span className='app-footer__brand-dot' />
-                <span className='app-footer__brand-name'>TradePulse</span>
-                <span className='app-footer__brand-tag'>Plan. Track. Perform.</span>
-            </div>
 
             {/* [AI] Only show language modal if language settings are enabled */}
             {enableLanguageSettings && isModalOpenFor('DesktopLanguagesModal') && (

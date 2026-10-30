@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { LogoMark } from '../LogoMark';
 
 // No NEXT_PUBLIC_DERIV_APP_NAME / preview name in the test env, so getAppName()
-// resolves to brand.config.json platform.name ("TradePulse").
+// resolves to brand.config.json platform.name ("Deriv Trading Bot").
 describe('LogoMark', () => {
     const originalAppBuild = process.env.NEXT_PUBLIC_APP_BUILD;
 
@@ -12,8 +12,7 @@ describe('LogoMark', () => {
 
     it('renders the resolved app name', () => {
         render(<LogoMark />);
-        expect(screen.getByText('TradePulse')).toBeInTheDocument();
-        expect(screen.getByText('Plan. Track. Perform.')).toBeInTheDocument();
+        expect(screen.getByText('Deriv Trading Bot')).toBeInTheDocument();
     });
 
     it('renders the logo image (first candidate) by default', () => {
@@ -31,13 +30,16 @@ describe('LogoMark', () => {
         }
         expect(screen.queryByRole('img')).not.toBeInTheDocument();
         // Letter badge shows the first letter of the app name.
-        expect(screen.getByText('T')).toBeInTheDocument();
+        expect(screen.getByText('D')).toBeInTheDocument();
     });
 
     it('skips logo file probing in the preview build and renders the letter badge', () => {
+        // The static preview build (NEXT_PUBLIC_APP_BUILD=true) ships no public/logo.*; the
+        // live App Builder logo arrives as a data URL via PREVIEW_BRANDING. With no live logo
+        // yet, there should be no <img> probe (which would 404) — only the badge fallback.
         process.env.NEXT_PUBLIC_APP_BUILD = 'true';
         render(<LogoMark />);
         expect(screen.queryByRole('img')).not.toBeInTheDocument();
-        expect(screen.getByText('T')).toBeInTheDocument();
+        expect(screen.getByText('D')).toBeInTheDocument();
     });
 });
