@@ -58,6 +58,67 @@ const MAX_JOURNAL_ITEMS = 200;
 const MAX_TRANSACTION_ITEMS = 150;
 const TERMINAL_SET = new Set(['won', 'lost', 'sold', 'expired']);
 
+function sanitizeSpot(val: unknown): string | undefined {
+    if (val === undefined || val === null || val === '') return undefined;
+    if (typeof val === 'number' || typeof val === 'string') return String(val);
+    if (typeof val === 'object') {
+        const obj = val as Record<string, unknown>;
+        const c = obj.display_value ?? obj.quote ?? obj.spot ?? obj.value;
+        if (c !== undefined && c !== null) return String(c);
+    }
+    return undefined;
+}
+
+function sanitizeTxRecord(raw: any): TabTransactionRecord | null {
+    if (!raw || typeof raw !== 'object') return null;
+    const contractId = Number(raw.contractId || raw.contract_id || 0);
+    if (!contractId) return null;
+    const contractType = String(raw.contractType || raw.contract_type || 'TRADE');
+    const barrier =
+        raw.barrier !== undefined && raw.barrier !== null && typeof raw.barrier !== 'object'
+            ? raw.barrier
+            : undefined;
+    return {
+        contractId,
+        buyTransactionId: Number(raw.buyTransactionId || raw.buy_transaction_id || contractId),
+        sellTransactionId: raw.sellTransactionId ? Number(raw.sellTransactionId) : undefined,
+        timestamp: Number(raw.timestamp || Date.now()),
+        symbol: String(raw.symbol || ''),
+        displayName: String(raw.displayName || raw.symbol || ''),
+        contractType,
+        shortLabel: String(raw.shortLabel || formatTabContractShortLabel(contractType, barrier)),
+        longcode: String(raw.longcode || ''),
+        barrier,
+        duration: raw.duration !== undefined ? Number(raw.duration) : undefined,
+        buyPrice: Number(raw.buyPrice ?? 0) || 0,
+        bidPrice: Number(raw.bidPrice ?? raw.buyPrice ?? 0) || 0,
+        payout: Number(raw.payout ?? 0) || 0,
+        profit: Number(raw.profit ?? 0) || 0,
+        currency: String(raw.currency || 'USD'),
+        entrySpot: sanitizeSpot(raw.entrySpot),
+        exitSpot: sanitizeSpot(raw.exitSpot),
+        status: (['open', 'won', 'lost', 'sold', 'expired'].includes(String(raw.status))
+            ? String(raw.status)
+            : 'open') as TabTransactionRecord['status'],
+        isCompleted: Boolean(raw.isCompleted),
+    };
+}
+
+function sanitizeJournalRecord(raw: any): TabJournalEntry | null {
+    if (!raw || typeof raw !== 'object') return null;
+    return {
+        id: String(raw.id || `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`),
+        timestamp: Number(raw.timestamp || Date.now()),
+        type: (['purchase', 'profit', 'loss', 'info', 'error'].includes(String(raw.type))
+            ? String(raw.type)
+            : 'info') as TabJournalEntry['type'],
+        message: String(raw.message || ''),
+        amount: raw.amount !== undefined && raw.amount !== null ? Number(raw.amount) : undefined,
+        currency: raw.currency ? String(raw.currency) : undefined,
+        contractId: raw.contractId ? Number(raw.contractId) : undefined,
+        transactionId: raw.transactionId ? Number(raw.transactionId) : undefined,
+    };
+}
 export function formatTabContractShortLabel(contractType: string, barrier?: string | number): string {
     const ct = String(contractType || '').toUpperCase();
     const b = barrier !== undefined && barrier !== null && barrier !== '' ? ` ${barrier}` : '';
@@ -137,8 +198,10 @@ class IsolatedTabTradeStore {
         this.namespace = namespace;
         this.journalKey = `tp_record_${namespace}_journal_v1`;
         this.txKey = `tp_record_${namespace}_tx_v1`;
-        const journal = this.readStorage<TabJournalEntry[]>(this.journalKey, []);
-        const transactions = this.readStorage<TabTransactionRecord[]>(this.txKey, []);
+        const rawJournal = this.readStorage<any[]>(this.journalKey, []);
+        const rawTransactions = this.readStorage<any[]>(this.txKey, []);
+        const journal = rawJournal.map(sanitizeJournalRecord).filter(Boolean) as TabJournalEntry[];
+        const transactions = rawTransactions.map(sanitizeTxRecord).filter(Boolean) as TabTransactionRecord[];
         this.snapshot = {
             journal,
             transactions,
@@ -206,16 +269,18 @@ class IsolatedTabTradeStore {
     };
 
     upsertTransaction = (tx: TabTransactionRecord) => {
+        const cleanTx = sanitizeTxRecord(tx);
+        if (!cleanTx) return;
         const existingIdx = this.snapshot.transactions.findIndex(
-            item => item.contractId === tx.contractId || item.buyTransactionId === tx.buyTransactionId
+            item => item.contractId === cleanTx.contractId || item.buyTransactionId === cleanTx.buyTransactionId
         );
         let nextTxList: TabTransactionRecord[];
         if (existingIdx >= 0) {
             nextTxList = this.snapshot.transactions.map((item, idx) =>
-                idx === existingIdx ? { ...item, ...tx } : item
+                idx === existingIdx ? { ...item, ...cleanTx } : item
             );
         } else {
-            nextTxList = [tx, ...this.snapshot.transactions].slice(0, MAX_TRANSACTION_ITEMS);
+            nextTxList = [cleanTx, ...this.snapshot.transactions].slice(0, MAX_TRANSACTION_ITEMS);
         }
         this.snapshot = {
             ...this.snapshot,

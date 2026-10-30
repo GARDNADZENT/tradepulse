@@ -238,7 +238,7 @@ export const CopyTrading: React.FC = () => {
 
         const masterToken = getMasterToken();
         if (!masterToken) {
-            setMasterStatus('Connect Master Account via API Token Login first');
+            setMasterStatus('Connect Master Account via PAT Login first');
             setIsCopyActive(false);
             return;
         }
@@ -294,7 +294,7 @@ export const CopyTrading: React.FC = () => {
     const handleLeaderToggle = () => {
         const masterToken = getMasterToken();
         if (!masterToken) {
-            setLeaderFeedback('Please authenticate with API Token Login first.');
+            setLeaderFeedback('Please authenticate with PAT Login first.');
             return;
         }
         if (!leaderFollowing && !leaderToken.trim()) {

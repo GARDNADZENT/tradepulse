@@ -773,23 +773,24 @@ export default observer(function DTrader() {
                                 <small>ACTIVE &amp; RECENT CONTRACTS</small>
                             </div>
                             {openContracts.map(oc => {
-                                const resolved = TERMINAL_STATUSES.includes(oc.status);
+                                const statusText = String(oc?.status || 'open');
+                                const resolved = TERMINAL_STATUSES.includes(statusText);
                                 return (
                                     <div
                                         key={oc.id}
                                         className={
                                             'dtrader__open' +
-                                            (resolved ? ' is-resolved is-' + oc.status : '')
+                                            (resolved ? ' is-resolved is-' + statusText : '')
                                         }
                                     >
                                         <div>
-                                            <small>{resolved ? 'CONTRACT ' + oc.status.toUpperCase() : 'OPEN CONTRACT'}</small>
+                                            <small>{resolved ? 'CONTRACT ' + statusText.toUpperCase() : 'OPEN CONTRACT'}</small>
                                             <strong>
-                                                {oc.label} · #{oc.id}
+                                                {String(oc.label || 'Contract')} · #{oc.id}
                                             </strong>
                                         </div>
-                                        <Metric l='STATUS' v={oc.status.toUpperCase()} />
-                                        <Metric l='P/L' v={(oc.profit >= 0 ? '+' : '') + Number(oc.profit || 0).toFixed(2)} />
+                                        <Metric l='STATUS' v={statusText.toUpperCase()} />
+                                        <Metric l='P/L' v={(Number(oc.profit || 0) >= 0 ? '+' : '') + Number(oc.profit || 0).toFixed(2)} />
                                         <Metric l='BID' v={Number(oc.bid || 0).toFixed(2)} />
                                         <button type='button' onClick={() => void sell(oc.id)} disabled={resolved}>
                                             {resolved ? 'SETTLED' : 'SELL NOW'}
@@ -891,11 +892,21 @@ export default observer(function DTrader() {
                         <Metric l='CONTRACT' v={labelFor(type, barrier)} />
                         <Metric
                             l='ASK PRICE'
-                            v={loading ? '…' : proposal?.ask_price != null ? Number(proposal.ask_price).toFixed(2) : String(stake.toFixed(2))}
+                            v={
+                                loading
+                                    ? '…'
+                                    : proposal?.ask_price != null
+                                      ? Number(proposal.ask_price || 0).toFixed(2)
+                                      : Number(stake || 0).toFixed(2)
+                            }
                         />
                         <Metric
                             l='PROPOSAL PAYOUT'
-                            v={proposal?.payout != null ? Number(proposal.payout).toFixed(2) + ' ' + activeCurrency : '—'}
+                            v={
+                                proposal?.payout != null
+                                    ? Number(proposal.payout || 0).toFixed(2) + ' ' + activeCurrency
+                                    : '—'
+                            }
                         />
                     </div>
 

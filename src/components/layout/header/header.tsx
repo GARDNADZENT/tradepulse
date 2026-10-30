@@ -139,24 +139,9 @@ const AppHeader = observer(() => {
         if (activeLoginid && !is_account_regenerating) {
             return (
                 <div className='auth-actions'>
-                    {isDesktop && (
-                        <span className='app-header__currency-pill'>
-                            <span>{activeCurrency}</span>
-                            <svg width='10' height='10' viewBox='0 0 12 12' fill='none' aria-hidden='true'>
-                                <path d='M3 4.5L6 7.5L9 4.5' stroke='currentColor' strokeWidth='1.6' strokeLinecap='round' />
-                            </svg>
-                        </span>
-                    )}
                     <div className='account-info'>
-                        <AccountSwitcher activeAccount={activeAccount} />
+                        <AccountSwitcher activeAccount={activeAccount} onLogout={handleLogout} />
                     </div>
-                    <button
-                        type='button'
-                        className='app-header__token-btn'
-                        onClick={() => setIsTokenModalOpen(true)}
-                    >
-                        API Token
-                    </button>
                     {renderThemeToggle()}
                 </div>
             );
@@ -169,20 +154,12 @@ const AppHeader = observer(() => {
             const isAuthConfigured = Boolean(process.env.NEXT_PUBLIC_DERIV_APP_ID);
             return (
                 <div className='auth-actions'>
-                    {isDesktop && (
-                        <span className='app-header__currency-pill'>
-                            <span>{activeCurrency}</span>
-                            <svg width='10' height='10' viewBox='0 0 12 12' fill='none' aria-hidden='true'>
-                                <path d='M3 4.5L6 7.5L9 4.5' stroke='currentColor' strokeWidth='1.6' strokeLinecap='round' />
-                            </svg>
-                        </span>
-                    )}
                     <button
                         type='button'
                         className='app-header__token-btn'
                         onClick={() => setIsTokenModalOpen(true)}
                     >
-                        API Token Login
+                        PAT Login
                     </button>
                     <Button tertiary disabled={!isAuthConfigured} onClick={handleLogin}>
                         <Localize i18n_default_text='Log in' />
@@ -199,13 +176,15 @@ const AppHeader = observer(() => {
 
         return (
             <div className='auth-actions auth-actions--loading'>
-                <button
-                    type='button'
-                    className='app-header__token-btn'
-                    onClick={() => setIsTokenModalOpen(true)}
-                >
-                    API Token Login
-                </button>
+                {!activeLoginid && (
+                    <button
+                        type='button'
+                        className='app-header__token-btn'
+                        onClick={() => setIsTokenModalOpen(true)}
+                    >
+                        PAT Login
+                    </button>
+                )}
                 <svg
                     className='auth-actions__spinner'
                     viewBox='0 0 24 24'
@@ -231,12 +210,12 @@ const AppHeader = observer(() => {
         isDesktop,
         activeLoginid,
         activeAccount,
-        activeCurrency,
         authTimeout,
         is_account_regenerating,
         isOAuthPending,
         is_dark_mode_on,
         handleLogin,
+        handleLogout,
         handleSignup,
         toggleTheme,
     ]);

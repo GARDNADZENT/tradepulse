@@ -266,12 +266,22 @@ export default class ClientStore {
             this.currency = 'USD';
             this.all_accounts_balance = null;
 
-            // Clear localStorage
+            // Clear localStorage (OAuth + PAT session keys)
             localStorage.removeItem('active_loginid');
             localStorage.removeItem('accountsList');
             localStorage.removeItem('authToken');
+            localStorage.removeItem('deriv_api_token');
             localStorage.removeItem('clientAccounts');
+            localStorage.removeItem('client.accounts');
             localStorage.removeItem('account_type');
+            Object.keys(localStorage).forEach(k => {
+                if (k.startsWith('token_')) localStorage.removeItem(k);
+            });
+
+            if (api_base) {
+                api_base.is_authorized = false;
+                api_base.account_info = {};
+            }
 
             // Clear sessionStorage
             sessionStorage.clear();

@@ -42,7 +42,21 @@ function formatMoney(val: number, signed = false): string {
     return n.toFixed(2);
 }
 
-export const TabExecutionRecordPanel: React.FC<TabExecutionRecordPanelProps> = ({
+class RecordSafeBoundary extends React.Component<
+    { children: React.ReactNode },
+    { hasError: boolean }
+> {
+    state = { hasError: false };
+    static getDerivedStateFromError() {
+        return { hasError: true };
+    }
+    render() {
+        if (this.state.hasError) return null;
+        return this.props.children;
+    }
+}
+
+const TabExecutionRecordPanelInner: React.FC<TabExecutionRecordPanelProps> = ({
     namespace,
     title,
     previewTitle,
@@ -338,7 +352,7 @@ export const TabExecutionRecordPanel: React.FC<TabExecutionRecordPanelProps> = (
                                                 <small>{tx.exitSpot ?? (tx.isCompleted ? '—' : '…')}</small>
                                             </span>
                                             <span className='tp-rec-preview__buy'>
-                                                {tx.buyPrice.toFixed(2)} <small>{tx.currency}</small>
+                                                {Number(tx.buyPrice || 0).toFixed(2)} <small>{tx.currency}</small>
                                             </span>
                                             <span
                                                 className={classNames('tp-rec-preview__pl', {
@@ -396,7 +410,7 @@ export const TabExecutionRecordPanel: React.FC<TabExecutionRecordPanelProps> = (
                                                     <small>{tx.exitSpot ?? (tx.isCompleted ? '—' : '…')}</small>
                                                 </span>
                                                 <span className='tp-rec-preview__buy'>
-                                                    {tx.buyPrice.toFixed(2)} <small>{tx.currency}</small>
+                                                    {Number(tx.buyPrice || 0).toFixed(2)} <small>{tx.currency}</small>
                                                 </span>
                                                 <span
                                                     className={classNames('tp-rec-preview__pl', {
@@ -429,7 +443,7 @@ export const TabExecutionRecordPanel: React.FC<TabExecutionRecordPanelProps> = (
                                                         <div>
                                                             <small>Payout Limit</small>
                                                             <b>
-                                                                {tx.payout.toFixed(2)} {tx.currency}
+                                                                {Number(tx.payout || 0).toFixed(2)} {tx.currency}
                                                             </b>
                                                         </div>
                                                     </div>
@@ -461,7 +475,7 @@ export const TabExecutionRecordPanel: React.FC<TabExecutionRecordPanelProps> = (
                                             'is-neg': latestTx.isCompleted && latestTx.profit < 0,
                                         })}
                                     >
-                                        {!latestTx.isCompleted ? 'OPEN' : latestTx.status.toUpperCase()}
+                                        {!latestTx.isCompleted ? 'OPEN' : String(latestTx.status || 'SETTLED').toUpperCase()}
                                     </span>
                                 </div>
                                 <p className='tp-rec-summary__longcode'>{latestTx.longcode}</p>
@@ -477,7 +491,7 @@ export const TabExecutionRecordPanel: React.FC<TabExecutionRecordPanelProps> = (
                                     <div>
                                         <small>Buy Price</small>
                                         <b>
-                                            {latestTx.buyPrice.toFixed(2)} {latestTx.currency}
+                                            {Number(latestTx.buyPrice || 0).toFixed(2)} {latestTx.currency}
                                         </b>
                                     </div>
                                     <div>
@@ -592,6 +606,12 @@ export const TabExecutionRecordPanel: React.FC<TabExecutionRecordPanelProps> = (
     );
 };
 
+export const TabExecutionRecordPanel: React.FC<TabExecutionRecordPanelProps> = props => (
+    <RecordSafeBoundary>
+        <TabExecutionRecordPanelInner {...props} />
+    </RecordSafeBoundary>
+);
+
 interface TabSessionDockBarProps {
     namespace: TabRecordNamespace;
     resetLabel: string;
@@ -601,7 +621,7 @@ interface TabSessionDockBarProps {
     currencyFallback?: string;
 }
 
-export const TabSessionDockBar: React.FC<TabSessionDockBarProps> = ({
+const TabSessionDockBarInner: React.FC<TabSessionDockBarProps> = ({
     namespace,
     resetLabel,
     activeTab,
@@ -691,3 +711,9 @@ export const TabSessionDockBar: React.FC<TabSessionDockBarProps> = ({
         </footer>
     );
 };
+
+export const TabSessionDockBar: React.FC<TabSessionDockBarProps> = props => (
+    <RecordSafeBoundary>
+        <TabSessionDockBarInner {...props} />
+    </RecordSafeBoundary>
+);

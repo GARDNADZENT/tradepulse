@@ -33,7 +33,7 @@ export const ApiTokenModal: React.FC<TApiTokenModalProps> = ({ isOpen, onClose }
         e.preventDefault();
         const trimmed = tokenInput.trim();
         if (!trimmed) {
-            setError('Please enter a valid Deriv API token.');
+            setError('Please enter a valid Personal Access Token (PAT).');
             return;
         }
 
@@ -177,8 +177,8 @@ export const ApiTokenModal: React.FC<TApiTokenModalProps> = ({ isOpen, onClose }
             <div className='tp-token-modal' onClick={e => e.stopPropagation()}>
                 <div className='tp-token-modal__header'>
                     <div>
-                        <span className='tp-token-modal__eyebrow'>DIRECT DERIV ACCESS</span>
-                        <h3 className='tp-token-modal__title'>API Token Login</h3>
+                        <span className='tp-token-modal__eyebrow'>PERSONAL ACCESS TOKEN</span>
+                        <h3 className='tp-token-modal__title'>PAT Login</h3>
                     </div>
                     <button type='button' className='tp-token-modal__close' onClick={onClose} aria-label='Close'>
                         ✕
@@ -187,8 +187,8 @@ export const ApiTokenModal: React.FC<TApiTokenModalProps> = ({ isOpen, onClose }
 
                 <form className='tp-token-modal__body' onSubmit={handleConnectToken}>
                     <p className='tp-token-modal__desc'>
-                        Sign in instantly with a Deriv API token enabled with <strong>Read</strong> and{' '}
-                        <strong>Trade</strong> scopes — no OAuth redirect required.
+                        Sign in instantly using a Deriv Personal Access Token (PAT) enabled with{' '}
+                        <strong>Read</strong> and <strong>Trade</strong> scopes — no OAuth redirect required.
                     </p>
 
                     {activeLoginid && (
@@ -201,13 +201,13 @@ export const ApiTokenModal: React.FC<TApiTokenModalProps> = ({ isOpen, onClose }
                     )}
 
                     <label className='tp-token-modal__label' htmlFor='tp-api-token-input'>
-                        Deriv API Token
+                        Personal Access Token (PAT)
                     </label>
                     <input
                         id='tp-api-token-input'
                         type='password'
                         className='tp-token-modal__input'
-                        placeholder='Paste your Deriv API token…'
+                        placeholder='Paste your Personal Access Token…'
                         value={tokenInput}
                         onChange={e => setTokenInput(e.target.value)}
                         autoFocus

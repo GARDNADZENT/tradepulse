@@ -16,13 +16,14 @@ import { TAccountSwitcher } from './common/types';
 import AccountInfoWrapper from './account-info-wrapper';
 import './account-switcher.scss';
 
-const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
+const AccountSwitcher = observer(({ activeAccount, onLogout }: TAccountSwitcher) => {
     const [isOpen, setIsOpen] = useState(false);
     const [showAsReal, setShowAsReal] = useState(false);
     const [trippleTrickActive, setTrippleTrickActive] = useState(
         () => localStorage.getItem('tripple_trick_active') === 'true'
     );
     const [resetBusy, setResetBusy] = useState(false);
+    const [logoutBusy, setLogoutBusy] = useState(false);
     const wrapperRef = useRef<HTMLDivElement>(null);
     const { accountList, activeLoginid } = useApiBase();
     const { client, run_panel } = useStore() ?? {};
@@ -68,9 +69,24 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
     }, []);
 
     const toggleDropdown = useCallback(() => {
-        if (is_bot_running || isSingleAccount) return;
+        if (is_bot_running) return;
         setIsOpen(prev => !prev);
-    }, [is_bot_running, isSingleAccount]);
+    }, [is_bot_running]);
+
+    const handleLogoutClick = useCallback(async () => {
+        if (logoutBusy) return;
+        setLogoutBusy(true);
+        try {
+            setIsOpen(false);
+            if (onLogout) {
+                await onLogout();
+            } else {
+                await client?.logout?.();
+            }
+        } finally {
+            setLogoutBusy(false);
+        }
+    }, [logoutBusy, onLogout, client]);
 
     const handleResetBalance = useCallback(
         async (e: React.MouseEvent) => {
@@ -162,10 +178,17 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
     };
     const formattedAccounts = getFormattedAccounts();
 
-    if (!activeAccount) return null;
+    const resolvedLoginId = activeAccount?.loginid || activeLoginid || client?.loginid || '';
+    if (!activeAccount && !resolvedLoginId) return null;
 
-    const { currency, isVirtual, balance } = activeAccount;
-    const showChevron = !isSingleAccount && !is_bot_running;
+    const currency = activeAccount?.currency || client?.currency || 'USD';
+    const isVirtual = activeAccount?.isVirtual ?? isDemoAccount(resolvedLoginId);
+    const balance =
+        activeAccount?.balance ??
+        addComma(Number(client?.balance || 0).toFixed(getDecimalPlaces(currency)));
+    const showChevron = !is_bot_running;
+    const isRealDisplay = (showAsReal && isVirtual) || !isVirtual;
+    const displayCurrencyCode = currency ? getCurrencyDisplayCode(currency) : 'USD';
 
     return (
         <div className='acc-info__wrapper' ref={wrapperRef}>
@@ -176,10 +199,11 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
                     role={showChevron ? 'button' : undefined}
                     tabIndex={showChevron ? 0 : -1}
                     aria-expanded={showChevron ? isOpen : undefined}
-                    aria-haspopup={showChevron ? 'listbox' : undefined}
-                    className={classNames('acc-info', {
+                    aria-haspopup={showChevron ? 'dialog' : undefined}
+                    className={classNames('acc-info acc-info--card', {
                         'acc-info--is-virtual': isVirtual && !showAsReal,
                         'acc-info--interactive': showChevron,
+                        'acc-info--open': isOpen,
                     })}
                     onClick={toggleDropdown}
                     onKeyDown={e => {
@@ -189,34 +213,18 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
                         }
                     }}
                 >
-                    <span className='acc-info__id' aria-hidden='true'></span>
                     <div className='acc-info__content'>
                         <div className='acc-info__account-type-header'>
-                            <Text as='p' size='xs' className='acc-info__account-type'>
-                                {showAsReal && isVirtual ? (
-                                    <Localize i18n_default_text='Real account' />
-                                ) : isVirtual ? (
-                                    <Localize i18n_default_text='Demo account' />
-                                ) : (
-                                    <Localize i18n_default_text='Real account' />
-                                )}
-                            </Text>
-                            {showChevron && (
-                                <span
-                                    className={classNames('acc-info__select-arrow', {
-                                        'acc-info__select-arrow--invert': isOpen,
-                                    })}
-                                >
-                                    <svg width='12' height='12' viewBox='0 0 12 12' fill='none'>
-                                        <path
-                                            d='M2 4L6 8L10 4'
-                                            stroke='currentColor'
-                                            strokeWidth='1.5'
-                                            strokeLinecap='round'
-                                            strokeLinejoin='round'
-                                        />
-                                    </svg>
-                                </span>
+                            <span
+                                className={classNames('acc-info__mode-tag', {
+                                    'acc-info__mode-tag--demo': !isRealDisplay,
+                                    'acc-info__mode-tag--real': isRealDisplay,
+                                })}
+                            >
+                                {isRealDisplay ? 'LIVE' : 'DEMO'}
+                            </span>
+                            {resolvedLoginId && (
+                                <span className='acc-info__loginid'>· {resolvedLoginId}</span>
                             )}
                         </div>
                         {(typeof balance !== 'undefined' || !currency) && (
@@ -230,7 +238,7 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
                                     {!currency ? (
                                         <Localize i18n_default_text='No currency assigned' />
                                     ) : (
-                                        `${balance} ${getCurrencyDisplayCode(currency)}`
+                                        `${balance} ${displayCurrencyCode}`
                                     )}
                                 </p>
                                 {isVirtual && !showAsReal && !trippleTrickActive && (
@@ -276,49 +284,138 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
                             </div>
                         )}
                     </div>
+                    {showChevron && (
+                        <span
+                            className={classNames('acc-info__select-arrow', {
+                                'acc-info__select-arrow--invert': isOpen,
+                            })}
+                        >
+                            <svg width='12' height='12' viewBox='0 0 12 12' fill='none'>
+                                <path
+                                    d='M2.5 4.25L6 7.75L9.5 4.25'
+                                    stroke='currentColor'
+                                    strokeWidth='1.6'
+                                    strokeLinecap='round'
+                                    strokeLinejoin='round'
+                                />
+                            </svg>
+                        </span>
+                    )}
                 </div>
             </AccountInfoWrapper>
             {isOpen && (
-                <div className='acc-dropdown' role='listbox'>
-                    {formattedAccounts.map((account, idx) => (
-                        <div
-                            key={account._isFakeReal ? `${account.loginid}-real` : `${account.loginid}-${idx}`}
-                            role='option'
-                            aria-selected={account.isActive}
-                            tabIndex={0}
-                            className={classNames('acc-dropdown__account', {
-                                'acc-dropdown__account--selected': account.isActive,
-                                'acc-dropdown__account--virtual': account.isVirtual && !account._isFakeReal,
-                            })}
-                            onClick={() => !account.isActive && handleAccountSelect(account.loginid)}
-                            onKeyDown={e => {
-                                if (!account.isActive && (e.key === 'Enter' || e.key === ' ')) {
-                                    e.preventDefault();
-                                    handleAccountSelect(account.loginid);
-                                }
-                            }}
-                        >
-                            <Text
-                                size='xxxs'
-                                className={classNames('acc-dropdown__account-type', {
-                                    'acc-dropdown__account-type--virtual': account.isVirtual && !account._isFakeReal,
-                                })}
-                            >
-                                {account.isVirtual && !account._isFakeReal ? (
-                                    <Localize i18n_default_text='Demo account' />
-                                ) : (
-                                    <Localize i18n_default_text='Real account' />
-                                )}
-                            </Text>
-                            <Text size='xs' weight='bold' className='acc-dropdown__balance'>
-                                {account.currency ? (
-                                    `${account.balance} ${getCurrencyDisplayCode(account.currency)}`
-                                ) : (
-                                    <Localize i18n_default_text='No currency assigned' />
-                                )}
-                            </Text>
+                <div
+                    data-testid='dt_acc_dropdown'
+                    className='acc-dropdown acc-dropdown--card'
+                    role='dialog'
+                    aria-label='Active Account Details'
+                >
+                    <div className='acc-dropdown__section-head'>Active Account Details</div>
+                    <div className='acc-dropdown__details'>
+                        <div className='acc-dropdown__detail-row'>
+                            <span>Account ID</span>
+                            <strong>{resolvedLoginId || '—'}</strong>
                         </div>
-                    ))}
+                        <div className='acc-dropdown__detail-row'>
+                            <span>Type</span>
+                            <strong>{isRealDisplay ? 'Real Account' : 'Demo Account'}</strong>
+                        </div>
+                        <div className='acc-dropdown__detail-row'>
+                            <span>Currency</span>
+                            <strong>{displayCurrencyCode}</strong>
+                        </div>
+                        <div className='acc-dropdown__detail-row'>
+                            <span>Balance</span>
+                            <strong className='acc-dropdown__detail-balance'>
+                                {balance} {displayCurrencyCode}
+                            </strong>
+                        </div>
+                    </div>
+
+                    {formattedAccounts.length > 1 && (
+                        <>
+                            <div className='acc-dropdown__section-head acc-dropdown__section-head--sub'>
+                                Switch Account
+                            </div>
+                            <div className='acc-dropdown__switch-list' role='listbox'>
+                                {formattedAccounts.map((account, idx) => {
+                                    const rowIsDemo = account.isVirtual && !account._isFakeReal;
+                                    return (
+                                        <div
+                                            key={
+                                                account._isFakeReal
+                                                    ? `${account.loginid}-real`
+                                                    : `${account.loginid}-${idx}`
+                                            }
+                                            role='option'
+                                            aria-selected={account.isActive}
+                                            tabIndex={0}
+                                            className={classNames('acc-dropdown__switch-row', {
+                                                'is-selected': account.isActive,
+                                            })}
+                                            onClick={() => !account.isActive && handleAccountSelect(account.loginid)}
+                                            onKeyDown={e => {
+                                                if (!account.isActive && (e.key === 'Enter' || e.key === ' ')) {
+                                                    e.preventDefault();
+                                                    handleAccountSelect(account.loginid);
+                                                }
+                                            }}
+                                        >
+                                            <div className='acc-dropdown__switch-left'>
+                                                <i className={account.isActive ? 'is-on' : ''} />
+                                                <span>
+                                                    {rowIsDemo ? 'DEMO' : 'LIVE'} · {account.loginid}
+                                                </span>
+                                            </div>
+                                            <strong className='acc-dropdown__switch-bal'>
+                                                {account.currency
+                                                    ? `${account.balance} ${getCurrencyDisplayCode(account.currency)}`
+                                                    : '—'}
+                                            </strong>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </>
+                    )}
+
+                    <div className='acc-dropdown__footer'>
+                        <button
+                            type='button'
+                            data-testid='dt_account_card_logout'
+                            className='acc-dropdown__logout-btn'
+                            disabled={logoutBusy}
+                            onClick={() => void handleLogoutClick()}
+                        >
+                            <svg width='15' height='15' viewBox='0 0 24 24' fill='none' aria-hidden='true'>
+                                <path
+                                    d='M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4'
+                                    stroke='currentColor'
+                                    strokeWidth='2'
+                                    strokeLinecap='round'
+                                    strokeLinejoin='round'
+                                />
+                                <polyline
+                                    points='16 17 21 12 16 7'
+                                    stroke='currentColor'
+                                    strokeWidth='2'
+                                    strokeLinecap='round'
+                                    strokeLinejoin='round'
+                                />
+                                <line
+                                    x1='21'
+                                    y1='12'
+                                    x2='9'
+                                    y2='12'
+                                    stroke='currentColor'
+                                    strokeWidth='2'
+                                    strokeLinecap='round'
+                                    strokeLinejoin='round'
+                                />
+                            </svg>
+                            <span>{logoutBusy ? 'Logging out…' : 'Log out'}</span>
+                        </button>
+                    </div>
                 </div>
             )}
         </div>

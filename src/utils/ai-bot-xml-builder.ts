@@ -1,3 +1,4 @@
+import { runInAction } from 'mobx';
 import {
     formatTabContractShortLabel,
     getTabTradeStore,
@@ -496,6 +497,17 @@ export function normalizeDerivContractParams(params: {
 
 const TERMINAL_CONTRACT_STATUSES = ['won', 'lost', 'sold', 'expired'];
 
+function coerceSpotPrimitive(val: unknown): string | undefined {
+    if (val === undefined || val === null || val === '') return undefined;
+    if (typeof val === 'number' || typeof val === 'string') return String(val);
+    if (typeof val === 'object') {
+        const obj = val as Record<string, unknown>;
+        const candidate = obj.display_value ?? obj.quote ?? obj.spot ?? obj.value;
+        if (candidate !== undefined && candidate !== null) return String(candidate);
+    }
+    return undefined;
+}
+
 function buildFallbackContractLongcode(
     symbol: string,
     apiContractType: string,
@@ -634,18 +646,20 @@ export async function executeLiveDerivTrade(params: {
 
     // Prevent app-content.jsx recoverPendingContracts from pulling tab-scoped manual trades into Bot Builder's global RunPanel
     if (tabStore) {
-        if (
-            Array.isArray(transactions?.recovered_transactions) &&
-            !transactions.recovered_transactions.includes(contractId)
-        ) {
-            transactions.recovered_transactions.push(contractId);
-        }
-        if (
-            Array.isArray(transactions?.recovered_completed_transactions) &&
-            !transactions.recovered_completed_transactions.includes(contractId)
-        ) {
-            transactions.recovered_completed_transactions.push(contractId);
-        }
+        runInAction(() => {
+            if (
+                Array.isArray(transactions?.recovered_transactions) &&
+                !transactions.recovered_transactions.includes(contractId)
+            ) {
+                transactions.recovered_transactions.push(contractId);
+            }
+            if (
+                Array.isArray(transactions?.recovered_completed_transactions) &&
+                !transactions.recovered_completed_transactions.includes(contractId)
+            ) {
+                transactions.recovered_completed_transactions.push(contractId);
+            }
+        });
 
         tabStore.appendJournal({
             type: 'purchase',
@@ -738,32 +752,36 @@ export async function executeLiveDerivTrade(params: {
                 const isTerminal =
                     TERMINAL_CONTRACT_STATUSES.includes(statusStr) || Boolean(poc.is_sold) || Boolean(poc.is_expired);
 
-                const entrySpot =
+                const entrySpot = coerceSpotPrimitive(
                     poc.entry_spot_display_value ??
-                    poc.entry_tick_display_value ??
-                    poc.entry_spot ??
-                    poc.entry_tick;
-                const exitSpot =
+                        poc.entry_tick_display_value ??
+                        poc.entry_spot ??
+                        poc.entry_tick
+                );
+                const exitSpot = coerceSpotPrimitive(
                     poc.exit_spot_display_value ??
-                    poc.exit_tick_display_value ??
-                    poc.exit_spot ??
-                    poc.exit_tick;
+                        poc.exit_tick_display_value ??
+                        poc.exit_spot ??
+                        poc.exit_tick
+                );
 
                 const shouldLogSettlement = isTerminal && !settledOnce;
                 if (shouldLogSettlement) {
                     settledOnce = true;
-                    if (
-                        Array.isArray(transactions?.recovered_transactions) &&
-                        !transactions.recovered_transactions.includes(contractId)
-                    ) {
-                        transactions.recovered_transactions.push(contractId);
-                    }
-                    if (
-                        Array.isArray(transactions?.recovered_completed_transactions) &&
-                        !transactions.recovered_completed_transactions.includes(contractId)
-                    ) {
-                        transactions.recovered_completed_transactions.push(contractId);
-                    }
+                    runInAction(() => {
+                        if (
+                            Array.isArray(transactions?.recovered_transactions) &&
+                            !transactions.recovered_transactions.includes(contractId)
+                        ) {
+                            transactions.recovered_transactions.push(contractId);
+                        }
+                        if (
+                            Array.isArray(transactions?.recovered_completed_transactions) &&
+                            !transactions.recovered_completed_transactions.includes(contractId)
+                        ) {
+                            transactions.recovered_completed_transactions.push(contractId);
+                        }
+                    });
                 }
 
                 const finalProfit = Number(poc.profit ?? 0);

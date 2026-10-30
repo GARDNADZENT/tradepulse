@@ -162,7 +162,7 @@ const StandaloneLoginScreen: React.FC = () => {
                         className='login-screen__btn login-screen__btn--token'
                         onClick={() => setIsTokenModalOpen(true)}
                     >
-                        <span className='login-screen__btn-text'>API Token Login</span>
+                        <span className='login-screen__btn-text'>PAT Login</span>
                     </button>
 
                     {newLoginError && <p className='login-screen__error'>{newLoginError}</p>}

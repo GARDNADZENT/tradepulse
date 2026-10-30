@@ -106,20 +106,24 @@ describe('AccountSwitcher', () => {
         require('@/external/bot-skeleton/services/api/api-base').api_base.is_running = false;
     });
 
-    it('returns null when activeAccount is not provided', () => {
+    it('returns null when activeAccount and loginid are not provided', () => {
+        const { useApiBase } = require('@/hooks/useApiBase');
+        useApiBase.mockReturnValue({ accountList: [], activeLoginid: '' });
         const { container } = render(<AccountSwitcher activeAccount={undefined} />);
         expect(container).toBeEmptyDOMElement();
     });
 
-    it('renders active account type and balance', () => {
+    it('renders active account badge, loginid, and balance', () => {
         render(<AccountSwitcher activeAccount={mockActiveAccount} />);
-        expect(screen.getByText('Real account')).toBeInTheDocument();
+        expect(screen.getByText('LIVE')).toBeInTheDocument();
+        expect(screen.getByText(/CR123/)).toBeInTheDocument();
         expect(screen.getByTestId('dt_balance')).toHaveTextContent('100.00 USD');
     });
 
     it('opens dropdown on click when multiple accounts exist', () => {
         render(<AccountSwitcher activeAccount={mockActiveAccount} />);
         fireEvent.click(screen.getByTestId('dt_acc_info'));
+        expect(screen.getByTestId('dt_acc_dropdown')).toBeInTheDocument();
         expect(screen.getByRole('listbox')).toBeInTheDocument();
     });
 
@@ -131,25 +135,32 @@ describe('AccountSwitcher', () => {
         });
         render(<AccountSwitcher activeAccount={mockActiveAccount} />);
         fireEvent.click(screen.getByTestId('dt_acc_info'));
-        expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('dt_acc_dropdown')).not.toBeInTheDocument();
     });
 
     it('does not open dropdown when api_base.is_running is true', () => {
         require('@/external/bot-skeleton/services/api/api-base').api_base.is_running = true;
         render(<AccountSwitcher activeAccount={mockActiveAccount} />);
         fireEvent.click(screen.getByTestId('dt_acc_info'));
-        expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('dt_acc_dropdown')).not.toBeInTheDocument();
     });
 
-    it('does not open dropdown with a single account', () => {
+    it('opens account details and Log out action with a single or PAT account', () => {
+        const mockOnLogout = jest.fn();
         const { useApiBase } = require('@/hooks/useApiBase');
         useApiBase.mockReturnValue({
             accountList: [{ loginid: 'CR123', currency: 'USD', balance: 100, is_virtual: 0 }],
             activeLoginid: 'CR123',
         });
-        render(<AccountSwitcher activeAccount={mockActiveAccount} />);
+        render(<AccountSwitcher activeAccount={mockActiveAccount} onLogout={mockOnLogout} />);
         fireEvent.click(screen.getByTestId('dt_acc_info'));
+        expect(screen.getByTestId('dt_acc_dropdown')).toBeInTheDocument();
+        expect(screen.getByText('Active Account Details')).toBeInTheDocument();
         expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+        const logoutBtn = screen.getByTestId('dt_account_card_logout');
+        expect(logoutBtn).toBeInTheDocument();
+        fireEvent.click(logoutBtn);
+        expect(mockOnLogout).toHaveBeenCalledTimes(1);
     });
 
     it('closes dropdown on outside click', () => {
@@ -209,7 +220,7 @@ describe('AccountSwitcher', () => {
         const trigger = screen.getByTestId('dt_acc_info');
         expect(trigger).toHaveAttribute('role', 'button');
         expect(trigger).toHaveAttribute('aria-expanded', 'false');
-        expect(trigger).toHaveAttribute('aria-haspopup', 'listbox');
+        expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
         fireEvent.click(trigger);
         expect(trigger).toHaveAttribute('aria-expanded', 'true');
     });
