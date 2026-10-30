@@ -20,7 +20,9 @@ const RunStrategy = observer(() => {
     const { active_tab } = dashboard;
     const { has_active_bot, has_saved_bots } = blockly_store;
     const {
+        active_index,
         contract_stage,
+        is_drawer_open,
         is_stop_button_visible,
         is_stop_button_disabled,
         is_paused,
@@ -30,9 +32,14 @@ const RunStrategy = observer(() => {
         onStopBotClick,
         onPauseBotClick,
         onResumeBotClick,
+        setActiveTabIndex,
+        toggleDrawer,
     } = run_panel;
-    const { statistics } = transactions;
+    const { statistics, transactions: transaction_list } = transactions;
     const { total_payout, total_profit, total_stake, won_contracts, lost_contracts, number_of_runs } = statistics;
+    const contract_count = Array.isArray(transaction_list)
+        ? transaction_list.filter((item: any) => item?.type === 'contract').length
+        : 0;
 
     const [isFastExec, setIsFastExec] = React.useState<boolean>(() => {
         try {
@@ -60,7 +67,16 @@ const RunStrategy = observer(() => {
 
     const has_no_bots = !has_active_bot && !has_saved_bots;
     const is_bot_builder_tab = active_tab === DBOT_TABS.BOT_BUILDER;
+    const is_manual_exec_tab =
+        active_tab === DBOT_TABS.DTRADER || active_tab === DBOT_TABS.ANALYSIS_TOOL;
     const is_run_disabled = !is_stop_button_visible && ((has_no_bots && !is_bot_builder_tab) || contract_stage === 3);
+
+    const openDrawerToTab = (tabIdx: number) => {
+        if (!is_drawer_open) {
+            toggleDrawer(true);
+        }
+        setActiveTabIndex(tabIdx);
+    };
 
     const handlePrimaryAction = () => {
         if (is_paused) {
@@ -98,71 +114,103 @@ const RunStrategy = observer(() => {
                     </span>
                 </button>
 
-                <button
-                    type='button'
-                    id={isStoppingMode ? 'db-animation__stop-button' : 'db-animation__run-button'}
-                    className={classNames('tp-exec-dock__run-btn', {
-                        'tp-exec-dock__run-btn--stop': isStoppingMode,
-                    })}
-                    disabled={is_run_disabled}
-                    onClick={handlePrimaryAction}
-                >
-                    {isStoppingMode ? (
-                        <>
-                            <LabelPairedSquareLgFillIcon fill='#ffffff' />
+                {is_manual_exec_tab && !is_stop_button_visible ? (
+                    <>
+                        <button
+                            type='button'
+                            className={classNames('tp-exec-dock__panel-btn', {
+                                'tp-exec-dock__panel-btn--active': is_drawer_open && active_index === 2,
+                            })}
+                            onClick={() => openDrawerToTab(2)}
+                        >
                             <span>
-                                <Localize i18n_default_text='Stop' />
+                                <Localize i18n_default_text='Journal' />
                             </span>
-                        </>
-                    ) : (
-                        <>
-                            <LabelPairedPlayLgFillIcon fill='#ffffff' />
+                        </button>
+                        <button
+                            type='button'
+                            className={classNames('tp-exec-dock__panel-btn', {
+                                'tp-exec-dock__panel-btn--active': is_drawer_open && active_index === 1,
+                            })}
+                            onClick={() => openDrawerToTab(1)}
+                        >
                             <span>
-                                {is_paused ? (
-                                    <Localize i18n_default_text='Resume' />
-                                ) : (
-                                    <Localize i18n_default_text='Run' />
-                                )}
+                                <Localize i18n_default_text='Transactions' />
                             </span>
-                        </>
-                    )}
-                </button>
+                            {contract_count > 0 && (
+                                <em className='tp-exec-dock__panel-badge'>{contract_count}</em>
+                            )}
+                        </button>
+                    </>
+                ) : (
+                    <>
+                        <button
+                            type='button'
+                            id={isStoppingMode ? 'db-animation__stop-button' : 'db-animation__run-button'}
+                            className={classNames('tp-exec-dock__run-btn', {
+                                'tp-exec-dock__run-btn--stop': isStoppingMode,
+                            })}
+                            disabled={is_run_disabled}
+                            onClick={handlePrimaryAction}
+                        >
+                            {isStoppingMode ? (
+                                <>
+                                    <LabelPairedSquareLgFillIcon fill='#ffffff' />
+                                    <span>
+                                        <Localize i18n_default_text='Stop' />
+                                    </span>
+                                </>
+                            ) : (
+                                <>
+                                    <LabelPairedPlayLgFillIcon fill='#ffffff' />
+                                    <span>
+                                        {is_paused ? (
+                                            <Localize i18n_default_text='Resume' />
+                                        ) : (
+                                            <Localize i18n_default_text='Run' />
+                                        )}
+                                    </span>
+                                </>
+                            )}
+                        </button>
 
-                {isStoppingMode && (
-                    <button
-                        type='button'
-                        id='db-animation__pause-button'
-                        className='tp-exec-dock__pause-btn'
-                        onClick={onPauseBotClick}
-                        title={localize('Pause bot')}
-                    >
-                        <svg width='13' height='13' viewBox='0 0 16 16' fill='none' aria-hidden='true'>
-                            <rect x='3' y='2' width='3.5' height='12' rx='1' fill='currentColor' />
-                            <rect x='9.5' y='2' width='3.5' height='12' rx='1' fill='currentColor' />
-                        </svg>
-                    </button>
+                        {isStoppingMode && (
+                            <button
+                                type='button'
+                                id='db-animation__pause-button'
+                                className='tp-exec-dock__pause-btn'
+                                onClick={onPauseBotClick}
+                                title={localize('Pause bot')}
+                            >
+                                <svg width='13' height='13' viewBox='0 0 16 16' fill='none' aria-hidden='true'>
+                                    <rect x='3' y='2' width='3.5' height='12' rx='1' fill='currentColor' />
+                                    <rect x='9.5' y='2' width='3.5' height='12' rx='1' fill='currentColor' />
+                                </svg>
+                            </button>
+                        )}
+
+                        <button
+                            type='button'
+                            className={classNames('tp-exec-dock__fast-card', {
+                                'tp-exec-dock__fast-card--active': isFastExec,
+                            })}
+                            onClick={toggleFastExec}
+                            title={localize('Toggle Fast Execution Mode')}
+                        >
+                            <div className='tp-exec-dock__fast-text'>
+                                <span className='tp-exec-dock__fast-kicker'>EXECUTION</span>
+                                <span className='tp-exec-dock__fast-mode'>{isFastExec ? 'FAST' : 'NORMAL'}</span>
+                            </div>
+                            <span
+                                className={classNames('tp-exec-dock__switch', {
+                                    'tp-exec-dock__switch--on': isFastExec,
+                                })}
+                            >
+                                <span className='tp-exec-dock__switch-knob' />
+                            </span>
+                        </button>
+                    </>
                 )}
-
-                <button
-                    type='button'
-                    className={classNames('tp-exec-dock__fast-card', {
-                        'tp-exec-dock__fast-card--active': isFastExec,
-                    })}
-                    onClick={toggleFastExec}
-                    title={localize('Toggle Fast Execution Mode')}
-                >
-                    <div className='tp-exec-dock__fast-text'>
-                        <span className='tp-exec-dock__fast-kicker'>EXECUTION</span>
-                        <span className='tp-exec-dock__fast-mode'>{isFastExec ? 'FAST' : 'NORMAL'}</span>
-                    </div>
-                    <span
-                        className={classNames('tp-exec-dock__switch', {
-                            'tp-exec-dock__switch--on': isFastExec,
-                        })}
-                    >
-                        <span className='tp-exec-dock__switch-knob' />
-                    </span>
-                </button>
             </div>
 
             <div className='tp-exec-dock__stats-shell'>

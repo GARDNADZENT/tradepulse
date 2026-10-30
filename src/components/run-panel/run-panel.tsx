@@ -45,6 +45,7 @@ type TDrawerHeader = {
 
 type TDrawerContent = {
     active_index: number;
+    contract_count?: number;
     is_drawer_open: boolean;
     active_tour: string;
     setActiveTabIndex: () => void;
@@ -129,7 +130,14 @@ const DrawerHeader = ({ is_clear_stat_disabled, is_mobile, is_drawer_open, onCle
         />
     );
 
-const DrawerContent = ({ active_index, is_drawer_open, active_tour, setActiveTabIndex, ...props }: TDrawerContent) => {
+const DrawerContent = ({
+    active_index,
+    contract_count = 0,
+    is_drawer_open,
+    active_tour,
+    setActiveTabIndex,
+    ...props
+}: TDrawerContent) => {
     const { isDesktop } = useDevice();
     // Use the useBlockScroll hook to prevent body scrolling when drawer is open on mobile
 
@@ -151,7 +159,11 @@ const DrawerContent = ({ active_index, is_drawer_open, active_tour, setActiveTab
                 <div id='db-run-panel-tab__summary' label={<Localize i18n_default_text='Summary' />}>
                     <Summary is_drawer_open={is_drawer_open} />
                 </div>
-                <div id='db-run-panel-tab__transactions' label={<Localize i18n_default_text='Transactions' />}>
+                <div
+                    id='db-run-panel-tab__transactions'
+                    label={<Localize i18n_default_text='Transactions' />}
+                    data-count={contract_count > 0 ? contract_count : undefined}
+                >
                     <Transactions is_drawer_open={is_drawer_open} />
                 </div>
                 <div id='db-run-panel-tab__journal' label={<Localize i18n_default_text='Journal' />}>
@@ -267,10 +279,13 @@ const RunPanel = observer(() => {
         toggleDrawer,
         toggleStatisticsInfoModal,
     } = run_panel;
-    const { statistics } = transactions;
+    const { statistics, transactions: transaction_list } = transactions;
     const { active_tour, active_tab } = dashboard;
     const { total_payout, total_profit, total_stake, won_contracts, lost_contracts, number_of_runs } = statistics;
-    const { DASHBOARD, BOT_BUILDER, FREE_BOTS } = DBOT_TABS;
+    const { DASHBOARD, BOT_BUILDER, FREE_BOTS, DTRADER, ANALYSIS_TOOL } = DBOT_TABS;
+    const contract_count = Array.isArray(transaction_list)
+        ? transaction_list.filter(item => item?.type === 'contract').length
+        : 0;
 
     React.useEffect(() => {
         onMount();
@@ -287,6 +302,7 @@ const RunPanel = observer(() => {
     const content = (
         <DrawerContent
             active_index={active_index}
+            contract_count={contract_count}
             currency={currency}
             is_drawer_open={is_drawer_open}
             is_mobile={!isDesktop}
@@ -314,7 +330,7 @@ const RunPanel = observer(() => {
     );
 
     const show_run_panel =
-        [BOT_BUILDER, FREE_BOTS].includes(active_tab) ||
+        [BOT_BUILDER, FREE_BOTS, DTRADER, ANALYSIS_TOOL].includes(active_tab) ||
         (active_tab === DASHBOARD && !dashboard.is_info_panel_visible) ||
         active_tour;
     if ((!show_run_panel && isDesktop) || active_tour === 'bot_builder') return null;
@@ -338,7 +354,7 @@ const RunPanel = observer(() => {
                 >
                     {content}
                 </Drawer>
-                {!isDesktop && <MobileDrawerFooter />}
+                {!isDesktop && ![DTRADER, ANALYSIS_TOOL].includes(active_tab) && <MobileDrawerFooter />}
             </div>
 
             <StatisticsInfoModal

@@ -1,6 +1,7 @@
 import { DBOT_TABS } from '@/constants/bot-contents';
-import { api_base } from '@/external/bot-skeleton';
+import { api_base, LogTypes } from '@/external/bot-skeleton';
 import chart_api from '@/external/bot-skeleton/services/api/chart-api';
+import { getSymbolDisplayNameSync } from '@/utils/symbol-display-name';
 
 export type AIBotContractKind =
     | 'DIGITOVER'
@@ -488,6 +489,44 @@ export function normalizeDerivContractParams(params: {
     }
 }
 
+const TERMINAL_CONTRACT_STATUSES = ['won', 'lost', 'sold', 'expired'];
+
+function buildFallbackContractLongcode(
+    symbol: string,
+    apiContractType: string,
+    duration: number,
+    barrier?: string
+): string {
+    const marketName = getSymbolDisplayNameSync(symbol) || symbol;
+    switch (apiContractType) {
+        case 'DIGITOVER':
+            return `Win payout if the last digit of ${marketName} is strictly higher than ${barrier ?? ''} after ${duration} ticks.`;
+        case 'DIGITUNDER':
+            return `Win payout if the last digit of ${marketName} is strictly lower than ${barrier ?? ''} after ${duration} ticks.`;
+        case 'DIGITEVEN':
+            return `Win payout if the last digit of ${marketName} is even after ${duration} ticks.`;
+        case 'DIGITODD':
+            return `Win payout if the last digit of ${marketName} is odd after ${duration} ticks.`;
+        case 'DIGITMATCH':
+            return `Win payout if the last digit of ${marketName} is ${barrier ?? ''} after ${duration} ticks.`;
+        case 'DIGITDIFF':
+            return `Win payout if the last digit of ${marketName} is not ${barrier ?? ''} after ${duration} ticks.`;
+        case 'CALL':
+            return `Win payout if ${marketName} is strictly higher than entry spot at ${duration} ticks after contract start time.`;
+        case 'PUT':
+            return `Win payout if ${marketName} is strictly lower than entry spot at ${duration} ticks after contract start time.`;
+        default:
+            return `Win payout on ${marketName} (${apiContractType}) after ${duration} ticks.`;
+    }
+}
+
+export interface LiveTradeRecordingStores {
+    journal?: any;
+    transactions?: any;
+    summary_card?: any;
+    run_panel?: any;
+}
+
 export async function executeLiveDerivTrade(params: {
     symbol: string;
     contractType: string;
@@ -495,7 +534,9 @@ export async function executeLiveDerivTrade(params: {
     duration?: number;
     barrier?: number | string;
     currency?: string;
-}): Promise<{ contractId: number; buyPrice: number; payout: number; longcode?: string }> {
+    stores?: LiveTradeRecordingStores;
+    onContractUpdate?: (poc: any, isTerminal: boolean) => void;
+}): Promise<{ contractId: number; buyPrice: number; payout: number; longcode: string }> {
     if (!api_base?.api || (api_base.api as any)?.connection?.readyState !== 1) {
         try {
             await api_base.init();
@@ -567,15 +608,164 @@ export async function executeLiveDerivTrade(params: {
     if (buyRes?.error) {
         throw new Error(extractDerivApiError(buyRes));
     }
-    const contractId = Number(buyRes?.buy?.contract_id);
+    const buyObj = buyRes?.buy;
+    const contractId = Number(buyObj?.contract_id);
     if (!contractId) {
         throw new Error('Deriv did not return a contract ID.');
     }
 
+    const buyPrice = Number(buyObj.buy_price ?? stakeAmount);
+    const payout = Number(buyObj.payout ?? 0);
+    const buyTxId = Number(buyObj.transaction_id || contractId);
+    const resolvedLongcode =
+        buyObj.longcode || buildFallbackContractLongcode(params.symbol, spec.apiContractType, spec.duration, spec.barrier);
+    const marketDisplayName = getSymbolDisplayNameSync(params.symbol) || params.symbol;
+
+    const { journal, transactions, summary_card, run_panel } = params.stores || {};
+
+    if (run_panel) {
+        if (!run_panel.run_id) {
+            run_panel.run_id = `manual-${Date.now()}`;
+        }
+        if (!run_panel.is_drawer_open && typeof window !== 'undefined' && window.innerWidth >= 1024) {
+            run_panel.toggleDrawer?.(true);
+        }
+        if (run_panel.active_index === 0) {
+            run_panel.setActiveTabIndex?.(2);
+        }
+    }
+
+    if (journal?.onLogSuccess) {
+        journal.onLogSuccess({
+            log_type: LogTypes.PURCHASE,
+            extra: {
+                longcode: resolvedLongcode,
+                transaction_id: buyTxId,
+            },
+        });
+    }
+
+    const baseContractRecord: Record<string, any> = {
+        contract_id: contractId,
+        transaction_ids: { buy: buyTxId },
+        buy_price: buyPrice,
+        bid_price: buyPrice,
+        payout,
+        profit: 0,
+        currency: activeCurrency,
+        contract_type: spec.apiContractType,
+        underlying: params.symbol,
+        underlying_symbol: params.symbol,
+        display_name: marketDisplayName,
+        shortcode: buyObj.shortcode || '',
+        longcode: resolvedLongcode,
+        barrier: spec.barrier,
+        tick_count: spec.duration,
+        date_start: buyObj.start_time || Math.floor(Date.now() / 1000),
+        status: 'open',
+        is_completed: false,
+    };
+
+    transactions?.onBotContractEvent?.(baseContractRecord);
+    summary_card?.onBotContractEvent?.(baseContractRecord);
+
+    if (transport?.onMessage) {
+        let settledOnce = false;
+        let unsubMsg: (() => void) | undefined;
+
+        try {
+            unsubMsg = transport.onMessage()?.subscribe?.(({ data }: { data: any }) => {
+                const poc = data?.proposal_open_contract;
+                if (!poc || Number(poc.contract_id) !== contractId) return;
+
+                const statusStr = String(poc.status || (poc.is_sold ? 'sold' : 'open'));
+                const isTerminal =
+                    TERMINAL_CONTRACT_STATUSES.includes(statusStr) || Boolean(poc.is_sold) || Boolean(poc.is_expired);
+
+                const entrySpot =
+                    poc.entry_spot_display_value ??
+                    poc.entry_tick_display_value ??
+                    poc.entry_spot ??
+                    poc.entry_tick;
+                const exitSpot =
+                    poc.exit_spot_display_value ??
+                    poc.exit_tick_display_value ??
+                    poc.exit_spot ??
+                    poc.exit_tick;
+
+                const mergedRecord: Record<string, any> = {
+                    ...baseContractRecord,
+                    ...poc,
+                    contract_id: contractId,
+                    underlying: poc.underlying || params.symbol,
+                    underlying_symbol: poc.underlying_symbol || poc.underlying || params.symbol,
+                    display_name: poc.display_name || marketDisplayName,
+                    contract_type: poc.contract_type || spec.apiContractType,
+                    longcode: poc.longcode || resolvedLongcode,
+                    buy_price: Number(poc.buy_price ?? buyPrice),
+                    bid_price: Number(poc.bid_price ?? buyPrice),
+                    payout: Number(poc.payout ?? payout),
+                    profit: Number(poc.profit ?? 0),
+                    currency: poc.currency || activeCurrency,
+                    entry_spot: entrySpot,
+                    exit_spot: exitSpot,
+                    transaction_ids: {
+                        buy: poc.transaction_ids?.buy ?? buyTxId,
+                        ...(poc.transaction_ids?.sell ? { sell: poc.transaction_ids.sell } : {}),
+                    },
+                    status: statusStr,
+                    is_completed: isTerminal,
+                };
+
+                const shouldLogSettlement = isTerminal && !settledOnce;
+                if (shouldLogSettlement) {
+                    settledOnce = true;
+                    if (Array.isArray(transactions?.recovered_transactions) && !transactions.recovered_transactions.includes(contractId)) {
+                        transactions.recovered_transactions.push(contractId);
+                    }
+                    if (
+                        Array.isArray(transactions?.recovered_completed_transactions) &&
+                        !transactions.recovered_completed_transactions.includes(contractId)
+                    ) {
+                        transactions.recovered_completed_transactions.push(contractId);
+                    }
+                }
+
+                transactions?.onBotContractEvent?.(mergedRecord);
+                summary_card?.onBotContractEvent?.(mergedRecord);
+                params.onContractUpdate?.(poc, isTerminal);
+
+                if (shouldLogSettlement) {
+                    const finalProfit = Number(poc.profit ?? 0);
+                    journal?.onLogSuccess?.({
+                        log_type: finalProfit > 0 ? LogTypes.PROFIT : LogTypes.LOST,
+                        extra: {
+                            currency: poc.currency || activeCurrency,
+                            profit: finalProfit,
+                        },
+                    });
+                    unsubMsg?.();
+                }
+            })?.unsubscribe;
+
+            void transport
+                .send({
+                    proposal_open_contract: 1,
+                    contract_id: contractId,
+                    subscribe: 1,
+                })
+                .catch(() => {
+                    unsubMsg?.();
+                });
+        } catch {
+            unsubMsg?.();
+        }
+    }
+
     return {
         contractId,
-        buyPrice: Number(buyRes.buy.buy_price ?? stakeAmount),
-        payout: Number(buyRes.buy.payout ?? 0),
-        longcode: buyRes.buy.longcode,
+        buyPrice,
+        payout,
+        longcode: resolvedLongcode,
     };
 }

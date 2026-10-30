@@ -84,7 +84,7 @@ const AppWrapper = observer(() => {
         [key: string]: string;
     };
     const { clear } = summary_card;
-    const { DASHBOARD, BOT_BUILDER, FREE_BOTS } = DBOT_TABS;
+    const { DASHBOARD, BOT_BUILDER, FREE_BOTS, DTRADER, ANALYSIS_TOOL } = DBOT_TABS;
     const init_render = React.useRef(true);
 
     const hash = [
@@ -234,6 +234,7 @@ const AppWrapper = observer(() => {
             void import('../free-bots/free-bots');
             void import('../dtrader');
             void import('../ai-bots');
+            void import('../analysis-tool');
         };
         const timer = window.setTimeout(idlePreload, 900);
         return () => window.clearTimeout(timer);
@@ -330,8 +331,8 @@ const AppWrapper = observer(() => {
         listEl.scrollBy({ left: dir === 'left' ? -260 : 260, behavior: 'smooth' });
     };
 
-    const isExecSurface = [DASHBOARD, BOT_BUILDER, FREE_BOTS].includes(active_tab);
-    const isExecScrollTab = active_tab === FREE_BOTS;
+    const isExecSurface = [DASHBOARD, BOT_BUILDER, FREE_BOTS, DTRADER, ANALYSIS_TOOL].includes(active_tab);
+    const isExecScrollTab = [FREE_BOTS, DTRADER, ANALYSIS_TOOL].includes(active_tab);
 
     return (
         <React.Fragment>

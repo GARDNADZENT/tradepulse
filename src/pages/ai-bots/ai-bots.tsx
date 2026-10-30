@@ -140,7 +140,7 @@ function computeCardStats(symbol: string, rawTicks: { t: number; price: number }
 }
 
 const AIBots = observer(() => {
-    const { client, dashboard, load_modal, run_panel } = useStore();
+    const { client, dashboard, load_modal, run_panel, journal, transactions, summary_card } = useStore();
     const currency = client?.currency || 'USD';
 
     const [activeTicks, setActiveTicks] = useState(120);
@@ -207,7 +207,7 @@ const AIBots = observer(() => {
             for (const m of CONTINUOUS_MARKETS.slice(0, 5)) {
                 if (cancelled) return;
                 try {
-                    const r = await (api_base.api as any).send({
+                    let r = await (api_base.api as any).send({
                         proposal: 1,
                         amount: 1,
                         basis: 'stake',
@@ -215,8 +215,20 @@ const AIBots = observer(() => {
                         currency,
                         duration: 1,
                         duration_unit: 't',
-                        symbol: m.symbol,
+                        underlying_symbol: m.symbol,
                     });
+                    if (r?.error?.code === 'InputValidationFailed') {
+                        r = await (api_base.api as any).send({
+                            proposal: 1,
+                            amount: 1,
+                            basis: 'stake',
+                            contract_type: 'DIGITEVEN',
+                            currency,
+                            duration: 1,
+                            duration_unit: 't',
+                            symbol: m.symbol,
+                        });
+                    }
                     const pay = r?.proposal?.payout;
                     if (pay && !cancelled) {
                         setCards(prev =>
@@ -274,6 +286,7 @@ const AIBots = observer(() => {
                 duration: getCardDuration(card.symbol),
                 barrier,
                 currency,
+                stores: { journal, transactions, summary_card, run_panel },
             });
             setStatusBanner(
                 `Executed ${contractType}${barrier !== undefined ? ` (${barrier})` : ''} on ${card.display_name} · Contract #${res.contractId} · Payout ${currency} ${res.payout.toFixed(2)}`

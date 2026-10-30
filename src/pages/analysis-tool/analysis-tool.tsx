@@ -50,7 +50,7 @@ const lastDigitOf = (q: number, pip: number) => {
 };
 
 const AnalysisTool = observer(() => {
-    const { client, dashboard, load_modal, run_panel } = useStore();
+    const { client, dashboard, load_modal, run_panel, journal, transactions, summary_card } = useStore();
     const [viewMode, setViewMode] = useState<'native' | 'binarytool'>('native');
     const [symbol, setSymbol] = useState('R_50');
     const [mode, setMode] = useState<AnalysisMode>('over_under');
@@ -207,6 +207,7 @@ const AnalysisTool = observer(() => {
         setBusy(true);
         setTradeFeedback(null);
         try {
+            const activeCurr = client?.currency || 'USD';
             const res = await executeLiveDerivTrade({
                 symbol,
                 contractType: intelligence.bestContract,
@@ -215,10 +216,21 @@ const AnalysisTool = observer(() => {
                 barrier: ['DIGITOVER', 'DIGITUNDER', 'DIGITDIFF', 'DIGITMATCH'].includes(intelligence.bestContract)
                     ? barrier
                     : undefined,
-                currency: client?.currency || 'USD',
+                currency: activeCurr,
+                stores: { journal, transactions, summary_card, run_panel },
+                onContractUpdate: (poc, isTerminal) => {
+                    if (!isTerminal) return;
+                    const pl = Number(poc.profit ?? 0);
+                    const curr = poc.currency || activeCurr;
+                    setTradeFeedback(
+                        `${pl >= 0 ? 'Won' : 'Lost'} ${intelligence.bestLabel} (#${poc.contract_id}) · ${pl >= 0 ? '+' : ''}${pl.toFixed(2)} ${curr}`
+                    );
+                },
             });
             setTradeFeedback(
-                `Bought ${intelligence.bestLabel} (#${res.contractId}) · Payout ${client?.currency || 'USD'} ${res.payout.toFixed(2)}`
+                res.longcode
+                    ? `Bought: ${res.longcode}`
+                    : `Bought ${intelligence.bestLabel} (#${res.contractId}) · Payout ${activeCurr} ${res.payout.toFixed(2)}`
             );
         } catch (e: any) {
             setTradeFeedback(e?.message || 'Execution failed.');

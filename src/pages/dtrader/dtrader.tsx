@@ -60,7 +60,6 @@ const DEFAULT_MARKETS = [
     { symbol: 'JD100', name: 'Jump 100 Index', market: 'synthetic_index', pip_size: 0.01 },
 ];
 
-const TERMINAL_STATUSES = ['won', 'lost', 'sold', 'expired'];
 const TREND_WINDOW = 60;
 const REQUEST_TIMEOUT_MS = 12000;
 
@@ -180,7 +179,7 @@ function getTransport(): any {
 }
 
 export default observer(function DTrader() {
-    const { client } = useStore();
+    const { client, journal, transactions, summary_card, run_panel } = useStore();
     const [symbol, setSymbol] = useState('R_50');
     const [markets, setMarkets] = useState<any[]>(DEFAULT_MARKETS);
     const [marketOpen, setMarketOpen] = useState(false);
@@ -442,56 +441,6 @@ export default observer(function DTrader() {
         };
     }, [isAuthorizedSession, activeCurrency, symbol, type, barrier, duration, stake]);
 
-    const contractSubscriptionsRef = useRef(
-        new Map<number, { api: any; id: string | null; messageUnsub: (() => void) | null; binding: boolean }>()
-    );
-
-    const bindContractStatus = async (contractId: number, api: any) => {
-        const existing = contractSubscriptionsRef.current.get(contractId);
-        if (existing?.binding || (existing?.api === api && existing?.id)) return;
-
-        const state = { api, id: null as string | null, messageUnsub: null as (() => void) | null, binding: true };
-        contractSubscriptionsRef.current.set(contractId, state);
-
-        try {
-            state.messageUnsub = api
-                .onMessage()
-                ?.subscribe(({ data }: { data: any }) => {
-                    const pc = data?.proposal_open_contract;
-                    if (!pc || Number(pc.contract_id) !== contractId) return;
-                    const st = String(pc.status || (pc.is_sold ? 'sold' : 'open'));
-                    setOpenContracts(prev =>
-                        prev.map(x =>
-                            x.id === contractId
-                                ? {
-                                      ...x,
-                                      status: st,
-                                      profit: Number(pc.profit || 0),
-                                      bid: Number(pc.bid_price || 0),
-                                      payout: Number(pc.payout || 0),
-                                  }
-                                : x
-                        )
-                    );
-                    if (TERMINAL_STATUSES.includes(st) || pc.is_sold || pc.is_expired) {
-                        state.messageUnsub?.();
-                        contractSubscriptionsRef.current.delete(contractId);
-                    }
-                })?.unsubscribe;
-
-            await api.send({
-                proposal_open_contract: 1,
-                contract_id: contractId,
-                subscribe: 1,
-            });
-        } catch {
-            state.messageUnsub?.();
-            contractSubscriptionsRef.current.delete(contractId);
-        } finally {
-            state.binding = false;
-        }
-    };
-
     useEffect(() => {
         if (!armed || entryDigit === '' || !ticks.length) return;
         const latest = ticks[ticks.length - 1];
@@ -536,6 +485,24 @@ export default observer(function DTrader() {
                 duration,
                 barrier,
                 currency: activeCurrency,
+                stores: { journal, transactions, summary_card, run_panel },
+                onContractUpdate: pc => {
+                    const st = String(pc.status || (pc.is_sold ? 'sold' : 'open'));
+                    const cid = Number(pc.contract_id);
+                    setOpenContracts(prev =>
+                        prev.map(x =>
+                            x.id === cid
+                                ? {
+                                      ...x,
+                                      status: st,
+                                      profit: Number(pc.profit || 0),
+                                      bid: Number(pc.bid_price || 0),
+                                      payout: Number(pc.payout || 0),
+                                  }
+                                : x
+                        )
+                    );
+                },
             });
             setOpenContracts(prev =>
                 [
@@ -551,10 +518,6 @@ export default observer(function DTrader() {
                 ].slice(0, 20)
             );
             setMessage(longcode ? `Bought: ${longcode}` : `Contract purchased: #${contractId}`);
-            const transport = getTransport();
-            if (transport?.send) {
-                void bindContractStatus(contractId, transport);
-            }
         } catch (e: any) {
             setMessage(extractDerivApiError(e, 'Purchase failed — please try again.'));
         } finally {
