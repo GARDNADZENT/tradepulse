@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { getAppId } from '@/components/shared';
-import QuickActionStrip from '@/components/quick-action-strip/quick-action-strip';
 import './digits-analysis.scss';
 
 const VOLATILITY_MARKETS = [
@@ -164,8 +163,6 @@ export const DigitsAnalysis: React.FC = () => {
     return (
         <div className='tp-digits-page'>
             <div className='tp-digits-page__inner'>
-                <QuickActionStrip />
-
                 <section className='tp-digits-card'>
                     <header className='tp-digits-card__header'>
                         <div className='tp-digits-card__title-group'>

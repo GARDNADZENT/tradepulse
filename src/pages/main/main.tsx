@@ -52,7 +52,6 @@ import DigitsAnalysis from '../digits-analysis/digits-analysis';
 import CopyTrading from '../copy-trading/copy-trading';
 import RiskCalculator from '../free-bots/risk-calculator';
 import TradingViewComponent from '@/components/trading-view-chart/trading-view';
-import FloatingTools from '@/components/floating-tools/floating-tools';
 import './main.scss';
 
 const ChartWrapper = lazy(() => import('../chart/chart-wrapper'));
@@ -400,13 +399,19 @@ const AppWrapper = observer(() => {
                 >
                     <div>
                         {!isDesktop && left_tab_shadow && <span className='tabs-shadow tabs-shadow--left' />}{' '}
-                        <Tabs active_index={active_tab} className='main__tabs' onTabItemClick={handleTabChange} top>
+                        <Tabs
+                            active_index={active_tab}
+                            className='main__tabs'
+                            header_fit_content
+                            onTabItemClick={handleTabChange}
+                            top
+                        >
                             <div
                                 label={
                                     <>
                                         <LabelPairedObjectsColumnCaptionRegularIcon
-                                            height='24px'
-                                            width='24px'
+                                            height='16px'
+                                            width='16px'
                                             fill='var(--text-general)'
                                         />
                                         <Localize i18n_default_text='Dashboard' />
@@ -420,8 +425,8 @@ const AppWrapper = observer(() => {
                                 label={
                                     <>
                                         <LabelPairedPuzzlePieceTwoCaptionBoldIcon
-                                            height='24px'
-                                            width='24px'
+                                            height='16px'
+                                            width='16px'
                                             fill='var(--text-general)'
                                         />
                                         <Localize i18n_default_text='Bot Builder' />
@@ -432,11 +437,9 @@ const AppWrapper = observer(() => {
                             <div
                                 label={
                                     <>
-                                        <LabelPairedPuzzlePieceTwoCaptionBoldIcon
-                                            height='24px'
-                                            width='24px'
-                                            fill='var(--text-general)'
-                                        />
+                                        <svg width='15' height='15' viewBox='0 0 24 24' fill='none'>
+                                            <path d='M12 2.5l2.85 5.77 6.37.93-4.61 4.49 1.09 6.34L12 17.04l-5.7 2.99 1.09-6.34L2.78 9.2l6.37-.93L12 2.5z' />
+                                        </svg>
                                         <Localize i18n_default_text='Special Bots' />
                                     </>
                                 }
@@ -448,8 +451,8 @@ const AppWrapper = observer(() => {
                                 label={
                                     <>
                                         <LabelPairedChartLineCaptionRegularIcon
-                                            height='24px'
-                                            width='24px'
+                                            height='16px'
+                                            width='16px'
                                             fill='var(--text-general)'
                                         />
                                         <Localize i18n_default_text='Digits Analysis' />
@@ -462,11 +465,9 @@ const AppWrapper = observer(() => {
                             <div
                                 label={
                                     <>
-                                        <LabelPairedObjectsColumnCaptionRegularIcon
-                                            height='24px'
-                                            width='24px'
-                                            fill='var(--text-general)'
-                                        />
+                                        <svg width='15' height='15' viewBox='0 0 24 24' fill='none'>
+                                            <path d='M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z' />
+                                        </svg>
                                         <Localize i18n_default_text='Copy Trading' />
                                     </>
                                 }
@@ -477,6 +478,9 @@ const AppWrapper = observer(() => {
                             <div
                                 label={
                                     <>
+                                        <svg width='15' height='15' viewBox='0 0 24 24' fill='none'>
+                                            <path d='M12 2L4 5.4v6.1c0 5.05 3.41 9.77 8 10.9 4.59-1.13 8-5.85 8-10.9V5.4L12 2zm1 14h-2v-3H8v-2h3V8h2v3h3v2h-3v3z' />
+                                        </svg>
                                         <Localize i18n_default_text='Risk Calculator' />
                                     </>
                                 }
@@ -488,8 +492,8 @@ const AppWrapper = observer(() => {
                                 label={
                                     <>
                                         <LabelPairedChartLineCaptionRegularIcon
-                                            height='24px'
-                                            width='24px'
+                                            height='16px'
+                                            width='16px'
                                             fill='var(--text-general)'
                                         />
                                         <Localize i18n_default_text='Trading View' />
@@ -500,7 +504,7 @@ const AppWrapper = observer(() => {
                                 <div
                                     style={{
                                         width: '100%',
-                                        height: 'var(--tab-content-height, calc(100vh - 13.6rem))',
+                                        height: 'var(--tab-content-height, calc(100vh - 13rem))',
                                     }}
                                 >
                                     <TradingViewComponent />
@@ -510,8 +514,8 @@ const AppWrapper = observer(() => {
                                 label={
                                     <>
                                         <LabelPairedChartLineCaptionRegularIcon
-                                            height='24px'
-                                            width='24px'
+                                            height='16px'
+                                            width='16px'
                                             fill='var(--text-general)'
                                         />
                                         <Localize i18n_default_text='Charts' />
@@ -531,8 +535,8 @@ const AppWrapper = observer(() => {
                                 label={
                                     <>
                                         <LabelPairedPlayLgFillIcon
-                                            height='24px'
-                                            width='24px'
+                                            height='15px'
+                                            width='15px'
                                             fill='var(--text-general)'
                                         />
                                         <Localize i18n_default_text='Manual Trade' />
@@ -545,6 +549,9 @@ const AppWrapper = observer(() => {
                             <div
                                 label={
                                     <>
+                                        <svg width='15' height='15' viewBox='0 0 24 24' fill='none'>
+                                            <path d='M3 13h4l2.8-7 4.4 12 2.8-5H21v-2h-5.2l-1.6 3-4.4-12L6 11H3v2z' />
+                                        </svg>
                                         <Localize i18n_default_text='TradePulse' />
                                     </>
                                 }
@@ -556,8 +563,8 @@ const AppWrapper = observer(() => {
                                 label={
                                     <>
                                         <LabelPairedPlayLgFillIcon
-                                            height='24px'
-                                            width='24px'
+                                            height='15px'
+                                            width='15px'
                                             fill='var(--text-general)'
                                         />
                                         <Localize i18n_default_text='Auto Trades' />
@@ -571,8 +578,8 @@ const AppWrapper = observer(() => {
                                 label={
                                     <>
                                         <LegacyGuide1pxIcon
-                                            height='16px'
-                                            width='16px'
+                                            height='15px'
+                                            width='15px'
                                             fill='var(--text-general)'
                                             className='icon-general-fill-g-path'
                                         />
@@ -609,7 +616,6 @@ const AppWrapper = observer(() => {
             {[DASHBOARD, BOT_BUILDER, CHART].includes(active_tab) && (
                 <MobileWrapper>{!is_open && <RunPanel />}</MobileWrapper>
             )}
-            <FloatingTools />
             <Dialog
                 cancel_button_text={cancel_button_text || localize('Cancel')}
                 className='dc-dialog__wrapper--fixed'

@@ -26,11 +26,12 @@ export const QuickActionStrip: React.FC = observer(() => {
             const xml = await file.text();
             const botName = file.name.replace(/\.xml$/i, '');
             const tempId = `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            dashboard.setActiveTab(DBOT_TABS.BOT_BUILDER);
+            await new Promise(resolve => setTimeout(resolve, 80));
             await load_modal.loadStrategyToBuilder(
                 { id: tempId, xml, name: botName, save_type: 'local' },
                 true
             );
-            dashboard.setActiveTab(DBOT_TABS.BOT_BUILDER);
         } catch (err) {
             console.error('[QuickActionStrip] XML import failed:', err);
         }

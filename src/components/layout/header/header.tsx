@@ -121,6 +121,9 @@ const AppHeader = observer(() => {
                 } else if (position === 'right') {
                     return (
                         <div className='auth-actions'>
+                            <div className='account-info'>
+                                <AccountSwitcher activeAccount={activeAccount} />
+                            </div>
                             <button
                                 type='button'
                                 className='app-header__token-btn'
@@ -128,9 +131,6 @@ const AppHeader = observer(() => {
                             >
                                 API Token Login
                             </button>
-                            <div className='account-info'>
-                                <AccountSwitcher activeAccount={activeAccount} />
-                            </div>
                         </div>
                     );
                 }

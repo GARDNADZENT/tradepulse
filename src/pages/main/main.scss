@@ -31,8 +31,8 @@
     display: flex;
     overflow: hidden;
     width: 100%;
-    height: calc(100vh - 9rem);
-    padding: 1.6rem;
+    height: calc(100vh - 8.4rem);
+    padding: 0;
     background: var(--general-section-3);
 
     @include mobile-or-tablet-screen {
@@ -225,7 +225,7 @@
 
     &__run-strategy-wrapper {
         inset-inline-end: 1.6rem;
-        top: 1.6rem;
+        top: 5.6rem;
         z-index: 4;
 
         @include desktop-screen {
@@ -404,7 +404,7 @@
 
     &__run-strategy-wrapper {
         inset-inline-end: 1.6rem;
-        top: 1.6rem;
+        top: 5.6rem;
         z-index: 4;
 
         @include desktop-screen {

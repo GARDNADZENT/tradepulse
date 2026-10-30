@@ -11,75 +11,78 @@
         margin: 0 auto;
     }
 
-    &__hero {
-        background: linear-gradient(135deg, #102A71 0%, #001840 100%);
-        border: 1px solid rgba(96, 165, 250, 0.28);
-        border-radius: 18px;
-        padding: 22px 26px;
-        color: #ffffff;
+    &__toolbar {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 18px;
+        gap: 14px;
         flex-wrap: wrap;
         margin-bottom: 18px;
-        box-shadow: 0 12px 30px rgba(0, 24, 64, 0.18);
     }
 
-    &__eyebrow {
-        display: block;
-        font-size: 11px;
-        font-weight: 800;
-        letter-spacing: 0.08em;
-        color: #93c5fd;
-        margin-bottom: 4px;
-    }
-
-    &__heading {
-        margin: 0 0 4px;
-        font-size: 22px;
-        font-weight: 800;
-        color: #ffffff;
-    }
-
-    &__subheading {
-        margin: 0;
-        font-size: 13.5px;
-        color: rgba(255, 255, 255, 0.82);
-    }
-
-    &__search-wrap {
-        min-width: 250px;
-        flex: 0 1 300px;
+    &__toolbar-right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
     }
 
     &__search {
-        width: 100%;
-        padding: 10px 14px;
+        min-width: 220px;
+        padding: 8px 14px;
         border-radius: 999px;
-        border: 1px solid rgba(255, 255, 255, 0.26);
-        background: rgba(255, 255, 255, 0.12);
-        color: #ffffff;
+        border: 1px solid rgba(16, 42, 113, 0.18);
+        background: #ffffff;
+        color: #001840;
         font-size: 13px;
         box-sizing: border-box;
 
         &::placeholder {
-            color: rgba(255, 255, 255, 0.68);
+            color: #64748b;
         }
 
         &:focus {
             outline: none;
-            background: rgba(255, 255, 255, 0.2);
-            border-color: #ffffff;
+            border-color: #102A71;
+            box-shadow: 0 0 0 3px rgba(16, 42, 113, 0.12);
+        }
+
+        .theme--dark & {
+            background: #081e4a;
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.18);
+        }
+    }
+
+    &__import-btn {
+        appearance: none;
+        padding: 8px 16px;
+        border-radius: 999px;
+        border: 1px solid #102A71;
+        background: #ffffff;
+        color: #102A71;
+        font-size: 12.5px;
+        font-weight: 800;
+        cursor: pointer;
+        transition: all 0.16s ease;
+
+        &:hover {
+            background: #102A71;
+            color: #ffffff;
+        }
+
+        .theme--dark & {
+            background: #081e4a;
+            color: #93c5fd;
+            border-color: rgba(147, 197, 253, 0.4);
         }
     }
 
     &__filters {
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 8px;
         flex-wrap: wrap;
-        margin-bottom: 18px;
     }
 
     &__filter-pill {

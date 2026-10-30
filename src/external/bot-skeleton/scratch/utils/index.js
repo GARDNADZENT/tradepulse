@@ -402,9 +402,12 @@ export const addDomAsBlock = (el_block, parent_block = null) => {
     return block;
 };
 
+const PURCHASE_BLOCK_ALIASES = ['purchase', 'mon_purchase', 'apollo_purchase', 'apollo_purchase2'];
+const normalizePurchaseType = type => (PURCHASE_BLOCK_ALIASES.includes(type) ? 'purchase' : type);
+
 const getAllRequiredBlocks = (workspace, required_block_types) => {
     return workspace.getAllBlocks().filter(block => {
-        const normalized_type = block.type === 'mon_purchase' ? 'purchase' : block.type;
+        const normalized_type = normalizePurchaseType(block.type);
         if (required_block_types.includes(normalized_type)) {
             return (
                 (block.childBlocks_.length === 0 && required_block_types.includes(block.category_)) ||
@@ -415,28 +418,21 @@ const getAllRequiredBlocks = (workspace, required_block_types) => {
 };
 
 const getMissingBlocks = (workspace, required_block_types) => {
-    return required_block_types.filter(blockType => {
-        const normalized_type = blockType === 'purchase' ? 'mon_purchase' : blockType;
-        return !workspace.getAllBlocks().some(block => block.type === blockType || block.type === normalized_type);
-    });
+    const all_normalized = workspace.getAllBlocks().map(block => normalizePurchaseType(block.type));
+    return required_block_types.filter(blockType => !all_normalized.includes(blockType));
 };
 
 const getDisabledBlocks = required_blocks_check => {
     const workspace = window.Blockly.derivWorkspace;
     const required_block_types = [getSelectedTradeType(workspace), ...config().mandatoryMainBlocks];
-    const disabled_blocks = Object.fromEntries(
-        workspace
-            .getAllBlocks()
-            .filter(block => {
-                const normalized_type = block.type === 'mon_purchase' ? 'purchase' : block.type;
-                return required_block_types.includes(normalized_type);
-            })
-            .map(block => [block.type, block.disabled])
-    );
+    const matching_blocks = workspace
+        .getAllBlocks()
+        .filter(block => required_block_types.includes(normalizePurchaseType(block.type)));
+
     const mandatory_blocks = ['before_purchase', 'purchase', 'trade_definition', 'trade_definition_tradeoptions'];
     const has_disabled_blocks = mandatory_blocks.some(type => {
-        const normalized_type = type === 'purchase' ? 'mon_purchase' : type;
-        return disabled_blocks[type] || disabled_blocks[normalized_type];
+        const group = matching_blocks.filter(b => normalizePurchaseType(b.type) === type);
+        return group.length > 0 && group.every(b => b.disabled);
     });
 
     return has_disabled_blocks

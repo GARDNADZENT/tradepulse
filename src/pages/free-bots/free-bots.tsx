@@ -1,9 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { observer } from 'mobx-react-lite';
 import { DBOT_TABS } from '@/constants/bot-contents';
 import { useStore } from '@/hooks/useStore';
 import { fetchXmlWithCache, prefetchAllXmlInBackground } from '@/utils/freebots-cache';
-import QuickActionStrip from '@/components/quick-action-strip/quick-action-strip';
 import './free-bots.scss';
 
 type BotCategory = 'all' | 'special' | 'virtual-hook' | 'turbo-ai';
@@ -227,6 +226,7 @@ const FreeBots = observer(() => {
     const [searchQuery, setSearchQuery] = useState('');
     const [loadingBotId, setLoadingBotId] = useState<string | null>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const xmlInputRef = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
         prefetchAllXmlInBackground(SPECIAL_BOTS_CATALOG.map(b => b.file));
@@ -254,6 +254,26 @@ const FreeBots = observer(() => {
         });
     }, [activeCategory, searchQuery]);
 
+    const loadXmlIntoVisibleBuilder = async (id: string, name: string, xml: string, saveType: 'pending' | 'local') => {
+        setActiveTab(DBOT_TABS.BOT_BUILDER);
+
+        for (let attempt = 0; attempt < 20; attempt++) {
+            if ((window as any).Blockly?.derivWorkspace) break;
+            await new Promise(resolve => setTimeout(resolve, 60));
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 60));
+        await load_modal.loadStrategyToBuilder({ id, xml, name, save_type: saveType }, true);
+
+        const ws = (window as any).Blockly?.derivWorkspace;
+        if (ws) {
+            try {
+                ws.getAllBlocks?.().forEach((b: any) => b.setErrorHighlighted?.(false));
+                (window as any).Blockly?.svgResize?.(ws);
+            } catch {}
+        }
+    };
+
     const handleLoadBot = async (bot: SpecialBotEntry) => {
         setLoadingBotId(bot.id);
         setLoadError(null);
@@ -264,11 +284,7 @@ const FreeBots = observer(() => {
                 return;
             }
             const tempId = `specialbot_${bot.id}_${Date.now()}`;
-            await load_modal.loadStrategyToBuilder(
-                { id: tempId, xml, name: bot.name, save_type: 'pending' },
-                true
-            );
-            setActiveTab(DBOT_TABS.BOT_BUILDER);
+            await loadXmlIntoVisibleBuilder(tempId, bot.name, xml, 'pending');
         } catch (err) {
             console.error('[SpecialBots] Error loading bot:', err);
             setLoadError(`Failed to load "${bot.name}" into Bot Builder.`);
@@ -277,59 +293,80 @@ const FreeBots = observer(() => {
         }
     };
 
+    const handleImportDeviceXml = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file) return;
+        setLoadError(null);
+        try {
+            const xml = await file.text();
+            const botName = file.name.replace(/\.xml$/i, '');
+            const tempId = `local_${Date.now()}`;
+            await loadXmlIntoVisibleBuilder(tempId, botName, xml, 'local');
+        } catch {
+            setLoadError('Failed to import XML file from device.');
+        }
+    };
+
     return (
         <div className='free-bots'>
             <div className='free-bots__container'>
-                <QuickActionStrip />
+                <input
+                    ref={xmlInputRef}
+                    type='file'
+                    accept='.xml,text/xml,application/xml'
+                    style={{ display: 'none' }}
+                    onChange={handleImportDeviceXml}
+                />
 
-                <div className='free-bots__hero'>
-                    <div>
-                        <span className='free-bots__eyebrow'>CURATED AUTOMATIONS · 1-CLICK DEPLOY</span>
-                        <h2 className='free-bots__heading'>Special Bots &amp; Virtual Hook Library</h2>
-                        <p className='free-bots__subheading'>
-                            Select any verified XML bot below to load its complete strategy directly into Bot Builder.
-                        </p>
+                <div className='free-bots__toolbar'>
+                    <div className='free-bots__filters'>
+                        <button
+                            type='button'
+                            className={`free-bots__filter-pill${activeCategory === 'all' ? ' free-bots__filter-pill--active' : ''}`}
+                            onClick={() => setActiveCategory('all')}
+                        >
+                            All Bots ({SPECIAL_BOTS_CATALOG.length})
+                        </button>
+                        <button
+                            type='button'
+                            className={`free-bots__filter-pill${activeCategory === 'special' ? ' free-bots__filter-pill--active' : ''}`}
+                            onClick={() => setActiveCategory('special')}
+                        >
+                            ☆ Special Bots ({SPECIAL_BOTS_CATALOG.filter(b => b.category.includes('special')).length})
+                        </button>
+                        <button
+                            type='button'
+                            className={`free-bots__filter-pill${activeCategory === 'virtual-hook' ? ' free-bots__filter-pill--active' : ''}`}
+                            onClick={() => setActiveCategory('virtual-hook')}
+                        >
+                            Virtual Hook ({SPECIAL_BOTS_CATALOG.filter(b => b.category.includes('virtual-hook')).length})
+                        </button>
+                        <button
+                            type='button'
+                            className={`free-bots__filter-pill${activeCategory === 'turbo-ai' ? ' free-bots__filter-pill--active' : ''}`}
+                            onClick={() => setActiveCategory('turbo-ai')}
+                        >
+                            Turbo &amp; AI ({SPECIAL_BOTS_CATALOG.filter(b => b.category.includes('turbo-ai')).length})
+                        </button>
                     </div>
-                    <div className='free-bots__search-wrap'>
+
+                    <div className='free-bots__toolbar-right'>
                         <input
                             type='search'
                             className='free-bots__search'
-                            placeholder='Search bots or strategies…'
+                            placeholder='Search bots…'
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                         />
+                        <button
+                            type='button'
+                            className='free-bots__import-btn'
+                            onClick={() => xmlInputRef.current?.click()}
+                        >
+                            Import XML ↑
+                        </button>
                     </div>
-                </div>
-
-                <div className='free-bots__filters'>
-                    <button
-                        type='button'
-                        className={`free-bots__filter-pill${activeCategory === 'all' ? ' free-bots__filter-pill--active' : ''}`}
-                        onClick={() => setActiveCategory('all')}
-                    >
-                        All Bots ({SPECIAL_BOTS_CATALOG.length})
-                    </button>
-                    <button
-                        type='button'
-                        className={`free-bots__filter-pill${activeCategory === 'special' ? ' free-bots__filter-pill--active' : ''}`}
-                        onClick={() => setActiveCategory('special')}
-                    >
-                        ☆ Special Bots ({SPECIAL_BOTS_CATALOG.filter(b => b.category.includes('special')).length})
-                    </button>
-                    <button
-                        type='button'
-                        className={`free-bots__filter-pill${activeCategory === 'virtual-hook' ? ' free-bots__filter-pill--active' : ''}`}
-                        onClick={() => setActiveCategory('virtual-hook')}
-                    >
-                        Virtual Hook ({SPECIAL_BOTS_CATALOG.filter(b => b.category.includes('virtual-hook')).length})
-                    </button>
-                    <button
-                        type='button'
-                        className={`free-bots__filter-pill${activeCategory === 'turbo-ai' ? ' free-bots__filter-pill--active' : ''}`}
-                        onClick={() => setActiveCategory('turbo-ai')}
-                    >
-                        Turbo &amp; AI ({SPECIAL_BOTS_CATALOG.filter(b => b.category.includes('turbo-ai')).length})
-                    </button>
                 </div>
 
                 {loadError && <div className='free-bots__error-banner'>{loadError}</div>}

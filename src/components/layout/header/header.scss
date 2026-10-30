@@ -66,10 +66,11 @@
         appearance: none;
         background: #ffffff;
         color: #001840 !important;
-        border: 1px solid rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.92);
         border-radius: 999px;
-        padding: 0.55rem 1.4rem;
-        margin-inline-end: 1rem;
+        padding: 0.5rem 1.35rem;
+        margin-inline-start: 0.8rem;
+        margin-inline-end: 0.4rem;
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         font-size: 1.25rem;
         font-weight: 700 !important;
@@ -86,9 +87,10 @@
         }
 
         @include mobile-or-tablet-screen {
-            padding: 0.45rem 0.95rem;
+            padding: 0.42rem 0.9rem;
             font-size: 1.1rem;
-            margin-inline-end: 0.6rem;
+            margin-inline-start: 0.4rem;
+            margin-inline-end: 0.2rem;
         }
     }
 }

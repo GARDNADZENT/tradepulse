@@ -1,11 +1,15 @@
 import { config } from '../constants/config';
 
+const PURCHASE_BLOCK_ALIASES = ['purchase', 'mon_purchase', 'apollo_purchase', 'apollo_purchase2'];
+
 export const hasAllRequiredBlocks = () => {
     const blocks_in_workspace = window.Blockly.derivWorkspace.getAllBlocks();
     const { mandatoryMainBlocks } = config();
     const required_block_types = ['trade_definition_tradeoptions', ...mandatoryMainBlocks];
     const all_block_types = blocks_in_workspace.map(block => block.type);
-    const normalized_block_types = all_block_types.map(type => (type === 'mon_purchase' ? 'purchase' : type));
+    const normalized_block_types = all_block_types.map(type =>
+        PURCHASE_BLOCK_ALIASES.includes(type) ? 'purchase' : type
+    );
     const has_all_required_blocks = required_block_types.every(required_block_type =>
         normalized_block_types.includes(required_block_type)
     );
