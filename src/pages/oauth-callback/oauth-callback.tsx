@@ -70,15 +70,8 @@ const OAuthCallback = () => {
     }, [navigate]);
 
     return (
-        <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: '100vh',
-            fontSize: '1.4rem',
-            color: 'var(--text-less-prominent)',
-        }}>
-            Completing authentication...
+        <div className='app-root__loading'>
+            Completing TradePulse authentication…
         </div>
     );
 };

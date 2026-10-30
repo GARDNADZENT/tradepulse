@@ -641,7 +641,7 @@ export const MarketKiller: React.FC = () => {
                                 {ss.dir === 'up' ? '\u2191' : ss.dir === 'down' ? '\u2193' : '\u2014'}{ss.dirCount}
                             </span>
                             <div style={{ width: 60, height: 6, background: '#1e293b', borderRadius: 3, overflow: 'hidden' }}>
-                                <div style={{ width: `${dirPct}%`, height: '100%', background: dirPct >= 100 ? '#ef4444' : '#f97316', borderRadius: 3, transition: 'width 0.3s' }} />
+                                <div style={{ width: `${dirPct}%`, height: '100%', background: dirPct >= 100 ? '#ef4444' : '#6366f1', borderRadius: 3, transition: 'width 0.3s' }} />
                             </div>
                             <span className='mw-killer__sym-wl'>
                                 <span className='mw-win'>{ss.wins}W</span>

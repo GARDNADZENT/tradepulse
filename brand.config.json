@@ -1,22 +1,22 @@
 {
-    "brand_name": "YourBrand",
-    "brand_domain": "yourbrand.com",
+    "brand_name": "TradePulse",
+    "brand_domain": "tradepulse.app",
     "brand_hostname": {
-        "staging": "staging.yourbrand.com/dashboard",
-        "production": "yourbrand.com/dashboard"
+        "staging": "staging.tradepulse.app/dashboard",
+        "production": "tradepulse.app/dashboard"
     },
-    "domain_name": "YourBrand.com",
+    "domain_name": "tradepulse.app",
     "colors": {
-        "primary": "#3B82F6",
-        "secondary": "#64748b",
-        "tertiary": "#8b5cf6",
-        "success": "#10b981",
-        "danger": "#ef4444",
-        "warning": "#f59e0b",
-        "info": "#0ea5e9",
-        "neutral": "#6b7280",
-        "black": "#0f172a",
-        "white": "#ffffff",
+        "primary": "#4F46E5",
+        "secondary": "#475569",
+        "tertiary": "#8B5CF6",
+        "success": "#059669",
+        "danger": "#E11D48",
+        "warning": "#D97706",
+        "info": "#0EA5E9",
+        "neutral": "#64748B",
+        "black": "#0F172A",
+        "white": "#FFFFFF",
         "grey": {
             "50": "#f8fafc",
             "100": "#f1f5f9",
@@ -32,9 +32,9 @@
     },
     "typography": {
         "font_family": {
-            "primary": "Inter",
-            "secondary": "Georgia, 'Times New Roman', Times, serif",
-            "monospace": "'Courier New', Courier, monospace"
+            "primary": "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+            "secondary": "'Inter', system-ui, sans-serif",
+            "monospace": "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace"
         },
         "font_sizes": {
             "xs": "0.75rem",
@@ -79,17 +79,18 @@
         "css_variable_prefix": "--brand"
     },
     "platform": {
-        "name": "MAKOTI TRADERS",
+        "name": "TradePulse",
+        "tagline": "Plan. Track. Perform.",
         "footer": {
             "enable_language_settings": false,
             "enable_theme_toggle": true
         },
         "hostname": {
             "production": {
-                "com": "bot.yourbrand.com"
+                "com": "tradepulse.app"
             },
             "staging": {
-                "com": "staging-bot.yourbrand.com"
+                "com": "staging.tradepulse.app"
             }
         },
         "auth2_url": {

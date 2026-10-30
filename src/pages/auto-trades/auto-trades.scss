@@ -1,15 +1,15 @@
-// ─── AUTO TRADES PAGE ─────────────────────────────────────────────────────────
+// ─── AUTO TRADES PAGE — TradePulse Institutional Console ─────────────────────
 
-$at-accent: #f97316;
-$at-accent2: #ef4444;
-$at-bg: #0f1117;
-$at-bg2: #181c27;
-$at-bg3: #1e2336;
-$at-border: rgba(249, 115, 22, 0.2);
-$at-text: #e2e8f0;
-$at-muted: #64748b;
-$at-win: #22c55e;
-$at-loss: #ef4444;
+$at-accent: #6366f1;
+$at-accent2: #8b5cf6;
+$at-bg: #0b1120;
+$at-bg2: #111827;
+$at-bg3: #1e293b;
+$at-border: rgba(148, 163, 184, 0.14);
+$at-text: #f1f5f9;
+$at-muted: #94a3b8;
+$at-win: #10b981;
+$at-loss: #f43f5e;
 $at-radius: 10px;
 
 .auto-trades {
@@ -20,28 +20,47 @@ $at-radius: 10px;
     min-width: 0;
     background: $at-bg;
     color: $at-text;
-    font-family: inherit;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     overflow: hidden;
 
     &__header {
-        padding: 24px 32px 16px;
+        padding: 20px 32px 16px;
         border-bottom: 1px solid $at-border;
         background: $at-bg2;
         flex-shrink: 0;
         width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    &__header-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    &__eyebrow {
+        font-size: 11.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #818cf8;
     }
 
     &__title {
-        margin: 0 0 4px;
-        font-size: 28px;
+        margin: 0;
+        font-size: 24px;
         font-weight: 700;
         letter-spacing: -0.02em;
-        color: #fff;
+        color: #f8fafc;
     }
 
     &__subtitle {
-        margin: 0 0 12px;
-        font-size: 14px;
+        margin: 2px 0 0;
+        font-size: 13.5px;
         color: $at-muted;
     }
 
@@ -49,23 +68,25 @@ $at-radius: 10px;
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        font-size: 13px;
-        font-weight: 500;
-        padding: 4px 12px;
+        font-size: 12.5px;
+        font-weight: 600;
+        padding: 6px 14px;
         border-radius: 999px;
-        background: rgba(239, 68, 68, 0.1);
-        color: $at-loss;
+        background: rgba(244, 63, 94, 0.12);
+        border: 1px solid rgba(244, 63, 94, 0.28);
+        color: #fda4af;
 
         &--connected {
-            background: rgba(34, 197, 94, 0.1);
-            color: $at-win;
+            background: rgba(16, 185, 129, 0.12);
+            border-color: rgba(16, 185, 129, 0.28);
+            color: #34d399;
         }
     }
 
     &__tabs {
         display: flex;
         gap: 4px;
-        padding: 12px 32px 0;
+        padding: 8px 32px 0;
         background: $at-bg2;
         border-bottom: 1px solid $at-border;
         flex-shrink: 0;
@@ -78,32 +99,33 @@ $at-radius: 10px;
         border: none;
         background: transparent;
         color: $at-muted;
+        font-family: inherit;
         font-size: 13px;
         font-weight: 600;
         padding: 10px 16px;
         border-radius: $at-radius $at-radius 0 0;
         cursor: pointer;
         white-space: nowrap;
-        transition: color 0.15s, background 0.15s;
+        transition: color 0.18s ease, background 0.18s ease;
         position: relative;
 
         &:hover {
-            color: #fff;
-            background: rgba(255, 255, 255, 0.04);
+            color: #f8fafc;
+            background: rgba(148, 163, 184, 0.08);
         }
 
         &--active {
-            color: #fff;
-            background: $at-bg3;
+            color: #a5b4fc;
+            background: rgba(99, 102, 241, 0.14);
 
             &::after {
                 content: '';
                 position: absolute;
                 bottom: 0;
-                left: 12px;
-                right: 12px;
-                height: 2px;
-                background: linear-gradient(90deg, $at-accent, $at-accent2);
+                left: 10px;
+                right: 10px;
+                height: 2.5px;
+                background: linear-gradient(90deg, #4f46e5, #8b5cf6, #06b6d4);
                 border-radius: 2px 2px 0 0;
             }
         }
@@ -112,7 +134,7 @@ $at-radius: 10px;
     &__body {
         flex: 1;
         overflow-y: auto;
-        padding: 24px 32px 32px;
+        padding: 24px 32px 48px;
         background: $at-bg;
         width: 100%;
         min-width: 0;
@@ -122,19 +144,19 @@ $at-radius: 10px;
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 12px 16px;
+        padding: 10px 16px;
         margin-bottom: 16px;
         border-radius: $at-radius;
-        background: rgba(239, 68, 68, 0.08);
-        border: 1px solid rgba(239, 68, 68, 0.15);
-        color: $at-loss;
+        background: rgba(244, 63, 94, 0.08);
+        border: 1px solid rgba(244, 63, 94, 0.2);
+        color: #fda4af;
         font-size: 13px;
         font-weight: 500;
 
         &--ok {
-            background: rgba(34, 197, 94, 0.08);
-            border-color: rgba(34, 197, 94, 0.15);
-            color: $at-win;
+            background: rgba(16, 185, 129, 0.08);
+            border-color: rgba(16, 185, 129, 0.2);
+            color: #34d399;
         }
     }
 }
@@ -146,11 +168,11 @@ $at-radius: 10px;
         }
 
         &__title {
-            font-size: 22px;
+            font-size: 20px;
         }
 
         &__tabs {
-            padding: 10px 16px 0;
+            padding: 8px 16px 0;
         }
 
         &__tab {
@@ -159,7 +181,7 @@ $at-radius: 10px;
         }
 
         &__body {
-            padding: 16px 20px 24px;
+            padding: 16px 20px 32px;
         }
     }
 }
@@ -172,12 +194,12 @@ $at-radius: 10px;
         }
 
         &__tab {
-            font-size: 11px;
+            font-size: 11.5px;
             padding: 8px 10px;
         }
 
         &__body {
-            padding: 12px 16px 20px;
+            padding: 12px 16px 28px;
         }
     }
 }

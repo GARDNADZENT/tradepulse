@@ -201,7 +201,6 @@ const AppHeader = observer(() => {
                 <Wrapper variant='left'>
                     <MobileMenu onLogout={handleLogout} />
                     <AppLogo />
-                    {!isDesktop && <span className='app-header__brand-text'>traderpulse.vercel.app</span>}
                     {isDesktop && <MenuItems />}
                 </Wrapper>
                 <Wrapper variant='right'>

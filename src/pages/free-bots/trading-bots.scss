@@ -5,131 +5,98 @@
     height: 100%;
     display: flex;
     flex-direction: column;
-    background: var(--general-main-1);
-    padding: 1rem 2rem;
+    background: var(--tp-bg, #f8fafc);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 
     &__cards-container {
         display: flex;
-        gap: 1rem;
-        margin-bottom: 1rem;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 24px 0;
+        background: var(--tp-surface, #ffffff);
+        border-bottom: 1px solid var(--tp-border, #e2e8f0);
         overflow-x: auto;
         overflow-y: hidden;
+        flex-shrink: 0;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: thin;
-        scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
-
-        &::-webkit-scrollbar {
-            height: 4px;
-        }
-
-        &::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        &::-webkit-scrollbar-thumb {
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 2px;
-        }
 
         @include mobile-or-tablet-screen {
-            gap: 0.75rem;
-            padding-bottom: 0.5rem;
+            gap: 4px;
+            padding: 6px 12px 0;
         }
     }
 
     &__card {
+        appearance: none;
         cursor: pointer;
-        border-radius: 4px;
-        padding: 0.5rem 2rem;
-        transition: all 0.2s ease;
-        display: flex;
+        border: none;
+        border-radius: 8px 8px 0 0;
+        padding: 11px 18px;
+        background: transparent;
+        color: var(--tp-text-tertiary, #64748b);
+        font-family: inherit;
+        transition: color 0.18s ease, background 0.18s ease;
+        display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-height: 40px;
         min-width: fit-content;
         flex-shrink: 0;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-        border: 2px solid transparent;
         position: relative;
         white-space: nowrap;
 
-        @include desktop-screen {
-            padding: 0.5rem 2.5rem;
-        }
-
         @include mobile-or-tablet-screen {
-            padding: 0.5rem 1.25rem;
+            padding: 9px 12px;
         }
 
-        &--dark {
-            background: #1e3a8a !important;
-            color: #ffffff !important;
-
-            &:hover:not(.trading-bots__card--active) {
-                background: #1e40af !important;
-            }
-
-            &.trading-bots__card--active {
-                background: #3b82f6 !important;
-                border-color: #3b82f6 !important;
-                box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4) !important;
-            }
-
-            &:not(.trading-bots__card--active) {
-                background: #1e3a8a !important;
-            }
+        svg,
+        svg > path,
+        svg > g > path {
+            color: currentColor;
         }
 
-        &--light {
-            background: rgba(255, 255, 255, 0.06) !important;
-            color: #7fa0be !important;
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        &:hover:not(&--active) {
+            color: var(--tp-text-primary, #0f172a);
+            background: var(--tp-surface-hover, #f1f5f9);
+        }
 
-            &:hover {
-                background: rgba(255, 255, 255, 0.1) !important;
+        &--active {
+            color: var(--tp-accent, #4f46e5);
+            background: var(--tp-accent-soft, rgba(79, 70, 229, 0.08));
+
+            &::after {
+                content: '';
+                position: absolute;
+                left: 8px;
+                right: 8px;
+                bottom: 0;
+                height: 2.5px;
+                border-radius: 2px 2px 0 0;
+                background: linear-gradient(90deg, #4f46e5, #8b5cf6, #06b6d4);
             }
 
-            &.trading-bots__card--active {
-                background: rgba(59, 130, 246, 0.18) !important;
-                border-color: #3b82f6 !important;
-                border-width: 2px !important;
-                color: #60a5fa !important;
-                box-shadow: 0 2px 12px rgba(59, 130, 246, 0.25) !important;
+            svg > path,
+            svg > g > path {
+                fill: currentColor;
             }
         }
 
         &-content {
-            display: flex;
+            display: inline-flex;
             flex-direction: row;
             align-items: center;
-            gap: 0.35rem;
+            gap: 8px;
         }
 
         &-label {
-            font-size: 0.8rem;
+            font-size: 13.5px;
             font-weight: 600;
             text-align: center;
             white-space: nowrap;
             color: inherit;
-        }
 
-        &--light.trading-bots__card--active {
-            svg,
-            svg > path,
-            svg > g > path {
-                fill: #60a5fa !important;
-            }
-        }
-
-        &--light:not(.trading-bots__card--active) {
-            svg,
-            svg > path,
-            svg > g > path {
-                fill: #7fa0be !important;
-            }
-
-            .trading-bots__card-label {
-                color: #7fa0be !important;
+            @include mobile-or-tablet-screen {
+                font-size: 12.5px;
             }
         }
     }
@@ -140,43 +107,9 @@
         min-height: 0;
         overflow-y: auto;
         overflow-x: hidden;
-        border-radius: 8px;
-        background: var(--general-main-1);
+        background: var(--tp-bg, #f8fafc);
         position: relative;
         -webkit-overflow-scrolling: touch;
         padding-bottom: 3rem;
-    }
-}
-
-/* Flying rocket next to SpeedBots tab */
-.nav-speedbots-rocket {
-    display: inline-block;
-    margin-left: 0.4rem;
-    font-size: 1.2em;
-    animation: rocketFly 2s ease-in-out infinite;
-    filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.8));
-    vertical-align: middle;
-}
-
-@keyframes rocketFly {
-    0% {
-        transform: translateY(0) translateX(0) rotate(0deg) scale(1);
-        opacity: 1;
-    }
-    25% {
-        transform: translateY(-8px) translateX(4px) rotate(-15deg) scale(1.1);
-        opacity: 0.9;
-    }
-    50% {
-        transform: translateY(-12px) translateX(8px) rotate(-25deg) scale(1.2);
-        opacity: 0.8;
-    }
-    75% {
-        transform: translateY(-8px) translateX(4px) rotate(-15deg) scale(1.1);
-        opacity: 0.9;
-    }
-    100% {
-        transform: translateY(0) translateX(0) rotate(0deg) scale(1);
-        opacity: 1;
     }
 }

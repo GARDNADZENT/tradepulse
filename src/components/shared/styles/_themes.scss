@@ -36,25 +36,25 @@
     --text-align-center: center;
 
     /* Brand colors - dynamically generated from brand.config.json */
-    --brand-white: #ffffff;
-    --brand-dark-grey: #0f172a;
-    --brand-red-coral: #3B82F6; /* legacy compatibility */
-    --brand-orange: #8b5cf6; /* legacy compatibility */
+    --brand-white: #FFFFFF;
+    --brand-dark-grey: #0F172A;
+    --brand-red-coral: #4F46E5; /* legacy compatibility */
+    --brand-orange: #8B5CF6; /* legacy compatibility */
 
     /* Dynamic brand colors (set by brand configuration) */
-    --brand-primary: #3B82F6;
-    --brand-secondary: #64748b;
-    --brand-tertiary: #8b5cf6;
-    --brand-success: #10b981;
-    --brand-danger: #ef4444;
-    --brand-warning: #f59e0b;
-    --brand-info: #0ea5e9;
-    --brand-neutral: #6b7280;
+    --brand-primary: #4F46E5;
+    --brand-secondary: #475569;
+    --brand-tertiary: #8B5CF6;
+    --brand-success: #059669;
+    --brand-danger: #E11D48;
+    --brand-warning: #D97706;
+    --brand-info: #0EA5E9;
+    --brand-neutral: #64748B;
 
     /* Brand typography - dynamically generated from brand.config.json */
-    --brand-font-primary: Inter;
-    --brand-font-secondary: Georgia, 'Times New Roman', Times, serif;
-    --brand-font-monospace: 'Courier New', Courier, monospace;
+    --brand-font-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --brand-font-secondary: 'Inter', system-ui, sans-serif;
+    --brand-font-monospace: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
     /* [/AI] */
 
     // App Cards gradient background

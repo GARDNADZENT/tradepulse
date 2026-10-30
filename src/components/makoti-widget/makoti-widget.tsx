@@ -292,11 +292,15 @@ export const MakotiWidget: React.FC = () => {
                 style={{ position: 'fixed', left: btnPosRef.current.x, top: btnPosRef.current.y, zIndex: 100001 }}
                 onPointerDown={onBtnPointerDown}
                 onClick={onBtnClick}
-                title='TRADERSPULSE — Scanner / Market Killer / O/U / HIGH/LOW'
+                title='TradePulse — Scanner / Market Killer / O/U / High-Low'
             >
                 <span className='mw-fab__pulse' />
-                <span className='mw-fab__icon'>⚔</span>
-                <span className='mw-fab__label'>TRADERSPULSE</span>
+                <span className='mw-fab__icon' aria-hidden='true'>
+                    <svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round' strokeLinejoin='round'>
+                        <polyline points='22 12 18 12 15 21 9 3 6 12 2 12' />
+                    </svg>
+                </span>
+                <span className='mw-fab__label'>PULSE</span>
             </button>
 
             {/* ── Floating window & tab content (always mounted so active killer survives close) ── */}
@@ -308,8 +312,12 @@ export const MakotiWidget: React.FC = () => {
             >
                 <div className='mw-win-header'>
                     <div className='mw-win-title'>
-                        <span className='mw-win-logo'>⚔</span>
-                        <span>TRADERSPULSE</span>
+                        <span className='mw-win-logo' aria-hidden='true'>
+                            <svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round' strokeLinejoin='round'>
+                                <polyline points='22 12 18 12 15 21 9 3 6 12 2 12' />
+                            </svg>
+                        </span>
+                        <span>TradePulse</span>
                         {tab !== 'scanner' && (
                             <span className={`mw-ws-dot ${wsReady ? 'mw-ws-dot--ok' : 'mw-ws-dot--off'}`}
                                 title={wsReady ? 'WebSocket connected' : 'WebSocket disconnected'} />
@@ -400,7 +408,9 @@ export const MakotiWidget: React.FC = () => {
                         setMinimized(false);
                     }}
                 >
-                    ⚔
+                    <svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round' strokeLinejoin='round'>
+                        <polyline points='22 12 18 12 15 21 9 3 6 12 2 12' />
+                    </svg>
                 </button>
             )}
         </>

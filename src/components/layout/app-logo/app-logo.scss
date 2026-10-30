@@ -2,16 +2,22 @@
     &__logo {
         padding-inline-start: 1.6rem;
         padding-inline-end: 1.6rem;
-        height: 32px;
+        height: 40px;
         display: flex;
         align-items: center;
         text-decoration: none;
+        transition: opacity 0.2s ease;
+
+        &:hover {
+            opacity: 0.9;
+        }
     }
 
     // Logo + app name mark (shared by the header and the mobile drawer).
     &__logo-mark {
         display: flex;
         align-items: center;
+        gap: 10px;
         min-width: 0;
     }
 
@@ -19,6 +25,8 @@
         width: auto;
         max-width: 160px;
         object-fit: contain;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(79, 70, 229, 0.22);
     }
 
     // Letter-badge fallback shown when no logo file/data URL is available.
@@ -27,28 +35,43 @@
         align-items: center;
         justify-content: center;
         flex: none;
-        border-radius: 0.8rem;
-        background: color-mix(in srgb, var(--brand-primary, var(--text-general)) 10%, transparent);
-        color: var(--brand-primary, var(--text-general));
+        border-radius: 9px;
+        background: linear-gradient(135deg, #6366f1 0%, #4f46e5 60%, #3730a3 100%);
+        color: #ffffff;
         font-weight: 700;
-        font-size: 1.4rem;
+        font-size: 1.5rem;
         line-height: 1;
+        box-shadow: 0 2px 8px rgba(79, 70, 229, 0.28);
+    }
+
+    &__logo-copy {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        min-width: 0;
     }
 
     &__logo-text {
-        margin-left: 1.2rem;
-        color: var(--text-general);
-        font-weight: 600;
-        font-size: 1.8rem;
+        color: var(--text-prominent);
+        font-weight: 700;
+        font-size: 1.65rem;
+        letter-spacing: -0.02em;
+        line-height: 1.15;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
         max-width: 220px;
     }
 
-    // On mobile the mark sits next to the hamburger and the account section, so
-    // tighten the padding and show the logo only — the app name is desktop-only
-    // here to avoid crowding. (The mobile drawer header still shows the name.)
+    &__logo-tagline {
+        color: var(--text-less-prominent, #64748b);
+        font-weight: 500;
+        font-size: 1.05rem;
+        letter-spacing: 0.02em;
+        line-height: 1.2;
+        white-space: nowrap;
+    }
+
     &--mobile {
         .app-header__logo {
             padding-inline-start: 0.8rem;
@@ -56,13 +79,16 @@
         }
 
         .app-header__logo-text {
+            font-size: 1.5rem;
+            max-width: 130px;
+        }
+
+        .app-header__logo-tagline {
             display: none;
         }
     }
 }
 
-// The same mark inside the mobile drawer header shows the app name (the header's
-// --mobile rule hides it, but the drawer has room) and can use the full available width.
 .mobile-menu__header .app-header__logo-text {
     display: block;
     max-width: 180px;

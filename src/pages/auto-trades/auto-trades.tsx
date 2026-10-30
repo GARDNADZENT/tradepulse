@@ -111,8 +111,11 @@ const AutoTrades: React.FC = () => {
     return (
         <div className='auto-trades'>
             <div className='auto-trades__header'>
-                <h1 className='auto-trades__title'>Auto Trades</h1>
-                <p className='auto-trades__subtitle'>Automated trading workspace</p>
+                <div className='auto-trades__header-copy'>
+                    <span className='auto-trades__eyebrow'>TradePulse · Plan. Track. Perform.</span>
+                    <h1 className='auto-trades__title'>Auto Trades</h1>
+                    <p className='auto-trades__subtitle'>Quantitative market scanners &amp; automated execution engines</p>
+                </div>
                 <div className={`auto-trades__status ${wsReady ? 'auto-trades__status--connected' : 'auto-trades__status--disconnected'}`}>
                     {wsReady ? '● Connected — tick data streaming' : '○ Connecting to Deriv API…'}
                 </div>

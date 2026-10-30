@@ -1,34 +1,35 @@
-/* TradePulse light theme — Account Info */
+/* TradePulse — Account Info */
 @import '@/components/shared/styles/_themes.scss';
 @import '@/components/shared/styles/_constants.scss';
 
 .account-info {
     display: flex;
     flex-direction: column;
-    gap: 32px;
+    gap: 28px;
 }
 
 .account-info__header {
-    margin-bottom: 8px;
+    margin-bottom: 4px;
 }
 
 .account-info__label {
-    font-size: 0.875rem;
+    font-size: 12px;
     font-weight: 600;
     color: var(--tp-accent);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
 }
 
 .account-info__title {
-    font-size: 2rem;
-    font-weight: bold;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
     color: var(--tp-text-primary);
-    margin: 4px 0 8px 0;
+    margin: 4px 0 6px 0;
 }
 
 .account-info__subtitle {
-    font-size: 0.95rem;
+    font-size: 14.5px;
     color: var(--tp-text-tertiary);
     margin: 0;
 }
@@ -42,16 +43,18 @@
 .summary-card {
     background: var(--tp-surface);
     border: 1px solid var(--tp-border);
-    border-radius: 12px;
-    padding: 16px;
+    border-radius: 14px;
+    padding: 20px;
     display: flex;
     flex-direction: column;
     gap: 8px;
-    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }
 
 .summary-card:hover {
-    box-shadow: 0 4px 6px rgba(15,23,42,.04), 0 20px 40px -20px rgba(15,23,42,.12);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(15, 23, 42, 0.04), 0 20px 40px -20px rgba(15, 23, 42, 0.12);
+    border-color: rgba(99, 102, 241, 0.3);
 }
 
 .summary-card--accent {
@@ -59,7 +62,7 @@
 }
 
 .summary-card--highlight {
-    border-color: var(--tp-profit-soft);
+    border-color: rgba(16, 185, 129, 0.35);
 }
 
 .summary-card__header {
@@ -69,11 +72,11 @@
 }
 
 .summary-card__label {
-    font-size: 0.875rem;
+    font-size: 12px;
     font-weight: 600;
     color: var(--tp-text-tertiary);
     text-transform: uppercase;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.04em;
 }
 
 .summary-card__icon {
@@ -89,8 +92,9 @@
 }
 
 .summary-card__value {
-    font-size: 1.625rem;
-    font-weight: bold;
+    font-size: 22px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
     color: var(--tp-text-primary);
     word-break: break-word;
 }
