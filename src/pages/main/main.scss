@@ -32,12 +32,7 @@
     overflow: hidden;
     width: 100%;
     height: calc(100vh - 9rem);
-    padding: 0;
-    background: #f8fafc;
-
-    .theme--dark & {
-        background: var(--general-main-1);
-    }
+    padding: 1.6rem;
 
     @include mobile-or-tablet-screen {
         height: calc(100vh - 6rem);

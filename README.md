@@ -1,25 +1,55 @@
 # TradePulse
 
-**Plan. Track. Perform.**
-
-Capital-first analytics, structured compounding schedules, and automated trading strategies powered by Deriv.
+Capital-first analytics and automated trading platform powered by Deriv.
 
 ## Features
 
-- **TradePulse Workspace** — My Journey, Master Schedule, Performance, and Account tabs for disciplined daily compounding
-- **Bot Builder** — Visual strategy builder powered by Blockly 10 with automated Deriv execution
-- **Auto Trades & Scanners** — Quantitative market scanners and automated tick-level execution engines
-- **Manual Trade** — Direct digit & contract placement workspace with live frequency histograms
-- **Trading Bots & Risk Calculator** — Pre-built XML bots, capital allocation calculator, and strategy playbooks
-- **Smart Charts** — Real-time market charts via SmartCharts Champion
-- **OAuth 2.0 + PKCE Authentication** — Secure Deriv account integration
+- **TradePulse Analytics** — Dashboard, My Journey, Master Schedule, Performance, and Account tabs for lifetime trading analytics
+- **Bot Builder** — Visual strategy builder powered by Blockly with automated execution
+- **Manual Trade** — Direct trade placement interface
+- **Trading Bots** — Pre-built automated strategies
+- **Smart Charts** — Real-time market charts via Smart Charts Champion
+- **OAuth Authentication** — Secure Deriv account integration
+
+## Tech Stack
+
+- React + TypeScript
+- MobX for state management
+- RSBuild for bundling
+- Blockly for visual programming
+- Deriv API / WebSocket
 
 ## Getting Started
 
 ```bash
-cp .env.example .env
-pnpm install
+# install dependencies
+npm install
+
+# run dev server
 npm run dev
+
+# type check
+npm run type-check
+
+# build for production
+npm run build
+```
+
+## Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start dev server on port 4003 |
+| `npm run build` | Production build |
+| `npm run test` | Run tests |
+| `npm run type-check` | TypeScript type checking |
+
+## Environment Variables
+
+Required for local development:
+
+```
+NEXT_PUBLIC_DERIV_APP_ID=<your-deriv-app-id>
 ```
 
 ## License

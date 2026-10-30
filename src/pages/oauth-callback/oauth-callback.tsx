@@ -72,32 +72,13 @@ const OAuthCallback = () => {
     return (
         <div style={{
             display: 'flex',
-            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '8px',
             minHeight: '100vh',
-            background: '#f8fafc',
-            fontFamily: "'Inter', system-ui, sans-serif",
-            color: '#0f172a',
+            fontSize: '1.4rem',
+            color: 'var(--text-less-prominent)',
         }}>
-            <div style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: '10px',
-                background: 'linear-gradient(135deg, #6366f1 0%, #4338ca 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#fff',
-                marginBottom: '6px',
-            }}>
-                <svg width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round' strokeLinejoin='round'>
-                    <polyline points='22 12 18 12 15 21 9 3 6 12 2 12' />
-                </svg>
-            </div>
-            <div style={{ fontSize: '16px', fontWeight: 700 }}>Signing in to TradePulse…</div>
-            <div style={{ fontSize: '12.5px', color: '#64748b' }}>Plan. Track. Perform.</div>
+            Completing authentication...
         </div>
     );
 };

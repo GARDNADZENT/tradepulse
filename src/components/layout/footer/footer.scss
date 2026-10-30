@@ -5,42 +5,16 @@
     height: 3.6rem;
     display: flex;
     flex-direction: row-reverse;
-    padding: 0 1.6rem;
+    padding: 0 1rem;
     align-items: center;
     position: fixed;
     bottom: 0;
     right: 0;
     left: 0;
-    border-top: 1px solid #e2e8f0;
-    background: #ffffff;
-    font-family: 'Inter', system-ui, sans-serif;
+    border-top: 1px solid var(--general-section-1);
+    box-shadow: 0 1px 0 0 var(--general-section-1) inset;
+    background: var(--general-main-1);
     z-index: 2;
-
-    .theme--dark & {
-        background: var(--general-main-1);
-        border-top-color: var(--general-section-1);
-    }
-
-    &__brand-pill {
-        margin-right: auto;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 11.5px;
-        font-weight: 500;
-        color: #64748b;
-
-        @include mobile-or-tablet-screen {
-            display: none;
-        }
-    }
-
-    &__brand-dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: #6366f1;
-    }
 
     &__icon {
         padding: 0.8rem;

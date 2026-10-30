@@ -34,67 +34,69 @@ const TradingBots: React.FC = () => {
     return (
         <div className='trading-bots'>
             <div className='trading-bots__cards-container'>
-                <button
-                    type='button'
-                    className={`trading-bots__card ${active_tool === 'free-bots' ? 'trading-bots__card--active' : ''}`}
+                <div
+                    className={`trading-bots__card trading-bots__card--light ${active_tool === 'free-bots' ? 'trading-bots__card--active' : ''}`}
                     onClick={() => handleCardClick('free-bots')}
                 >
                     <div className='trading-bots__card-content'>
-                        <LabelPairedPuzzlePieceTwoCaptionBoldIcon height='16px' width='16px' />
+                        <LabelPairedPuzzlePieceTwoCaptionBoldIcon
+                            height='16px'
+                            width='16px'
+                            fill={active_tool === 'free-bots' ? '#3b82f6' : '#1e3a8a'}
+                        />
                         <span className='trading-bots__card-label'>
                             <Localize i18n_default_text='Free Bots' />
                         </span>
                     </div>
-                </button>
-                <button
-                    type='button'
-                    className={`trading-bots__card ${active_tool === 'speedbots' ? 'trading-bots__card--active' : ''}`}
+                </div>
+                <div
+                    className={`trading-bots__card trading-bots__card--light ${active_tool === 'speedbots' ? 'trading-bots__card--active' : ''}`}
                     onClick={() => handleCardClick('speedbots')}
                 >
                     <div className='trading-bots__card-content'>
-                        <svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.2' strokeLinecap='round' strokeLinejoin='round'>
-                            <polygon points='13 2 3 14 12 14 11 22 21 10 12 10 13 2' />
-                        </svg>
+                        <LabelPairedPuzzlePieceTwoCaptionBoldIcon
+                            height='16px'
+                            width='16px'
+                            fill={active_tool === 'speedbots' ? '#3b82f6' : '#1e3a8a'}
+                        />
                         <span className='trading-bots__card-label'>
                             <Localize i18n_default_text='SpeedBots' />
                         </span>
+                        <span className='nav-speedbots-rocket' aria-hidden='true'>
+                            🚀
+                        </span>
                     </div>
-                </button>
-                <button
-                    type='button'
-                    className={`trading-bots__card ${active_tool === 'calculator' ? 'trading-bots__card--active' : ''}`}
+                </div>
+                <div
+                    className={`trading-bots__card trading-bots__card--light ${active_tool === 'calculator' ? 'trading-bots__card--active' : ''}`}
                     onClick={() => handleCardClick('calculator')}
                 >
                     <div className='trading-bots__card-content'>
-                        <svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.2' strokeLinecap='round' strokeLinejoin='round'>
-                            <rect x='4' y='2' width='16' height='20' rx='2' />
-                            <line x1='8' y1='6' x2='16' y2='6' />
-                            <line x1='8' y1='11' x2='8.01' y2='11' />
-                            <line x1='12' y1='11' x2='12.01' y2='11' />
-                            <line x1='16' y1='11' x2='16.01' y2='11' />
-                            <line x1='8' y1='15' x2='8.01' y2='15' />
-                            <line x1='12' y1='15' x2='12.01' y2='15' />
-                            <line x1='16' y1='15' x2='16.01' y2='15' />
-                        </svg>
+                        <LabelPairedPuzzlePieceTwoCaptionBoldIcon
+                            height='16px'
+                            width='16px'
+                            fill={active_tool === 'calculator' ? '#3b82f6' : '#1e3a8a'}
+                        />
                         <span className='trading-bots__card-label'>
-                            <Localize i18n_default_text='Risk Calculator' />
+                            <Localize i18n_default_text='Calculator' />
                         </span>
                     </div>
-                </button>
-                <button
-                    type='button'
-                    className={`trading-bots__card ${active_tool === 'strategies' ? 'trading-bots__card--active' : ''}`}
+                </div>
+                <div
+                    className={`trading-bots__card trading-bots__card--light ${active_tool === 'strategies' ? 'trading-bots__card--active' : ''}`}
                     onClick={() => handleCardClick('strategies')}
                 >
                     <div className='trading-bots__card-content'>
-                        <svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.2' strokeLinecap='round' strokeLinejoin='round'>
-                            <polyline points='22 12 18 12 15 21 9 3 6 12 2 12' />
-                        </svg>
+                        <LabelPairedPuzzlePieceTwoCaptionBoldIcon
+                            height='16px'
+                            width='16px'
+                            fill={active_tool === 'strategies' ? '#3b82f6' : '#1e3a8a'}
+                        />
                         <span className='trading-bots__card-label'>
                             <Localize i18n_default_text='Strategies' />
                         </span>
                     </div>
-                </button>
+                </div>
             </div>
             <div className='trading-bots__content'>{content}</div>
         </div>

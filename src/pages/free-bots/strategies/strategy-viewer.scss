@@ -5,24 +5,23 @@
     height: 100%;
     display: flex;
     flex-direction: column;
-    background: #f8fafc;
-    border-radius: 20px;
-    border: 1px solid #e2e8f0;
+    background: #f5f5f5;
+    border-radius: 8px;
     overflow: hidden;
-    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 
     &__toolbar {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 10px 18px;
+        padding: 0.75rem 1rem;
         background: #ffffff;
-        border-bottom: 1px solid #e2e8f0;
+        border-bottom: 1px solid #e5e7eb;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 
         &-left,
         &-right {
             display: flex;
-            gap: 6px;
+            gap: 0.5rem;
         }
 
         &-center {
@@ -34,18 +33,18 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 34px;
-            height: 34px;
-            border: 1px solid transparent;
+            width: 32px;
+            height: 32px;
+            border: none;
             background: transparent;
-            border-radius: 8px;
+            border-radius: 4px;
             cursor: pointer;
-            color: #475569;
-            transition: all 0.18s ease;
+            color: #4a5568;
+            transition: all 0.2s ease;
 
             &:hover {
-                background: #f8fafc;
-                color: #6366f1;
+                background: #f3f4f6;
+                color: #1e40af;
             }
 
             svg {
@@ -56,8 +55,8 @@
     }
 
     &__page-info {
-        font-size: 13px;
-        color: #64748b;
+        font-size: 0.875rem;
+        color: #6b7280;
         font-weight: 500;
     }
 
@@ -65,237 +64,277 @@
         flex: 1;
         overflow-y: auto;
         overflow-x: hidden;
-        background: #f8fafc;
-        padding: 28px 24px 48px;
+        background: #ffffff;
+        padding: 2rem;
         -webkit-overflow-scrolling: touch;
         position: relative;
 
         @include mobile-or-tablet-screen {
-            padding: 18px 12px 36px;
+            padding: 1.5rem 1rem;
         }
     }
 
     &__back-button {
-        display: inline-flex;
+        display: flex;
         align-items: center;
-        gap: 8px;
-        padding: 9px 18px;
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 10px;
-        color: #6366f1;
-        font-family: inherit;
-        font-size: 13.5px;
+        gap: 0.5rem;
+        padding: 0.75rem 1.5rem;
+        background: transparent;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        color: #1e40af;
+        font-size: 0.95rem;
         font-weight: 600;
         cursor: pointer;
-        transition: all 0.18s ease;
-        margin-bottom: 20px;
+        transition: all 0.2s ease;
+        margin-bottom: 1.5rem;
 
         &:hover {
-            background: #f8fafc;
-            border-color: #6366f1;
+            background: #f3f4f6;
+            border-color: #3b82f6;
         }
 
         svg {
             width: 16px;
             height: 16px;
         }
+
+        @include mobile-or-tablet-screen {
+            padding: 0.65rem 1.25rem;
+            font-size: 0.85rem;
+        }
     }
 
     &__document {
-        max-width: 880px;
+        max-width: 900px;
         margin: 0 auto;
         background: #ffffff;
-        padding: 36px 32px;
-        border: 1px solid #e2e8f0;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -12px rgba(15, 23, 42, 0.08);
-        border-radius: 20px;
+        padding: 2rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        border-radius: 4px;
 
         @include mobile-or-tablet-screen {
-            padding: 22px 16px;
+            padding: 1.5rem 1rem;
         }
     }
 
     &__title {
-        font-size: 24px;
+        font-size: 2rem;
         font-weight: 700;
-        color: #0f172a;
-        margin-bottom: 24px;
+        color: #1e40af;
+        margin-bottom: 2rem;
         text-align: center;
-        letter-spacing: -0.015em;
+        text-transform: uppercase;
+        letter-spacing: 1px;
 
         @include mobile-or-tablet-screen {
-            font-size: 20px;
-            margin-bottom: 18px;
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
         }
     }
 }
 
 .strategy-section {
-    margin-bottom: 32px;
+    margin-bottom: 3rem;
 
     &__number {
-        font-size: 19px;
+        font-size: 1.75rem;
         font-weight: 700;
-        color: #059669;
-        margin-bottom: 16px;
-        border-bottom: 2px solid rgba(5, 150, 105, 0.25);
-        padding-bottom: 8px;
+        color: #10b981;
+        margin-bottom: 1.5rem;
+        border-bottom: 2px solid #10b981;
+        padding-bottom: 0.5rem;
+
+        @include mobile-or-tablet-screen {
+            font-size: 1.5rem;
+        }
     }
 }
 
 .strategy-subsection {
-    margin-bottom: 24px;
-    padding: 20px;
-    background: #f8fafc;
-    border-radius: 14px;
-    border-left: 4px solid #6366f1;
+    margin-bottom: 2.5rem;
+    padding: 1.5rem;
+    background: #f9fafb;
+    border-radius: 8px;
+    border-left: 4px solid #3b82f6;
 
     &__title {
-        font-size: 16px;
+        font-size: 1.5rem;
         font-weight: 700;
-        color: #6366f1;
-        margin-bottom: 10px;
+        color: #1e40af;
+        margin-bottom: 1rem;
         text-transform: uppercase;
-        letter-spacing: 0.02em;
+
+        @include mobile-or-tablet-screen {
+            font-size: 1.25rem;
+        }
     }
 
     &__digits {
-        font-size: 14px;
-        font-family: 'JetBrains Mono', monospace;
+        font-size: 1.1rem;
         font-weight: 600;
-        color: #0f172a;
-        margin-bottom: 10px;
-        padding: 8px 12px;
+        color: #4b5563;
+        margin-bottom: 1rem;
+        padding: 0.5rem;
         background: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
+        border-radius: 4px;
     }
 
     &__recommended {
-        font-size: 13.5px;
+        font-size: 1rem;
         font-weight: 600;
         color: #059669;
-        margin-bottom: 10px;
-        padding: 8px 12px;
+        margin-bottom: 1rem;
+        padding: 0.5rem;
         background: #ecfdf5;
-        border-radius: 8px;
+        border-radius: 4px;
     }
 
     &__heading {
-        font-size: 13.5px;
+        font-size: 1.2rem;
         font-weight: 700;
-        color: #0f172a;
-        margin-top: 16px;
-        margin-bottom: 8px;
+        color: #1e40af;
+        margin-top: 1.5rem;
+        margin-bottom: 1rem;
         text-transform: uppercase;
-        letter-spacing: 0.04em;
+
+        @include mobile-or-tablet-screen {
+            font-size: 1.1rem;
+        }
     }
 }
 
 .strategy-detail {
-    margin: 16px 0;
-    padding: 16px;
+    margin: 1.5rem 0;
+    padding: 1rem;
     background: #ffffff;
-    border-radius: 12px;
-    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
 
     &__title {
-        font-size: 14.5px;
+        font-size: 1.1rem;
         font-weight: 700;
         color: #6366f1;
-        margin-bottom: 8px;
+        margin-bottom: 0.75rem;
     }
 }
 
 .strategy-list {
     list-style: none;
     padding: 0;
-    margin: 10px 0;
+    margin: 1rem 0;
 
     li {
-        padding: 6px 0 6px 18px;
+        padding: 0.75rem 0;
+        padding-left: 1.5rem;
         position: relative;
-        color: #475569;
-        line-height: 1.65;
-        font-size: 14px;
+        color: #374151;
+        line-height: 1.6;
+        font-size: 1rem;
 
         &::before {
             content: '•';
             position: absolute;
-            left: 2px;
-            color: #6366f1;
+            left: 0;
+            color: #3b82f6;
             font-weight: bold;
+            font-size: 1.2rem;
+        }
+
+        @include mobile-or-tablet-screen {
+            font-size: 0.9rem;
+            padding: 0.5rem 0;
+            padding-left: 1.25rem;
         }
     }
 }
 
 .strategy-list-numbered {
     list-style: decimal;
-    padding-left: 22px;
-    margin: 10px 0;
+    padding-left: 2rem;
+    margin: 1rem 0;
 
     li {
-        padding: 6px 0;
-        color: #475569;
-        line-height: 1.65;
-        font-size: 14px;
+        padding: 0.75rem 0;
+        color: #374151;
+        line-height: 1.6;
+        font-size: 1rem;
+
+        @include mobile-or-tablet-screen {
+            font-size: 0.9rem;
+            padding: 0.5rem 0;
+        }
     }
 }
 
 .strategy-text {
-    color: #475569;
+    color: #374151;
     line-height: 1.7;
-    margin: 10px 0;
-    font-size: 14px;
+    margin: 1rem 0;
+    font-size: 1rem;
 
     strong {
-        color: #6366f1;
+        color: #1e40af;
         font-weight: 700;
+    }
+
+    @include mobile-or-tablet-screen {
+        font-size: 0.9rem;
     }
 }
 
 .strategy-bots {
-    margin-top: 12px;
-    padding: 12px 14px;
-    background: rgba(99, 102, 241, 0.08);
-    border-radius: 10px;
-    border-left: 3px solid #6366f1;
-    color: #6366f1;
+    margin-top: 1rem;
+    padding: 1rem;
+    background: #eff6ff;
+    border-radius: 6px;
+    border-left: 4px solid #3b82f6;
+    color: #1e40af;
     font-weight: 600;
-    font-size: 13.5px;
+    font-size: 1rem;
+
+    @include mobile-or-tablet-screen {
+        font-size: 0.9rem;
+        padding: 0.75rem;
+    }
 }
 
 .strategy-note {
-    margin-top: 12px;
-    padding: 10px 14px;
-    background: #fffbeb;
-    border-radius: 10px;
-    border-left: 3px solid #d97706;
-    color: #d97706;
+    margin-top: 1rem;
+    padding: 0.75rem;
+    background: #fef3c7;
+    border-radius: 6px;
+    border-left: 4px solid #f59e0b;
+    color: #92400e;
     font-weight: 600;
-    font-size: 13px;
+    font-size: 0.95rem;
+    font-style: italic;
 }
 
 .strategy-footer {
-    margin-top: 32px;
-    padding: 22px;
+    margin-top: 3rem;
+    padding: 2rem;
     text-align: center;
-    background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
-    border-radius: 14px;
+    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+    border-radius: 8px;
 
     &__text {
-        font-size: 15px;
+        font-size: 1.5rem;
         font-weight: 700;
         color: #ffffff;
-        letter-spacing: 0.03em;
-        margin: 0;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+
+        @include mobile-or-tablet-screen {
+            font-size: 1.2rem;
+        }
     }
 }
 
 .strategy-placeholder {
     text-align: center;
-    padding: 48px 24px;
-    color: #64748b;
-    font-size: 14px;
+    padding: 4rem 2rem;
+    color: #6b7280;
+    font-size: 1.2rem;
 }
