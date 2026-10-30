@@ -45,7 +45,7 @@ const TradingBots: React.FC = () => {
                             fill={active_tool === 'free-bots' ? '#ffffff' : '#102A71'}
                         />
                         <span className='trading-bots__card-label'>
-                            <Localize i18n_default_text='Free Bots' />
+                            <Localize i18n_default_text='Special Bots' />
                         </span>
                     </div>
                 </div>

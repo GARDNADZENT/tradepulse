@@ -48,6 +48,11 @@ import TradingBots from '../free-bots/trading-bots';
 import ManualTrade from '../manual-trade';
 import { TradePulse } from '../tradepulse';
 import AutoTrades from '../auto-trades/auto-trades';
+import DigitsAnalysis from '../digits-analysis/digits-analysis';
+import CopyTrading from '../copy-trading/copy-trading';
+import RiskCalculator from '../free-bots/risk-calculator';
+import TradingViewComponent from '@/components/trading-view-chart/trading-view';
+import FloatingTools from '@/components/floating-tools/floating-tools';
 import './main.scss';
 
 const ChartWrapper = lazy(() => import('../chart/chart-wrapper'));
@@ -82,9 +87,22 @@ const AppWrapper = observer(() => {
         [key: string]: string;
     };
     const { clear } = summary_card;
-    const { DASHBOARD, BOT_BUILDER, TRADING_BOTS, MANUAL_TRADE, TRADEPULSE, AUTO_TRADES } = DBOT_TABS;
+    const { DASHBOARD, BOT_BUILDER, CHART, MANUAL_TRADE } = DBOT_TABS;
     const init_render = React.useRef(true);
-    const hash = ['dashboard', 'bot_builder', 'chart', 'trading_bots', 'manual_trade', 'tradepulse', 'auto_trades', 'tutorial'];
+    const hash = [
+        'dashboard',
+        'bot_builder',
+        'special_bots',
+        'digits_analysis',
+        'copy_trading',
+        'risk_calculator',
+        'trading_view',
+        'chart',
+        'manual_trade',
+        'tradepulse',
+        'auto_trades',
+        'tutorial',
+    ];
     const { isDesktop } = useDevice();
     const location = useLocation();
     const navigate = useNavigate();
@@ -414,6 +432,83 @@ const AppWrapper = observer(() => {
                             <div
                                 label={
                                     <>
+                                        <LabelPairedPuzzlePieceTwoCaptionBoldIcon
+                                            height='24px'
+                                            width='24px'
+                                            fill='var(--text-general)'
+                                        />
+                                        <Localize i18n_default_text='Special Bots' />
+                                    </>
+                                }
+                                id='id-trading-bots'
+                            >
+                                <TradingBots />
+                            </div>
+                            <div
+                                label={
+                                    <>
+                                        <LabelPairedChartLineCaptionRegularIcon
+                                            height='24px'
+                                            width='24px'
+                                            fill='var(--text-general)'
+                                        />
+                                        <Localize i18n_default_text='Digits Analysis' />
+                                    </>
+                                }
+                                id='id-digits-analysis'
+                            >
+                                <DigitsAnalysis />
+                            </div>
+                            <div
+                                label={
+                                    <>
+                                        <LabelPairedObjectsColumnCaptionRegularIcon
+                                            height='24px'
+                                            width='24px'
+                                            fill='var(--text-general)'
+                                        />
+                                        <Localize i18n_default_text='Copy Trading' />
+                                    </>
+                                }
+                                id='id-copy-trading'
+                            >
+                                <CopyTrading />
+                            </div>
+                            <div
+                                label={
+                                    <>
+                                        <Localize i18n_default_text='Risk Calculator' />
+                                    </>
+                                }
+                                id='id-risk-calculator'
+                            >
+                                <RiskCalculator />
+                            </div>
+                            <div
+                                label={
+                                    <>
+                                        <LabelPairedChartLineCaptionRegularIcon
+                                            height='24px'
+                                            width='24px'
+                                            fill='var(--text-general)'
+                                        />
+                                        <Localize i18n_default_text='Trading View' />
+                                    </>
+                                }
+                                id='id-trading-view'
+                            >
+                                <div
+                                    style={{
+                                        width: '100%',
+                                        height: 'var(--tab-content-height, calc(100vh - 13.6rem))',
+                                    }}
+                                >
+                                    <TradingViewComponent />
+                                </div>
+                            </div>
+                            <div
+                                label={
+                                    <>
                                         <LabelPairedChartLineCaptionRegularIcon
                                             height='24px'
                                             width='24px'
@@ -431,21 +526,6 @@ const AppWrapper = observer(() => {
                                 <Suspense fallback={<div className='app-root__loading'>Loading chart...</div>}>
                                     <ChartWrapper show_digits_stats={false} />
                                 </Suspense>
-                            </div>
-                            <div
-                                label={
-                                    <>
-                                        <LabelPairedPuzzlePieceTwoCaptionBoldIcon
-                                            height='24px'
-                                            width='24px'
-                                            fill='var(--text-general)'
-                                        />
-                                        <Localize i18n_default_text='Trading Bots' />
-                                    </>
-                                }
-                                id='id-trading-bots'
-                            >
-                                <TradingBots />
                             </div>
                             <div
                                 label={
@@ -475,6 +555,21 @@ const AppWrapper = observer(() => {
                             <div
                                 label={
                                     <>
+                                        <LabelPairedPlayLgFillIcon
+                                            height='24px'
+                                            width='24px'
+                                            fill='var(--text-general)'
+                                        />
+                                        <Localize i18n_default_text='Auto Trades' />
+                                    </>
+                                }
+                                id='id-auto-trades'
+                            >
+                                <AutoTrades />
+                            </div>
+                            <div
+                                label={
+                                    <>
                                         <LegacyGuide1pxIcon
                                             height='16px'
                                             width='16px'
@@ -496,27 +591,12 @@ const AppWrapper = observer(() => {
                                     </Suspense>
                                 </div>
                             </div>
-                            <div
-                                label={
-                                    <>
-                                        <LabelPairedPlayLgFillIcon
-                                            height='24px'
-                                            width='24px'
-                                            fill='var(--text-general)'
-                                        />
-                                        <Localize i18n_default_text='Auto Trades' />
-                                    </>
-                                }
-                                id='id-auto-trades'
-                            >
-                                <AutoTrades />
-                            </div>
                         </Tabs>
                         {!isDesktop && right_tab_shadow && <span className='tabs-shadow tabs-shadow--right' />}{' '}
                     </div>
                 </div>
             </div>
-            {active_tab !== MANUAL_TRADE && (
+            {[DASHBOARD, BOT_BUILDER, CHART].includes(active_tab) && (
                 <DesktopWrapper>
                     <div className='main__run-strategy-wrapper'>
                         <RunStrategy />
@@ -526,7 +606,10 @@ const AppWrapper = observer(() => {
                     <TradingViewModal />
                 </DesktopWrapper>
             )}
-            {active_tab !== MANUAL_TRADE && <MobileWrapper>{!is_open && <RunPanel />}</MobileWrapper>}
+            {[DASHBOARD, BOT_BUILDER, CHART].includes(active_tab) && (
+                <MobileWrapper>{!is_open && <RunPanel />}</MobileWrapper>
+            )}
+            <FloatingTools />
             <Dialog
                 cancel_button_text={cancel_button_text || localize('Cancel')}
                 className='dc-dialog__wrapper--fixed'

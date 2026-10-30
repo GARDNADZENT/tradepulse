@@ -207,6 +207,19 @@
         }
     }
 
+    &__btn--token {
+        margin-top: 0.7rem;
+        background: #ffffff;
+        color: #001840;
+        border: 1.5px solid rgba(255, 255, 255, 0.9);
+        box-shadow: 0 4px 18px rgba(0, 12, 36, 0.35);
+
+        &:hover:not(:disabled) {
+            transform: translateY(-2px);
+            background: #f1f5f9;
+        }
+    }
+
     &__btn--loading {
         animation: loadingPulse 1.6s ease-in-out infinite;
         pointer-events: none;

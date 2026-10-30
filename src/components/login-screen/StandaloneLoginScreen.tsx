@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { generateOAuthURL } from '@/components/shared';
+import ApiTokenModal from '@/components/api-token-modal/api-token-modal';
 import './LoginScreen.scss';
 
 const PARTICLES = 50;
@@ -42,6 +43,7 @@ const StandaloneLoginScreen: React.FC = () => {
     const [isNewLoginLoading, setIsNewLoginLoading] = useState(false);
     const [isNewSignupLoading, setIsNewSignupLoading] = useState(false);
     const [newLoginError, setNewLoginError] = useState('');
+    const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
 
     useEffect(() => {
         if (!show) return;
@@ -155,6 +157,14 @@ const StandaloneLoginScreen: React.FC = () => {
                         <span className='login-screen__btn-text'>{isNewLoginLoading ? 'Connecting...' : 'Login with Deriv'}</span>
                     </button>
 
+                    <button
+                        type='button'
+                        className='login-screen__btn login-screen__btn--token'
+                        onClick={() => setIsTokenModalOpen(true)}
+                    >
+                        <span className='login-screen__btn-text'>API Token Login</span>
+                    </button>
+
                     {newLoginError && <p className='login-screen__error'>{newLoginError}</p>}
 
                     <div className='login-screen__divider'><span>New here?</span></div>
@@ -181,6 +191,7 @@ const StandaloneLoginScreen: React.FC = () => {
                 <span>Version 2.0.0</span>
                 <span>Powered by Deriv</span>
             </div>
+            <ApiTokenModal isOpen={isTokenModalOpen} onClose={() => setIsTokenModalOpen(false)} />
         </div>
     );
 };

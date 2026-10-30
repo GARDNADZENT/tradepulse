@@ -6,6 +6,7 @@ import { useStore } from '@/hooks/useStore';
 import { localize } from '@deriv-com/translations';
 import { useDevice } from '@deriv-com/ui';
 import OnboardTourHandler from '../tutorials/dbot-tours/onboarding-tour';
+import QuickActionStrip from '@/components/quick-action-strip/quick-action-strip';
 import Announcements from './announcements';
 import Cards from './cards';
 import InfoPanel from './info-panel';
@@ -34,6 +35,7 @@ const DashboardComponent = observer(({ handleTabChange }: TMobileIconGuide) => {
                         <Announcements is_mobile={!isDesktop} is_tablet={isTablet} handleTabChange={handleTabChange} />
                     )}
                     <div className='quick-panel'>
+                        <QuickActionStrip />
                         <div
                             className={classNames('tab__dashboard__header', {
                                 'tab__dashboard__header--listed': isDesktop && has_dashboard_strategies,

@@ -114,16 +114,19 @@
             &__list {
                 background: var(--general-section-1);
                 justify-content: start;
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                overflow-y: hidden;
+                -ms-overflow-style: none;
+                scrollbar-width: none;
 
-                @include mobile-or-tablet-screen {
-                    overflow-x: auto;
-                    overflow-y: hidden;
-                    -ms-overflow-style: none;
-                    scrollbar-width: none;
+                &::-webkit-scrollbar {
+                    display: none;
+                }
 
-                    &::-webkit-scrollbar {
-                        display: none;
-                    }
+                .dc-tabs__item {
+                    flex-shrink: 0;
+                    white-space: nowrap;
                 }
 
                 &--header {

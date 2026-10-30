@@ -171,6 +171,23 @@ export const ToolboxItems = () =>
                 <Block type='trade_again' />
             </Category>
 
+            <Category id='virtual_hook' name={localize('Virtual Hook')}>
+                <Block type='vh_virtual_streak_ready' />
+                <Block type='vh_stake_router'>
+                    <Value name='HOOK_READY'>
+                        <Block type='vh_virtual_streak_ready' />
+                    </Value>
+                </Block>
+            </Category>
+
+            <Category id='analysis_logics' name={localize('Analysis Logics 🔥')}>
+                <Block type='al_parity_majority' />
+                <Block type='al_over_under_majority' />
+                <Block type='al_extreme_digit' />
+                <Block type='last_digit' />
+                <Block type='lastDigitList' />
+            </Category>
+
             <Category id='analysis' name={localize('Analysis')}>
                 <Category id='indicators' name={localize('Indicators')}>
                     <Block type='sma_statement'>

@@ -1,261 +1,383 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { observer } from 'mobx-react-lite';
-import Button from '@/components/shared_ui/button';
-import Text from '@/components/shared_ui/text';
 import { DBOT_TABS } from '@/constants/bot-contents';
 import { useStore } from '@/hooks/useStore';
-import { localize } from '@deriv-com/translations';
-import { getBotsManifest, prefetchAllXmlInBackground, fetchXmlWithCache } from '@/utils/freebots-cache';
+import { fetchXmlWithCache, prefetchAllXmlInBackground } from '@/utils/freebots-cache';
+import QuickActionStrip from '@/components/quick-action-strip/quick-action-strip';
 import './free-bots.scss';
 
-interface BotData {
+type BotCategory = 'all' | 'special' | 'virtual-hook' | 'turbo-ai';
+
+interface SpecialBotEntry {
+    id: string;
     name: string;
-    description: string;
-    difficulty: string;
+    file: string;
+    avatar: string;
+    badge: string;
+    category: Exclude<BotCategory, 'all'>[];
     strategy: string;
+    description: string;
     features: string[];
-    xml: string;
-    badge_text?: string;
-    badge_class?: string;
 }
 
-const DEFAULT_FEATURES = ['Automated Trading', 'Risk Management', 'Profit Optimization'];
+const SPECIAL_BOTS_CATALOG: SpecialBotEntry[] = [
+    {
+        id: 'best-of-3',
+        name: 'Best of 3',
+        file: 'special-bots/Best of 3.xml',
+        avatar: 'BO',
+        badge: '☆ SPECIAL BOT',
+        category: ['special'],
+        strategy: 'Multi-Tick Confirmation',
+        description: '3-confirmation entry strategy designed for steady trend and parity precision on synthetic indices.',
+        features: ['Best of 3 Logic', 'Smart Recovery', 'TP/SL Guard'],
+    },
+    {
+        id: 'massive-profits-duke',
+        name: 'Massive Profits By Mr Duke',
+        file: 'special-bots/Massive Profits By Mr Duke.xml',
+        avatar: 'MP',
+        badge: '☆ SPECIAL BOT',
+        category: ['special'],
+        strategy: 'Compound Recovery',
+        description: 'High-consistency compounding bot with adaptive stake sizing and disciplined stop-loss protection.',
+        features: ['Adaptive Stake', 'Profit Lock', 'Auto Compound'],
+    },
+    {
+        id: 'risk-manager-ai',
+        name: 'Risk Manager AI Bot',
+        file: 'special-bots/Risk Manager AI Bot.xml',
+        avatar: 'AI',
+        badge: '☆ SPECIAL BOT',
+        category: ['special', 'turbo-ai'],
+        strategy: 'AI Digit & Risk Engine',
+        description: 'Flagship Risk Manager automated bot combining tick-pattern filtering with strict capital preservation.',
+        features: ['AI Tick Filter', 'Drawdown Cap', 'Auto TP/SL'],
+    },
+    {
+        id: '2026-turbo-duke',
+        name: '2026 Turbo by Mr. Duke',
+        file: 'special-bots/2026 Turbo by Mr. Duke.xml',
+        avatar: '⚡',
+        badge: '☆ SPECIAL BOT',
+        category: ['special', 'turbo-ai'],
+        strategy: 'High-Speed 1-Tick',
+        description: 'Ultra-fast 1-tick execution bot engineered for rapid scalping cycles on 1s Volatility indices.',
+        features: ['1-Tick Speed', 'Fast Execution', 'Quick Target'],
+    },
+    {
+        id: 'rise-and-fall',
+        name: 'Rise and Fall',
+        file: 'special-bots/Rise and Fall.xml',
+        avatar: 'RF',
+        badge: '☆ SPECIAL BOT',
+        category: ['special'],
+        strategy: 'Momentum Rise/Fall',
+        description: 'Directional momentum Rise/Fall bot tracking consecutive tick slopes before triggering entries.',
+        features: ['Trend Filter', 'Rise/Fall', 'Controlled Martingale'],
+    },
+    {
+        id: 'over-after-loss-even',
+        name: 'Over After Loss Even',
+        file: 'special-bots/Over After Loss Even.xml',
+        avatar: 'OA',
+        badge: '☆ SPECIAL BOT',
+        category: ['special'],
+        strategy: 'Hybrid Parity + Over',
+        description: 'Trades high-probability digit setups and dynamically pivots recovery entries after a loss.',
+        features: ['Loss Pivot', 'Parity + Over', 'Smart Recovery'],
+    },
+    {
+        id: 'ou-2pred-vh',
+        name: 'OverUnder with 2 Predictions, Virtual Hook $ Entry',
+        file: 'special-bots/OverUnder with 2 Predictions, Virtual Hook $ Entry.xml',
+        avatar: 'OW',
+        badge: '☆ VIRTUAL HOOK',
+        category: ['special', 'virtual-hook'],
+        strategy: 'Dual-Barrier Virtual Hook',
+        description: 'Dual-prediction Over/Under bot with Virtual Hook entry filtering to wait out cold streaks first.',
+        features: ['Virtual Hook', '2 Predictions', '$ Entry Trigger'],
+    },
+    {
+        id: 'ou-vh-entry',
+        name: 'OverUnder with Virtual Hook $ Entry',
+        file: 'special-bots/OverUnder with Virtual Hook $ Entry.xml',
+        avatar: 'VH',
+        badge: '☆ VIRTUAL HOOK',
+        category: ['special', 'virtual-hook'],
+        strategy: 'Virtual Hook Entry',
+        description: 'Monitors virtual digit outcomes and deploys real-stake Over/Under entries on confirmed setups.',
+        features: ['Virtual Hook', 'Over/Under', 'Capital Shield'],
+    },
+    {
+        id: 'ou-simple-vh',
+        name: 'Over and Under Simple with Virtual Hook',
+        file: 'special-bots/Over and Under Simple with Virtual Hook.xml',
+        avatar: 'VH',
+        badge: '☆ VIRTUAL HOOK',
+        category: ['special', 'virtual-hook'],
+        strategy: 'Clean Virtual Hook',
+        description: 'Streamlined Over & Under strategy paired with Virtual Hook protection for low-drawdown sessions.',
+        features: ['Virtual Hook', 'Simple Rules', 'Low Drawdown'],
+    },
+    {
+        id: 'ou-simple',
+        name: 'Over and Under Simple Bot',
+        file: 'special-bots/Over and Under Simple Bot.xml',
+        avatar: 'OU',
+        badge: '☆ SPECIAL BOT',
+        category: ['special'],
+        strategy: 'Over/Under Core',
+        description: 'Clean, fast Over/Under digit bot ideal for short target-profit sessions on Volatility indices.',
+        features: ['Clean Entry', 'Over/Under', 'Session Target'],
+    },
+    {
+        id: 'wealth-generator',
+        name: 'Wealth Generator Bot',
+        file: 'special-bots/Wealth Generator Bot.xml',
+        avatar: 'WG',
+        badge: '☆ SPECIAL BOT',
+        category: ['special'],
+        strategy: 'Systematic Growth',
+        description: 'Disciplined session compounding bot built for consistent daily target milestones.',
+        features: ['Daily Target', 'Risk Guard', 'Auto Stop'],
+    },
+    {
+        id: 'auto-switch-duke',
+        name: 'Auto Switch by Mr Duke',
+        file: 'special-bots/Auto Switch by Mr Duke.xml',
+        avatar: 'AS',
+        badge: '☆ SPECIAL BOT',
+        category: ['special', 'turbo-ai'],
+        strategy: 'Dynamic Digit Switcher',
+        description: 'Automatically rotates predictions and recovery barriers as digit distribution shifts.',
+        features: ['Auto Switch', 'Dynamic Barrier', 'Fast Cycle'],
+    },
+    {
+        id: 'simba-ai-v1',
+        name: 'Simba AI v1',
+        file: 'special-bots/Simba AI v1.xml',
+        avatar: 'SB',
+        badge: '☆ SPECIAL BOT',
+        category: ['special', 'turbo-ai'],
+        strategy: 'AI Statistical Scanner',
+        description: 'Multi-condition AI digit analyzer with automated barrier selection and recovery.',
+        features: ['AI Scanner', 'Smart Martingale', 'Volatility 1s'],
+    },
+    {
+        id: 'over-2-profit',
+        name: 'Over 2 Profit Bot',
+        file: 'OVER 2 PROFIT BOT.xml',
+        avatar: 'O2',
+        badge: 'TRADERSPULSE',
+        category: ['turbo-ai'],
+        strategy: 'Over 2 High Win-Rate',
+        description: 'High win-rate Over 2 profit bot with intelligent entry logic and risk management.',
+        features: ['Over 2 Barrier', 'High Win Rate', 'Risk Managed'],
+    },
+    {
+        id: 'over-2-recovery-4',
+        name: 'Over 2 Recovery Over 4',
+        file: 'OVER 2 RECOVERY OVER 4.xml',
+        avatar: 'R4',
+        badge: 'TRADERSPULSE',
+        category: ['turbo-ai'],
+        strategy: 'Split-Barrier Recovery',
+        description: 'Trades Over 2 for high accuracy and switches to Over 4 payout recovery after a loss.',
+        features: ['Over 2 → Over 4', 'Gentle Recovery', 'Profit Lock'],
+    },
+    {
+        id: 'mr-duke-speed',
+        name: 'Mr Duke Speed Bot',
+        file: 'Mr Duke Speed Bot.1.xml',
+        avatar: 'SP',
+        badge: 'TRADERSPULSE',
+        category: ['turbo-ai'],
+        strategy: 'Rapid Execution',
+        description: 'High-speed trading bot optimized for rapid execution in active Volatility markets.',
+        features: ['Speed Mode', '1-Tick Cycles', 'Auto TP'],
+    },
+    {
+        id: 'tp-even-odd',
+        name: 'TradersPulse Even/Odd Profit Bot',
+        file: 'tradepulse_even_odd profit bot.xml',
+        avatar: 'EO',
+        badge: 'TRADERSPULSE',
+        category: ['turbo-ai'],
+        strategy: 'Parity Equilibrium',
+        description: 'Digit-based trading bot specializing in Even/Odd parity bursts and controlled recovery.',
+        features: ['Even / Odd', 'Streak Filter', 'Profit Target'],
+    },
+];
 
 const FreeBots = observer(() => {
-    const { dashboard, load_modal, app } = useStore();
-    const { active_tab, setActiveTab } = dashboard;
-    const [availableBots, setAvailableBots] = useState<BotData[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const { dashboard, load_modal } = useStore();
+    const { setActiveTab } = dashboard;
 
-    // Bot descriptions mapping
-    const getBotDescription = (botName: string): string => {
-        const descriptions: { [key: string]: string } = {
-            'OVER 2 PROFIT BOT':
-                'Advanced Over 2 profit bot with intelligent entry logic and risk management for consistent returns.',
-            'MR DUKE SPEED BOT':
-                'High-speed trading bot optimized for rapid execution and quick profit targeting in volatile markets.',
-            'OVER 2 RECOVERY OVER 4':
-                'Recovery-focused bot that switches to Over 4 after a loss, maximizing win rate with intelligent martingale recovery.',
-            'TRADEPULSE EVEN ODD PROFIT BOT':
-                'Digit-based trading bot specializing in even/odd predictions with profit optimization and recovery strategy.',
-        };
-
-        // Try exact match first
-        if (descriptions[botName]) {
-            return descriptions[botName];
-        }
-
-        // Try partial matches
-        for (const key in descriptions) {
-            if (botName.includes(key) || key.includes(botName)) {
-                return descriptions[key];
+    const [activeCategory, setActiveCategory] = useState<BotCategory>(() => {
+        try {
+            const saved = sessionStorage.getItem('tp_special_bots_filter') as BotCategory | null;
+            if (saved && ['all', 'special', 'virtual-hook', 'turbo-ai'].includes(saved)) {
+                sessionStorage.removeItem('tp_special_bots_filter');
+                return saved;
             }
-        }
+        } catch {}
+        return 'all';
+    });
+    const [searchQuery, setSearchQuery] = useState('');
+    const [loadingBotId, setLoadingBotId] = useState<string | null>(null);
+    const [loadError, setLoadError] = useState<string | null>(null);
 
-        return `Advanced trading bot: ${botName}. Features automated trading, risk management, and profit optimization.`;
-    };
+    useEffect(() => {
+        prefetchAllXmlInBackground(SPECIAL_BOTS_CATALOG.map(b => b.file));
 
-    // Show selected bots from public/xml (explicit curated list)
-    const getXmlFiles = () => {
-        return [
-            'OVER 2 PROFIT BOT.xml',
-            'Mr Duke Speed Bot.1.xml',
-            'OVER 2 RECOVERY OVER 4.xml',
-            'tradepulse_even_odd profit bot.xml',
-        ];
-    };
+        const onFilterEvent = (e: Event) => {
+            const detail = (e as CustomEvent<string>).detail as BotCategory;
+            if (detail && ['all', 'special', 'virtual-hook', 'turbo-ai'].includes(detail)) {
+                setActiveCategory(detail);
+            }
+        };
+        window.addEventListener('tp-special-bots-filter', onFilterEvent);
+        return () => window.removeEventListener('tp-special-bots-filter', onFilterEvent);
+    }, []);
 
-    // Wait for workspace to be available
-    const waitForWorkspace = (maxAttempts = 3, delay = 50) => {
-        return new Promise((resolve, reject) => {
-            let attempts = 0;
-
-            const checkWorkspace = () => {
-                attempts++;
-                if (window.Blockly?.derivWorkspace) {
-                    console.log('Workspace is ready!');
-                    resolve(window.Blockly.derivWorkspace);
-                } else if (attempts >= maxAttempts) {
-                    reject(new Error('Workspace not available after maximum attempts'));
-                } else {
-                    console.log(`Waiting for workspace... attempt ${attempts}/${maxAttempts}`);
-                    setTimeout(checkWorkspace, delay);
-                }
-            };
-
-            checkWorkspace();
+    const filteredBots = useMemo(() => {
+        return SPECIAL_BOTS_CATALOG.filter(bot => {
+            const matchesCategory = activeCategory === 'all' || bot.category.includes(activeCategory);
+            const q = searchQuery.trim().toLowerCase();
+            const matchesSearch =
+                !q ||
+                bot.name.toLowerCase().includes(q) ||
+                bot.strategy.toLowerCase().includes(q) ||
+                bot.description.toLowerCase().includes(q);
+            return matchesCategory && matchesSearch;
         });
-    };
+    }, [activeCategory, searchQuery]);
 
-    // Load bot into builder
-    const loadBotIntoBuilder = async (bot: BotData) => {
-        if (bot.xml) {
-            const tempId = `freebot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const handleLoadBot = async (bot: SpecialBotEntry) => {
+        setLoadingBotId(bot.id);
+        setLoadError(null);
+        try {
+            const xml = await fetchXmlWithCache(bot.file);
+            if (!xml) {
+                setLoadError(`Unable to load "${bot.name}". Please try again.`);
+                return;
+            }
+            const tempId = `specialbot_${bot.id}_${Date.now()}`;
             await load_modal.loadStrategyToBuilder(
-                { id: tempId, xml: bot.xml, name: bot.name, save_type: 'pending' },
+                { id: tempId, xml, name: bot.name, save_type: 'pending' },
                 true
             );
             setActiveTab(DBOT_TABS.BOT_BUILDER);
+        } catch (err) {
+            console.error('[SpecialBots] Error loading bot:', err);
+            setLoadError(`Failed to load "${bot.name}" into Bot Builder.`);
+        } finally {
+            setLoadingBotId(null);
         }
     };
-
-    // Load bots with instant UI and progressive loading (no blocking spinner)
-    useEffect(() => {
-        const loadBots = async () => {
-            // Always load when component is mounted (now used as sub-component)
-
-            setError(null);
-
-            // 0) Immediately render skeleton cards from a small fallback list
-            const fallback = getXmlFiles().map(file => ({ name: file.replace('.xml', ''), file }));
-            const initialSkeleton: BotData[] = fallback.map(item => {
-                const botName = (item.name || item.file.replace('.xml', '')).replace(/[_-]/g, ' ');
-                return {
-                    name: botName,
-                    description: getBotDescription(botName),
-                    difficulty: 'Intermediate',
-                    strategy: 'Multi-Strategy',
-                    features: DEFAULT_FEATURES,
-                    xml: '',
-                };
-            });
-            setAvailableBots(initialSkeleton);
-            setIsLoading(false); // hide "Loading free bots..." right away
-
-            try {
-                // Force use of explicit list only; ignore remote manifest
-                const manifest = getXmlFiles().map(file => ({ name: file.replace('.xml', ''), file }));
-
-                // Update skeletons to our explicit list
-                const skeletonBots: BotData[] = manifest.map(item => {
-                    const botName = (item.name || item.file.replace('.xml', '')).replace(/[_-]/g, ' ');
-                    return {
-                        name: botName,
-                        description: getBotDescription(botName),
-                        difficulty: 'Intermediate',
-                        strategy: 'Multi-Strategy',
-                        features: DEFAULT_FEATURES,
-                        xml: '',
-                        badge_text: 'PREMIUM',
-                        badge_class: 'premium',
-                    };
-                });
-                setAvailableBots(skeletonBots);
-
-                // 3) Load XMLs progressively in background
-                const loadedBots: BotData[] = [];
-                for (let i = 0; i < manifest.length; i++) {
-                    const item = manifest[i];
-                    try {
-                        const xml = await fetchXmlWithCache(item.file);
-                        if (xml) {
-                            const botName = (item.name || item.file.replace('.xml', '')).replace(/[_-]/g, ' ');
-                            loadedBots.push({
-                                name: botName,
-                                description: getBotDescription(botName),
-                                difficulty: 'Intermediate',
-                                strategy: 'Multi-Strategy',
-                                features: DEFAULT_FEATURES,
-                                xml,
-                                badge_text: 'PREMIUM',
-                                badge_class: 'premium',
-                            });
-                            setAvailableBots([...loadedBots, ...skeletonBots.slice(loadedBots.length)]);
-                        }
-                    } catch (err) {
-                        console.warn(`Failed to load ${item.file}:`, err);
-                    }
-                }
-            } catch (error) {
-                console.error('Error loading bots:', error);
-                setError('Failed to load bots. Please try again.');
-            }
-        };
-
-        loadBots();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
 
     return (
         <div className='free-bots'>
             <div className='free-bots__container'>
-                {isLoading ? (
-                    <div className='free-bots__loading'>
-                        <Text size='s' color='general'>
-                            {localize('Loading free bots...')}
-                        </Text>
+                <QuickActionStrip />
+
+                <div className='free-bots__hero'>
+                    <div>
+                        <span className='free-bots__eyebrow'>CURATED AUTOMATIONS · 1-CLICK DEPLOY</span>
+                        <h2 className='free-bots__heading'>Special Bots &amp; Virtual Hook Library</h2>
+                        <p className='free-bots__subheading'>
+                            Select any verified XML bot below to load its complete strategy directly into Bot Builder.
+                        </p>
                     </div>
-                ) : error ? (
-                    <div className='free-bots__error'>
-                        <Text size='s' color='general'>
-                            {error}
-                        </Text>
-                        <div style={{ marginTop: '20px' }}>
-                            <Button onClick={() => window.location.reload()}>{localize('Retry')}</Button>
-                        </div>
+                    <div className='free-bots__search-wrap'>
+                        <input
+                            type='search'
+                            className='free-bots__search'
+                            placeholder='Search bots or strategies…'
+                            value={searchQuery}
+                            onChange={e => setSearchQuery(e.target.value)}
+                        />
                     </div>
-                ) : availableBots.length === 0 ? (
-                    <div className='free-bots__empty'>
-                        <Text size='s' color='general'>
-                            {localize('No bots available at the moment.')}
-                        </Text>
-                    </div>
+                </div>
+
+                <div className='free-bots__filters'>
+                    <button
+                        type='button'
+                        className={`free-bots__filter-pill${activeCategory === 'all' ? ' free-bots__filter-pill--active' : ''}`}
+                        onClick={() => setActiveCategory('all')}
+                    >
+                        All Bots ({SPECIAL_BOTS_CATALOG.length})
+                    </button>
+                    <button
+                        type='button'
+                        className={`free-bots__filter-pill${activeCategory === 'special' ? ' free-bots__filter-pill--active' : ''}`}
+                        onClick={() => setActiveCategory('special')}
+                    >
+                        ☆ Special Bots ({SPECIAL_BOTS_CATALOG.filter(b => b.category.includes('special')).length})
+                    </button>
+                    <button
+                        type='button'
+                        className={`free-bots__filter-pill${activeCategory === 'virtual-hook' ? ' free-bots__filter-pill--active' : ''}`}
+                        onClick={() => setActiveCategory('virtual-hook')}
+                    >
+                        Virtual Hook ({SPECIAL_BOTS_CATALOG.filter(b => b.category.includes('virtual-hook')).length})
+                    </button>
+                    <button
+                        type='button'
+                        className={`free-bots__filter-pill${activeCategory === 'turbo-ai' ? ' free-bots__filter-pill--active' : ''}`}
+                        onClick={() => setActiveCategory('turbo-ai')}
+                    >
+                        Turbo &amp; AI ({SPECIAL_BOTS_CATALOG.filter(b => b.category.includes('turbo-ai')).length})
+                    </button>
+                </div>
+
+                {loadError && <div className='free-bots__error-banner'>{loadError}</div>}
+
+                {filteredBots.length === 0 ? (
+                    <div className='free-bots__empty'>No bots match your current search filter.</div>
                 ) : (
                     <div className='free-bots__grid'>
-                        {availableBots.map((bot, index) => (
-                                <div
-                                    key={index}
-                                    className={`free-bot-card ${bot.badge_class ? `free-bot-card--${bot.badge_class}` : ''}`}
-                                    data-badge={bot.badge_text || 'PREMIUM'}
+                        {filteredBots.map(bot => {
+                            const isLoadingThis = loadingBotId === bot.id;
+                            const isVirtualHook = bot.category.includes('virtual-hook');
+                            return (
+                                <article
+                                    key={bot.id}
+                                    className={`free-bot-card${isVirtualHook ? ' free-bot-card--vh' : ''}`}
                                 >
-                                <div className='free-bot-card__header'>
-                                    <Text size='s' weight='bold' className='free-bot-card__title'>
-                                        {bot.name}
-                                    </Text>
-
-                                    {/* Star Rating */}
-                                    <div className='free-bot-card__rating'>
-                                        <span className='star'>★</span>
-                                        <span className='star'>★</span>
-                                        <span className='star'>★</span>
-                                        <span className='star'>★</span>
-                                        <span className='star'>★</span>
+                                    <div className='free-bot-card__top'>
+                                        <span className='free-bot-card__avatar'>{bot.avatar}</span>
+                                        <span
+                                            className={`free-bot-card__ribbon${isVirtualHook ? ' free-bot-card__ribbon--vh' : ''}`}
+                                        >
+                                            {bot.badge}
+                                        </span>
                                     </div>
 
-                                    {/* Bot Description */}
-                                    <Text size='xs' className='free-bot-card__description'>
-                                        {bot.description}
-                                    </Text>
-                                </div>
+                                    <h3 className='free-bot-card__title'>{bot.name}</h3>
+                                    <span className='free-bot-card__strategy'>{bot.strategy}</span>
+                                    <p className='free-bot-card__description'>{bot.description}</p>
 
-                                <div className='free-bot-card__badges'>
-                                    <span className={`free-bot-card__badge free-bot-card__badge--${bot.difficulty.toLowerCase()}`}>
-                                        {bot.difficulty}
-                                    </span>
-                                    <span className='free-bot-card__badge free-bot-card__badge--strategy'>
-                                        {bot.strategy}
-                                    </span>
-                                </div>
+                                    <div className='free-bot-card__features'>
+                                        {bot.features.map(feat => (
+                                            <span key={feat} className='free-bot-card__feature-tag'>
+                                                {feat}
+                                            </span>
+                                        ))}
+                                    </div>
 
-                                <div className='free-bot-card__features'>
-                                    {bot.features.map((f, i) => (
-                                        <span key={i} className='free-bot-card__feature-tag'>{f}</span>
-                                    ))}
-                                </div>
-
-                                <Button
-                                    className='free-bot-card__load-btn'
-                                    onClick={() => loadBotIntoBuilder(bot)}
-                                    primary
-                                    has_effect
-                                    type='button'
-                                    disabled={!bot.xml}
-                                >
-                                    {bot.xml ? 'LOAD PREMIUM BOT' : 'LOADING...'}
-                                </Button>
-                            </div>
-                        ))}
+                                    <button
+                                        type='button'
+                                        className='free-bot-card__load-btn'
+                                        disabled={isLoadingThis}
+                                        onClick={() => handleLoadBot(bot)}
+                                    >
+                                        {isLoadingThis ? 'LOADING…' : 'LOAD BOT →'}
+                                    </button>
+                                </article>
+                            );
+                        })}
                     </div>
                 )}
             </div>

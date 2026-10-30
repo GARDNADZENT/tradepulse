@@ -1,10 +1,16 @@
 const memoryCache = new Map<string, string>();
 const XML_BASE = '/xml/';
 
+const encodeXmlPath = (file: string): string =>
+    file
+        .split('/')
+        .map(part => encodeURIComponent(part))
+        .join('/');
+
 export const fetchXmlWithCache = async (file: string): Promise<string | null> => {
     if (memoryCache.has(file)) return memoryCache.get(file) || null;
     try {
-        const response = await fetch(`${XML_BASE}${file}`);
+        const response = await fetch(`${XML_BASE}${encodeXmlPath(file)}`);
         if (!response.ok) return null;
         const xml = await response.text();
         memoryCache.set(file, xml);

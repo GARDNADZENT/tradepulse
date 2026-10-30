@@ -31,6 +31,22 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
     const { contract_stage, is_stop_button_visible, is_stop_button_disabled, is_paused, onRunButtonClick, onStopBotClick, onPauseBotClick, onResumeBotClick } =
         run_panel;
     const [shouldDisable, setShouldDisable] = React.useState(false);
+    const [isFastExec, setIsFastExec] = React.useState<boolean>(() => {
+        try {
+            return localStorage.getItem('tp_fast_execution') === 'true';
+        } catch {
+            return false;
+        }
+    });
+    const toggleFastExec = React.useCallback(() => {
+        setIsFastExec(prev => {
+            const next = !prev;
+            try {
+                localStorage.setItem('tp_fast_execution', String(next));
+            } catch {}
+            return next;
+        });
+    }, []);
     const is_unavailable_for_payment_agent = false;
 
     // Get the load_modal store to monitor strategy deletions
@@ -202,6 +218,16 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
                 </div>
             ) : (
                 <div className='animation__controls'>
+                    <button
+                        type='button'
+                        className={classNames('animation__fast-toggle', {
+                            'animation__fast-toggle--on': isFastExec,
+                        })}
+                        onClick={toggleFastExec}
+                        title='Toggle Fast Execution Mode (bypasses inter-cycle wait delays)'
+                    >
+                        ⚡ FAST
+                    </button>
                     <Button
                         is_disabled={(is_disabled && !is_unavailable_for_payment_agent) || contract_stage === 3}
                         className={button_props.class}

@@ -10,6 +10,7 @@ import { useStore } from '@/hooks/useStore';
 import { Localize } from '@deriv-com/translations';
 import { Header, useDevice, Wrapper } from '@deriv-com/ui';
 import { AppLogo } from '../app-logo';
+import ApiTokenModal from '@/components/api-token-modal/api-token-modal';
 import AccountSwitcher from './account-switcher';
 import MenuItems from './menu-items';
 import MobileMenu from './mobile-menu';
@@ -20,6 +21,7 @@ const AppHeader = observer(() => {
     const { isAuthorizing, activeLoginid, setIsAuthorizing } = useApiBase();
     const { client } = useStore() ?? {};
     const [authTimeout, setAuthTimeout] = useState(false);
+    const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
     const is_account_regenerating = client?.is_account_regenerating || false;
 
     const [isOAuthPending, setIsOAuthPending] = useState(() => {
@@ -119,6 +121,13 @@ const AppHeader = observer(() => {
                 } else if (position === 'right') {
                     return (
                         <div className='auth-actions'>
+                            <button
+                                type='button'
+                                className='app-header__token-btn'
+                                onClick={() => setIsTokenModalOpen(true)}
+                            >
+                                API Token Login
+                            </button>
                             <div className='account-info'>
                                 <AccountSwitcher activeAccount={activeAccount} />
                             </div>
@@ -138,6 +147,13 @@ const AppHeader = observer(() => {
                 const isAuthConfigured = Boolean(process.env.NEXT_PUBLIC_DERIV_APP_ID);
                 return (
                     <div className='auth-actions'>
+                        <button
+                            type='button'
+                            className='app-header__token-btn'
+                            onClick={() => setIsTokenModalOpen(true)}
+                        >
+                            API Token Login
+                        </button>
                         <Button tertiary disabled={!isAuthConfigured} onClick={handleLogin}>
                             <Localize i18n_default_text='Log in' />
                         </Button>
@@ -151,6 +167,13 @@ const AppHeader = observer(() => {
             else if (position === 'right') {
                 return (
                     <div className='auth-actions auth-actions--loading'>
+                        <button
+                            type='button'
+                            className='app-header__token-btn'
+                            onClick={() => setIsTokenModalOpen(true)}
+                        >
+                            API Token Login
+                        </button>
                         <svg
                             className='auth-actions__spinner'
                             viewBox='0 0 24 24'
@@ -208,6 +231,7 @@ const AppHeader = observer(() => {
                     {renderAccountSection('right')}
                 </Wrapper>
             </Header>
+            <ApiTokenModal isOpen={isTokenModalOpen} onClose={() => setIsTokenModalOpen(false)} />
         </>
     );
 });
