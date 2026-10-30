@@ -33,7 +33,17 @@ const FormatMessage = ({ logType, className, extra }: TFormatMessageProps) => {
                 return localize('Resale of this contract is not offered.');
             }
             case LogTypes.PURCHASE: {
-                const { transaction_id } = extra;
+                const { longcode, transaction_id } = extra;
+                if (longcode) {
+                    return (
+                        <Localize
+                            i18n_default_text='<0>Bought</0>: {{longcode}}'
+                            values={{ longcode }}
+                            components={[<Text key={0} size='xxs' styles={{ color: '#38bdf8', fontWeight: 600 }} />]}
+                            options={{ interpolation: { escapeValue: false } }}
+                        />
+                    );
+                }
                 return (
                     <Localize
                         i18n_default_text='<0>Bought</0>: Contract purchased (ID: {{transaction_id}})'

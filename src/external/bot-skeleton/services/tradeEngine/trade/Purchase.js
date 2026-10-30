@@ -40,6 +40,82 @@ const getStakeVariableName = () => {
     }
 };
 
+const SYMBOL_FALLBACK_NAMES = {
+    R_10: 'Volatility 10 Index',
+    R_25: 'Volatility 25 Index',
+    R_50: 'Volatility 50 Index',
+    R_75: 'Volatility 75 Index',
+    R_100: 'Volatility 100 Index',
+    '1HZ10V': 'Volatility 10 (1s) Index',
+    '1HZ25V': 'Volatility 25 (1s) Index',
+    '1HZ50V': 'Volatility 50 (1s) Index',
+    '1HZ75V': 'Volatility 75 (1s) Index',
+    '1HZ100V': 'Volatility 100 (1s) Index',
+    JD10: 'Jump 10 Index',
+    JD25: 'Jump 25 Index',
+    JD50: 'Jump 50 Index',
+    JD75: 'Jump 75 Index',
+    JD100: 'Jump 100 Index',
+};
+
+const resolveMarketDisplayName = symbol => {
+    if (!symbol) return 'Market';
+    try {
+        const botSymbols = ApiHelpers?.instance?.active_symbols?.getSymbolsForBot?.() || [];
+        const matchBot = botSymbols.find(s => s?.value === symbol);
+        if (matchBot?.text) return matchBot.text;
+
+        const rawSymbols = Array.isArray(api_base?.active_symbols) ? api_base.active_symbols : [];
+        const matchRaw = rawSymbols.find(s => (s?.underlying_symbol || s?.symbol) === symbol);
+        if (matchRaw) {
+            return (
+                matchRaw.underlying_symbol_name ||
+                matchRaw.display_name ||
+                matchRaw.name ||
+                SYMBOL_FALLBACK_NAMES[symbol] ||
+                symbol
+            );
+        }
+    } catch (e) {
+        // fallback map below
+    }
+    return SYMBOL_FALLBACK_NAMES[symbol] || symbol;
+};
+
+const buildPurchaseLongcode = (contractType, tradeOptions = {}) => {
+    const marketName = resolveMarketDisplayName(tradeOptions.symbol);
+    const duration = tradeOptions.duration ?? 1;
+    const unitMap = { t: 'ticks', s: 'seconds', m: 'minutes', h: 'hours', d: 'days' };
+    const unitLabel = unitMap[tradeOptions.duration_unit || 't'] || 'ticks';
+    const barrier =
+        tradeOptions.prediction !== undefined
+            ? tradeOptions.prediction
+            : tradeOptions.barrierOffset !== undefined
+              ? tradeOptions.barrierOffset
+              : '';
+
+    switch (contractType) {
+        case 'DIGITOVER':
+            return `Win payout if the last digit of ${marketName} is strictly higher than ${barrier} after ${duration} ${unitLabel}.`;
+        case 'DIGITUNDER':
+            return `Win payout if the last digit of ${marketName} is strictly lower than ${barrier} after ${duration} ${unitLabel}.`;
+        case 'DIGITEVEN':
+            return `Win payout if the last digit of ${marketName} is even after ${duration} ${unitLabel}.`;
+        case 'DIGITODD':
+            return `Win payout if the last digit of ${marketName} is odd after ${duration} ${unitLabel}.`;
+        case 'DIGITMATCH':
+            return `Win payout if the last digit of ${marketName} is ${barrier} after ${duration} ${unitLabel}.`;
+        case 'DIGITDIFF':
+            return `Win payout if the last digit of ${marketName} is not ${barrier} after ${duration} ${unitLabel}.`;
+        case 'CALL':
+            return `Win payout if ${marketName} is strictly higher than entry spot at ${duration} ${unitLabel} after contract start time.`;
+        case 'PUT':
+            return `Win payout if ${marketName} is strictly lower than entry spot at ${duration} ${unitLabel} after contract start time.`;
+        default:
+            return `Win payout on ${marketName} (${contractType}) after ${duration} ${unitLabel}.`;
+    }
+};
+
 const getStakeVariableCandidates = () => {
     const derived = getStakeVariableName();
     if (!derived) return [];
@@ -496,7 +572,11 @@ export default Engine =>
                 }
 
                 delayIndex = 0;
-                log(LogTypes.PURCHASE, { transaction_id: buy.transaction_id });
+                const resolvedLongcode = buy.longcode || buildPurchaseLongcode(contract_type, this.tradeOptions);
+                log(LogTypes.PURCHASE, {
+                    longcode: resolvedLongcode,
+                    transaction_id: buy.transaction_id,
+                });
                 info({
                     accountID: this.accountInfo.loginid,
                     totalRuns: this.updateAndReturnTotalRuns(),
