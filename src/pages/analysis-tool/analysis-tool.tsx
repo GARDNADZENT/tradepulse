@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { observer } from 'mobx-react-lite';
+import {
+    RecordTabKey,
+    TabExecutionRecordPanel,
+} from '@/components/tab-trade-record/tab-execution-record-panel';
 import { DBOT_TABS } from '@/constants/bot-contents';
 import { useStore } from '@/hooks/useStore';
 import { derivBus } from '@/lib/deriv/tick-bus';
@@ -43,6 +47,7 @@ const ANALYSIS_MODES: { value: AnalysisMode; label: string }[] = [
 ];
 
 const WINDOWS = [100, 250, 500, 1000];
+const DURATIONS = [1, 2, 3, 4, 5, 7, 10];
 
 const lastDigitOf = (q: number, pip: number) => {
     const s = Math.abs(q).toFixed(Math.max(0, pip));
@@ -50,16 +55,19 @@ const lastDigitOf = (q: number, pip: number) => {
 };
 
 const AnalysisTool = observer(() => {
-    const { client, dashboard, load_modal, run_panel, journal, transactions, summary_card } = useStore();
+    const { client, dashboard, load_modal, run_panel, transactions } = useStore();
     const [viewMode, setViewMode] = useState<'native' | 'binarytool'>('native');
     const [symbol, setSymbol] = useState('R_50');
     const [mode, setMode] = useState<AnalysisMode>('over_under');
     const [windowSize, setWindowSize] = useState(250);
+    const [duration, setDuration] = useState(1);
     const [barrier, setBarrier] = useState(4);
     const [stake, setStake] = useState('1');
     const [prices, setPrices] = useState<number[]>([]);
     const [busy, setBusy] = useState(false);
     const [tradeFeedback, setTradeFeedback] = useState<string | null>(null);
+    const [recordOpen, setRecordOpen] = useState(true);
+    const [recordTab, setRecordTab] = useState<RecordTabKey>('journal');
 
     useEffect(() => {
         if (viewMode !== 'native') return;
@@ -212,12 +220,13 @@ const AnalysisTool = observer(() => {
                 symbol,
                 contractType: intelligence.bestContract,
                 stake: Math.max(0.35, Number(stake) || 1),
-                duration: 1,
+                duration,
                 barrier: ['DIGITOVER', 'DIGITUNDER', 'DIGITDIFF', 'DIGITMATCH'].includes(intelligence.bestContract)
                     ? barrier
                     : undefined,
                 currency: activeCurr,
-                stores: { journal, transactions, summary_card, run_panel },
+                tabNamespace: 'analysis',
+                stores: { transactions },
                 onContractUpdate: (poc, isTerminal) => {
                     if (!isTerminal) return;
                     const pl = Number(poc.profit ?? 0);
@@ -227,6 +236,7 @@ const AnalysisTool = observer(() => {
                     );
                 },
             });
+            setRecordOpen(true);
             setTradeFeedback(
                 res.longcode
                     ? `Bought: ${res.longcode}`
@@ -291,11 +301,26 @@ const AnalysisTool = observer(() => {
             </div>
 
             {viewMode === 'binarytool' ? (
-                <div className='rm-analysis__iframe-wrap'>
-                    <iframe
-                        src='https://api.binarytool.site'
-                        title='Analysis Tool'
-                        className='rm-analysis__iframe'
+                <div className='rm-analysis__scanner-shell'>
+                    <div className='rm-analysis__iframe-wrap'>
+                        <iframe
+                            src='https://api.binarytool.site'
+                            title='Analysis Tool'
+                            className='rm-analysis__iframe'
+                        />
+                    </div>
+                    <TabExecutionRecordPanel
+                        namespace='analysis'
+                        title='ANALYSIS RECORD'
+                        previewTitle='Analysis Transactions (Preview)'
+                        resetLabel='Reset Analysis'
+                        emptyHint='Execute recommended AI signals in Analysis Tool to record dedicated Analysis Journal entries and Transactions here.'
+                        variant='analysis'
+                        activeTab={recordTab}
+                        onActiveTabChange={setRecordTab}
+                        isOpen={recordOpen}
+                        onToggleOpen={setRecordOpen}
+                        currencyFallback={client?.currency || 'USD'}
                     />
                 </div>
             ) : (
@@ -334,7 +359,17 @@ const AnalysisTool = observer(() => {
                             </label>
                         )}
                         <label>
-                            Sample Ticks
+                            Ticks Duration
+                            <select value={duration} onChange={e => setDuration(Number(e.target.value))}>
+                                {DURATIONS.map(d => (
+                                    <option key={d} value={d}>
+                                        {d}t
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <label>
+                            Sample
                             <select value={windowSize} onChange={e => setWindowSize(Number(e.target.value))}>
                                 {WINDOWS.map(w => (
                                     <option key={w} value={w}>
@@ -355,119 +390,146 @@ const AnalysisTool = observer(() => {
                         </label>
                     </section>
 
-                    {!intelligence ? (
-                        <div className='rm-analysis__loading'>Streaming live ticks for {symbol}…</div>
-                    ) : (
-                        <>
-                            <div className='rm-analysis__grid'>
-                                <section className='rm-analysis__card'>
-                                    <div className='rm-analysis__card-head'>
-                                        <strong>Live Price &amp; Momentum ({prices.length} Ticks)</strong>
-                                        <span className='rm-analysis__quote'>
-                                            {intelligence.latestPrice} · Digit <b>{intelligence.lastDigit}</b>
-                                        </span>
-                                    </div>
-                                    <svg viewBox='0 0 640 140' preserveAspectRatio='none' className='rm-analysis__spark'>
-                                        <path
-                                            d={intelligence.sparkPath}
-                                            fill='none'
-                                            stroke='#0066ff'
-                                            strokeWidth='2.4'
-                                        />
-                                    </svg>
-                                    <div className='rm-analysis__split-bars'>
-                                        <div className='rm-analysis__split-labels'>
-                                            <span>
-                                                {intelligence.primaryLabel}: {intelligence.primaryPct.toFixed(1)}%
-                                            </span>
-                                            <span>
-                                                {intelligence.secondaryLabel}: {intelligence.secondaryPct.toFixed(1)}%
-                                            </span>
-                                        </div>
-                                        <div className='rm-analysis__split-track'>
-                                            <div style={{ width: `${intelligence.primaryPct}%` }} />
-                                        </div>
-                                    </div>
-                                </section>
+                    <div className='rm-analysis__workspace'>
+                        <div className='rm-analysis__main-col'>
+                            {!intelligence ? (
+                                <div className='rm-analysis__loading'>Streaming live ticks for {symbol}…</div>
+                            ) : (
+                                <>
+                                    <div className='rm-analysis__grid'>
+                                        <section className='rm-analysis__card'>
+                                            <div className='rm-analysis__card-head'>
+                                                <strong>Live Price &amp; Momentum ({prices.length} Ticks)</strong>
+                                                <span className='rm-analysis__quote'>
+                                                    {intelligence.latestPrice} · Digit <b>{intelligence.lastDigit}</b>
+                                                </span>
+                                            </div>
+                                            <svg
+                                                viewBox='0 0 640 140'
+                                                preserveAspectRatio='none'
+                                                className='rm-analysis__spark'
+                                            >
+                                                <path
+                                                    d={intelligence.sparkPath}
+                                                    fill='none'
+                                                    stroke='#0066ff'
+                                                    strokeWidth='2.4'
+                                                />
+                                            </svg>
+                                            <div className='rm-analysis__split-bars'>
+                                                <div className='rm-analysis__split-labels'>
+                                                    <span>
+                                                        {intelligence.primaryLabel}: {intelligence.primaryPct.toFixed(1)}%
+                                                    </span>
+                                                    <span>
+                                                        {intelligence.secondaryLabel}:{' '}
+                                                        {intelligence.secondaryPct.toFixed(1)}%
+                                                    </span>
+                                                </div>
+                                                <div className='rm-analysis__split-track'>
+                                                    <div style={{ width: `${intelligence.primaryPct}%` }} />
+                                                </div>
+                                            </div>
+                                        </section>
 
-                                <section className='rm-analysis__card rm-analysis__card--signal'>
-                                    <div className='rm-analysis__card-head'>
-                                        <strong>3-Model AI Signal Consensus</strong>
-                                        <span className='rm-analysis__conf'>{intelligence.confidence}% Confidence</span>
+                                        <section className='rm-analysis__card rm-analysis__card--signal'>
+                                            <div className='rm-analysis__card-head'>
+                                                <strong>3-Model AI Signal Consensus</strong>
+                                                <span className='rm-analysis__conf'>
+                                                    {intelligence.confidence}% Confidence
+                                                </span>
+                                            </div>
+                                            <div className='rm-analysis__verdict'>
+                                                <small>RECOMMENDED SIGNAL</small>
+                                                <h3>{intelligence.bestLabel}</h3>
+                                                <span>Current Streak: {intelligence.streak} consecutive ticks</span>
+                                            </div>
+                                            <div className='rm-analysis__models'>
+                                                <div>
+                                                    <span>Frequency Model</span>
+                                                    <strong>{intelligence.primaryPct.toFixed(1)}%</strong>
+                                                </div>
+                                                <div>
+                                                    <span>30t Momentum</span>
+                                                    <strong>{intelligence.shortPrimaryPct.toFixed(1)}%</strong>
+                                                </div>
+                                                <div>
+                                                    <span>Markov Transition</span>
+                                                    <strong>{intelligence.markovPrimaryPct.toFixed(1)}%</strong>
+                                                </div>
+                                            </div>
+                                            <div className='rm-analysis__actions'>
+                                                <button
+                                                    type='button'
+                                                    className='btn-primary'
+                                                    disabled={busy}
+                                                    onClick={() => void handleInstantTrade()}
+                                                >
+                                                    {busy ? 'Executing…' : `⚡ Trade ${intelligence.bestLabel}`}
+                                                </button>
+                                                <button
+                                                    type='button'
+                                                    className='btn-emerald'
+                                                    onClick={() => void handleLoadIntoBuilder(false)}
+                                                >
+                                                    Load Bot in Builder
+                                                </button>
+                                                <button
+                                                    type='button'
+                                                    className='btn-ghost'
+                                                    onClick={() => {
+                                                        window.dispatchEvent(
+                                                            new CustomEvent('tp-dtrader-prefill', {
+                                                                detail: {
+                                                                    symbol,
+                                                                    contractType: intelligence.bestContract,
+                                                                    barrier,
+                                                                },
+                                                            })
+                                                        );
+                                                        dashboard.setActiveTab(DBOT_TABS.DTRADER);
+                                                    }}
+                                                >
+                                                    Open in DTrader
+                                                </button>
+                                            </div>
+                                            {tradeFeedback && (
+                                                <div className='rm-analysis__feedback'>{tradeFeedback}</div>
+                                            )}
+                                        </section>
                                     </div>
-                                    <div className='rm-analysis__verdict'>
-                                        <small>RECOMMENDED SIGNAL</small>
-                                        <h3>{intelligence.bestLabel}</h3>
-                                        <span>Current Streak: {intelligence.streak} consecutive ticks</span>
-                                    </div>
-                                    <div className='rm-analysis__models'>
-                                        <div>
-                                            <span>Frequency Model</span>
-                                            <strong>{intelligence.primaryPct.toFixed(1)}%</strong>
-                                        </div>
-                                        <div>
-                                            <span>30t Momentum</span>
-                                            <strong>{intelligence.shortPrimaryPct.toFixed(1)}%</strong>
-                                        </div>
-                                        <div>
-                                            <span>Markov Transition</span>
-                                            <strong>{intelligence.markovPrimaryPct.toFixed(1)}%</strong>
-                                        </div>
-                                    </div>
-                                    <div className='rm-analysis__actions'>
-                                        <button
-                                            type='button'
-                                            className='btn-primary'
-                                            disabled={busy}
-                                            onClick={() => void handleInstantTrade()}
-                                        >
-                                            {busy ? 'Executing…' : `⚡ Trade ${intelligence.bestLabel}`}
-                                        </button>
-                                        <button
-                                            type='button'
-                                            className='btn-emerald'
-                                            onClick={() => void handleLoadIntoBuilder(false)}
-                                        >
-                                            Load Bot in Builder
-                                        </button>
-                                        <button
-                                            type='button'
-                                            className='btn-ghost'
-                                            onClick={() => {
-                                                window.dispatchEvent(
-                                                    new CustomEvent('tp-dtrader-prefill', {
-                                                        detail: {
-                                                            symbol,
-                                                            contractType: intelligence.bestContract,
-                                                            barrier,
-                                                        },
-                                                    })
-                                                );
-                                                dashboard.setActiveTab(DBOT_TABS.DTRADER);
-                                            }}
-                                        >
-                                            Open in DTrader
-                                        </button>
-                                    </div>
-                                    {tradeFeedback && <div className='rm-analysis__feedback'>{tradeFeedback}</div>}
-                                </section>
-                            </div>
 
-                            <section className='rm-analysis__card'>
-                                <div className='rm-analysis__card-head'>
-                                    <strong>Last 30 Pattern Sequence</strong>
-                                    <span className='rm-analysis__muted'>Newest at right</span>
-                                </div>
-                                <div className='rm-analysis__tape'>
-                                    {intelligence.pattern30.map((item, idx) => (
-                                        <span key={idx} className={item.win ? 'is-win' : 'is-loss'}>
-                                            {item.tag}
-                                        </span>
-                                    ))}
-                                </div>
-                            </section>
-                        </>
-                    )}
+                                    <section className='rm-analysis__card'>
+                                        <div className='rm-analysis__card-head'>
+                                            <strong>Last 30 Pattern Sequence</strong>
+                                            <span className='rm-analysis__muted'>Newest at right</span>
+                                        </div>
+                                        <div className='rm-analysis__tape'>
+                                            {intelligence.pattern30.map((item, idx) => (
+                                                <span key={idx} className={item.win ? 'is-win' : 'is-loss'}>
+                                                    {item.tag}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </section>
+                                </>
+                            )}
+                        </div>
+
+                        <TabExecutionRecordPanel
+                            namespace='analysis'
+                            title='ANALYSIS RECORD'
+                            previewTitle='Analysis Transactions (Preview)'
+                            resetLabel='Reset Analysis'
+                            emptyHint='Click "Trade" on any AI Consensus signal to stream dedicated Analysis Tool Journal logs and Transactions records here.'
+                            variant='analysis'
+                            activeTab={recordTab}
+                            onActiveTabChange={setRecordTab}
+                            isOpen={recordOpen}
+                            onToggleOpen={setRecordOpen}
+                            currencyFallback={client?.currency || 'USD'}
+                        />
+                    </div>
                 </div>
             )}
         </div>

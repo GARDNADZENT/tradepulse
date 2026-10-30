@@ -286,7 +286,8 @@ const AIBots = observer(() => {
                 duration: getCardDuration(card.symbol),
                 barrier,
                 currency,
-                stores: { journal, transactions, summary_card, run_panel },
+                tabNamespace: 'ai_bots',
+                stores: { transactions },
             });
             setStatusBanner(
                 `Executed ${contractType}${barrier !== undefined ? ` (${barrier})` : ''} on ${card.display_name} · Contract #${res.contractId} · Payout ${currency} ${res.payout.toFixed(2)}`

@@ -282,7 +282,7 @@ const RunPanel = observer(() => {
     const { statistics, transactions: transaction_list } = transactions;
     const { active_tour, active_tab } = dashboard;
     const { total_payout, total_profit, total_stake, won_contracts, lost_contracts, number_of_runs } = statistics;
-    const { DASHBOARD, BOT_BUILDER, FREE_BOTS, DTRADER, ANALYSIS_TOOL } = DBOT_TABS;
+    const { DASHBOARD, BOT_BUILDER, FREE_BOTS } = DBOT_TABS;
     const contract_count = Array.isArray(transaction_list)
         ? transaction_list.filter(item => item?.type === 'contract').length
         : 0;
@@ -330,7 +330,7 @@ const RunPanel = observer(() => {
     );
 
     const show_run_panel =
-        [BOT_BUILDER, FREE_BOTS, DTRADER, ANALYSIS_TOOL].includes(active_tab) ||
+        [BOT_BUILDER, FREE_BOTS].includes(active_tab) ||
         (active_tab === DASHBOARD && !dashboard.is_info_panel_visible) ||
         active_tour;
     if ((!show_run_panel && isDesktop) || active_tour === 'bot_builder') return null;
@@ -354,7 +354,7 @@ const RunPanel = observer(() => {
                 >
                     {content}
                 </Drawer>
-                {!isDesktop && ![DTRADER, ANALYSIS_TOOL].includes(active_tab) && <MobileDrawerFooter />}
+                {!isDesktop && <MobileDrawerFooter />}
             </div>
 
             <StatisticsInfoModal

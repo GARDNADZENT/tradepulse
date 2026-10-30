@@ -208,17 +208,22 @@
     color: #e2e8f0;
 }
 
+.dtrader__workspace {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    overflow: hidden;
+}
+
 .dtrader__grid {
-    flex: 1 1 auto;
+    flex: 1 1 0;
+    min-width: 0;
     min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
-    max-width: 1560px;
-    width: 100%;
-    margin: 0 auto;
-    padding: 16px 16px 64px;
+    padding: 16px 16px 28px;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(280px, 325px);
+    grid-template-columns: minmax(0, 1fr) minmax(275px, 325px);
     gap: 16px;
     align-content: start;
 }
@@ -728,14 +733,20 @@
 }
 
 @media (max-width: 1320px) {
-    .main--drawer-open .dtrader__grid {
+    .dtrader__grid {
         grid-template-columns: 1fr;
     }
 }
 
-@media (max-width: 1060px) {
+@media (max-width: 1180px) {
+    .dtrader__workspace {
+        flex-direction: column;
+        overflow-y: auto;
+    }
+
     .dtrader__grid {
-        grid-template-columns: 1fr;
+        flex: 0 0 auto;
+        overflow-y: visible;
     }
 }
 

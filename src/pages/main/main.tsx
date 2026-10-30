@@ -84,7 +84,7 @@ const AppWrapper = observer(() => {
         [key: string]: string;
     };
     const { clear } = summary_card;
-    const { DASHBOARD, BOT_BUILDER, FREE_BOTS, DTRADER, ANALYSIS_TOOL } = DBOT_TABS;
+    const { DASHBOARD, BOT_BUILDER, FREE_BOTS } = DBOT_TABS;
     const init_render = React.useRef(true);
 
     const hash = [
@@ -331,8 +331,8 @@ const AppWrapper = observer(() => {
         listEl.scrollBy({ left: dir === 'left' ? -260 : 260, behavior: 'smooth' });
     };
 
-    const isExecSurface = [DASHBOARD, BOT_BUILDER, FREE_BOTS, DTRADER, ANALYSIS_TOOL].includes(active_tab);
-    const isExecScrollTab = [FREE_BOTS, DTRADER, ANALYSIS_TOOL].includes(active_tab);
+    const isExecSurface = [DASHBOARD, BOT_BUILDER, FREE_BOTS].includes(active_tab);
+    const isExecScrollTab = active_tab === FREE_BOTS;
 
     return (
         <React.Fragment>

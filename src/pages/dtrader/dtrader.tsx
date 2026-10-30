@@ -1,6 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { observer } from 'mobx-react-lite';
 import { generateOAuthURL } from '@/components/shared';
+import {
+    RecordTabKey,
+    TabExecutionRecordPanel,
+    TabSessionDockBar,
+} from '@/components/tab-trade-record/tab-execution-record-panel';
 import { api_base } from '@/external/bot-skeleton';
 import chart_api from '@/external/bot-skeleton/services/api/chart-api';
 import { useStore } from '@/hooks/useStore';
@@ -60,6 +65,7 @@ const DEFAULT_MARKETS = [
     { symbol: 'JD100', name: 'Jump 100 Index', market: 'synthetic_index', pip_size: 0.01 },
 ];
 
+const TERMINAL_STATUSES = ['won', 'lost', 'sold', 'expired'];
 const TREND_WINDOW = 60;
 const REQUEST_TIMEOUT_MS = 12000;
 
@@ -179,7 +185,9 @@ function getTransport(): any {
 }
 
 export default observer(function DTrader() {
-    const { client, journal, transactions, summary_card, run_panel } = useStore();
+    const { client, transactions } = useStore();
+    const [recordOpen, setRecordOpen] = useState(true);
+    const [recordTab, setRecordTab] = useState<RecordTabKey>('journal');
     const [symbol, setSymbol] = useState('R_50');
     const [markets, setMarkets] = useState<any[]>(DEFAULT_MARKETS);
     const [marketOpen, setMarketOpen] = useState(false);
@@ -485,7 +493,8 @@ export default observer(function DTrader() {
                 duration,
                 barrier,
                 currency: activeCurrency,
-                stores: { journal, transactions, summary_card, run_panel },
+                tabNamespace: 'dtrader',
+                stores: { transactions },
                 onContractUpdate: pc => {
                     const st = String(pc.status || (pc.is_sold ? 'sold' : 'open'));
                     const cid = Number(pc.contract_id);
@@ -504,6 +513,7 @@ export default observer(function DTrader() {
                     );
                 },
             });
+            setRecordOpen(true);
             setOpenContracts(prev =>
                 [
                     {
@@ -609,8 +619,9 @@ export default observer(function DTrader() {
                 </div>
             </div>
 
-            <div className='dtrader__grid'>
-                <main>
+            <div className='dtrader__workspace'>
+                <div className='dtrader__grid'>
+                    <main>
                     <section className='dt-price-card'>
                         <div className='dt-price-head'>
                             <div>
@@ -902,7 +913,34 @@ export default observer(function DTrader() {
                     {message && <div className='dtrader__message'>{message}</div>}
                     <small>Live Deriv WebSocket execution with instant contract settlement monitoring.</small>
                 </aside>
+                </div>
+
+                <TabExecutionRecordPanel
+                    namespace='dtrader'
+                    title='DTRADER RECORD'
+                    previewTitle='DTrader Transactions (Preview)'
+                    resetLabel='Reset DTrader'
+                    emptyHint='Place a trade on the DTrader Adaptive Trade Deck to stream live DTrader Journal logs and Transactions records here.'
+                    variant='dtrader'
+                    activeTab={recordTab}
+                    onActiveTabChange={setRecordTab}
+                    isOpen={recordOpen}
+                    onToggleOpen={setRecordOpen}
+                    currencyFallback={activeCurrency}
+                />
             </div>
+
+            <TabSessionDockBar
+                namespace='dtrader'
+                resetLabel='Reset DTrader'
+                activeTab={recordTab}
+                isOpen={recordOpen}
+                onSelectTab={tab => {
+                    setRecordOpen(true);
+                    setRecordTab(tab);
+                }}
+                currencyFallback={activeCurrency}
+            />
         </div>
     );
 });

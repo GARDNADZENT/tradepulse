@@ -1,3 +1,8 @@
+import {
+    formatTabContractShortLabel,
+    getTabTradeStore,
+    TabRecordNamespace,
+} from '@/components/tab-trade-record/tab-trade-store';
 import { DBOT_TABS } from '@/constants/bot-contents';
 import { api_base, LogTypes } from '@/external/bot-skeleton';
 import chart_api from '@/external/bot-skeleton/services/api/chart-api';
@@ -534,6 +539,7 @@ export async function executeLiveDerivTrade(params: {
     duration?: number;
     barrier?: number | string;
     currency?: string;
+    tabNamespace?: TabRecordNamespace;
     stores?: LiveTradeRecordingStores;
     onContractUpdate?: (poc: any, isTerminal: boolean) => void;
 }): Promise<{ contractId: number; buyPrice: number; payout: number; longcode: string }> {
@@ -622,27 +628,75 @@ export async function executeLiveDerivTrade(params: {
     const marketDisplayName = getSymbolDisplayNameSync(params.symbol) || params.symbol;
 
     const { journal, transactions, summary_card, run_panel } = params.stores || {};
+    const tabStore = params.tabNamespace ? getTabTradeStore(params.tabNamespace) : null;
+    const shortLabel = formatTabContractShortLabel(spec.apiContractType, spec.barrier);
+    const createdAtMs = Date.now();
 
-    if (run_panel) {
-        if (!run_panel.run_id) {
-            run_panel.run_id = `manual-${Date.now()}`;
+    // Prevent app-content.jsx recoverPendingContracts from pulling tab-scoped manual trades into Bot Builder's global RunPanel
+    if (tabStore) {
+        if (
+            Array.isArray(transactions?.recovered_transactions) &&
+            !transactions.recovered_transactions.includes(contractId)
+        ) {
+            transactions.recovered_transactions.push(contractId);
         }
-        if (!run_panel.is_drawer_open && typeof window !== 'undefined' && window.innerWidth >= 1024) {
-            run_panel.toggleDrawer?.(true);
+        if (
+            Array.isArray(transactions?.recovered_completed_transactions) &&
+            !transactions.recovered_completed_transactions.includes(contractId)
+        ) {
+            transactions.recovered_completed_transactions.push(contractId);
         }
-        if (run_panel.active_index === 0) {
-            run_panel.setActiveTabIndex?.(2);
-        }
-    }
 
-    if (journal?.onLogSuccess) {
-        journal.onLogSuccess({
-            log_type: LogTypes.PURCHASE,
-            extra: {
-                longcode: resolvedLongcode,
-                transaction_id: buyTxId,
-            },
+        tabStore.appendJournal({
+            type: 'purchase',
+            message: `Bought: ${resolvedLongcode}`,
+            contractId,
+            transactionId: buyTxId,
+            currency: activeCurrency,
+            timestamp: createdAtMs,
         });
+
+        tabStore.upsertTransaction({
+            contractId,
+            buyTransactionId: buyTxId,
+            timestamp: createdAtMs,
+            symbol: params.symbol,
+            displayName: marketDisplayName,
+            contractType: spec.apiContractType,
+            shortLabel,
+            longcode: resolvedLongcode,
+            barrier: spec.barrier,
+            duration: spec.duration,
+            buyPrice,
+            bidPrice: buyPrice,
+            payout,
+            profit: 0,
+            currency: activeCurrency,
+            status: 'open',
+            isCompleted: false,
+        });
+    } else {
+        if (run_panel) {
+            if (!run_panel.run_id) {
+                run_panel.run_id = `manual-${Date.now()}`;
+            }
+            if (!run_panel.is_drawer_open && typeof window !== 'undefined' && window.innerWidth >= 1024) {
+                run_panel.toggleDrawer?.(true);
+            }
+            if (run_panel.active_index === 0) {
+                run_panel.setActiveTabIndex?.(2);
+            }
+        }
+
+        if (journal?.onLogSuccess) {
+            journal.onLogSuccess({
+                log_type: LogTypes.PURCHASE,
+                extra: {
+                    longcode: resolvedLongcode,
+                    transaction_id: buyTxId,
+                },
+            });
+        }
     }
 
     const baseContractRecord: Record<string, any> = {
@@ -661,13 +715,15 @@ export async function executeLiveDerivTrade(params: {
         longcode: resolvedLongcode,
         barrier: spec.barrier,
         tick_count: spec.duration,
-        date_start: buyObj.start_time || Math.floor(Date.now() / 1000),
+        date_start: buyObj.start_time || Math.floor(createdAtMs / 1000),
         status: 'open',
         is_completed: false,
     };
 
-    transactions?.onBotContractEvent?.(baseContractRecord);
-    summary_card?.onBotContractEvent?.(baseContractRecord);
+    if (!tabStore) {
+        transactions?.onBotContractEvent?.(baseContractRecord);
+        summary_card?.onBotContractEvent?.(baseContractRecord);
+    }
 
     if (transport?.onMessage) {
         let settledOnce = false;
@@ -693,34 +749,13 @@ export async function executeLiveDerivTrade(params: {
                     poc.exit_spot ??
                     poc.exit_tick;
 
-                const mergedRecord: Record<string, any> = {
-                    ...baseContractRecord,
-                    ...poc,
-                    contract_id: contractId,
-                    underlying: poc.underlying || params.symbol,
-                    underlying_symbol: poc.underlying_symbol || poc.underlying || params.symbol,
-                    display_name: poc.display_name || marketDisplayName,
-                    contract_type: poc.contract_type || spec.apiContractType,
-                    longcode: poc.longcode || resolvedLongcode,
-                    buy_price: Number(poc.buy_price ?? buyPrice),
-                    bid_price: Number(poc.bid_price ?? buyPrice),
-                    payout: Number(poc.payout ?? payout),
-                    profit: Number(poc.profit ?? 0),
-                    currency: poc.currency || activeCurrency,
-                    entry_spot: entrySpot,
-                    exit_spot: exitSpot,
-                    transaction_ids: {
-                        buy: poc.transaction_ids?.buy ?? buyTxId,
-                        ...(poc.transaction_ids?.sell ? { sell: poc.transaction_ids.sell } : {}),
-                    },
-                    status: statusStr,
-                    is_completed: isTerminal,
-                };
-
                 const shouldLogSettlement = isTerminal && !settledOnce;
                 if (shouldLogSettlement) {
                     settledOnce = true;
-                    if (Array.isArray(transactions?.recovered_transactions) && !transactions.recovered_transactions.includes(contractId)) {
+                    if (
+                        Array.isArray(transactions?.recovered_transactions) &&
+                        !transactions.recovered_transactions.includes(contractId)
+                    ) {
                         transactions.recovered_transactions.push(contractId);
                     }
                     if (
@@ -731,21 +766,98 @@ export async function executeLiveDerivTrade(params: {
                     }
                 }
 
-                transactions?.onBotContractEvent?.(mergedRecord);
-                summary_card?.onBotContractEvent?.(mergedRecord);
-                params.onContractUpdate?.(poc, isTerminal);
+                const finalProfit = Number(poc.profit ?? 0);
+                const resolvedCurrency = poc.currency || activeCurrency;
 
-                if (shouldLogSettlement) {
-                    const finalProfit = Number(poc.profit ?? 0);
-                    journal?.onLogSuccess?.({
-                        log_type: finalProfit > 0 ? LogTypes.PROFIT : LogTypes.LOST,
-                        extra: {
-                            currency: poc.currency || activeCurrency,
-                            profit: finalProfit,
-                        },
+                if (tabStore) {
+                    const resolvedStatus = isTerminal
+                        ? finalProfit > 0
+                            ? 'won'
+                            : finalProfit < 0
+                              ? 'lost'
+                              : (statusStr as 'sold' | 'expired')
+                        : 'open';
+
+                    tabStore.upsertTransaction({
+                        contractId,
+                        buyTransactionId: Number(poc.transaction_ids?.buy ?? buyTxId),
+                        sellTransactionId: poc.transaction_ids?.sell ? Number(poc.transaction_ids.sell) : undefined,
+                        timestamp: createdAtMs,
+                        symbol: poc.underlying_symbol || poc.underlying || params.symbol,
+                        displayName: poc.display_name || marketDisplayName,
+                        contractType: poc.contract_type || spec.apiContractType,
+                        shortLabel,
+                        longcode: poc.longcode || resolvedLongcode,
+                        barrier: spec.barrier,
+                        duration: spec.duration,
+                        buyPrice: Number(poc.buy_price ?? buyPrice),
+                        bidPrice: Number(poc.bid_price ?? buyPrice),
+                        payout: Number(poc.payout ?? payout),
+                        profit: finalProfit,
+                        currency: resolvedCurrency,
+                        entrySpot,
+                        exitSpot,
+                        status: resolvedStatus,
+                        isCompleted: isTerminal,
                     });
-                    unsubMsg?.();
+
+                    if (shouldLogSettlement) {
+                        tabStore.appendJournal({
+                            type: finalProfit >= 0 ? 'profit' : 'loss',
+                            message:
+                                finalProfit >= 0
+                                    ? `Won: ${shortLabel} on ${marketDisplayName}`
+                                    : `Lost: ${shortLabel} on ${marketDisplayName}`,
+                            amount: finalProfit,
+                            currency: resolvedCurrency,
+                            contractId,
+                            transactionId: poc.transaction_ids?.sell
+                                ? Number(poc.transaction_ids.sell)
+                                : buyTxId,
+                        });
+                        unsubMsg?.();
+                    }
+                } else {
+                    const mergedRecord: Record<string, any> = {
+                        ...baseContractRecord,
+                        ...poc,
+                        contract_id: contractId,
+                        underlying: poc.underlying || params.symbol,
+                        underlying_symbol: poc.underlying_symbol || poc.underlying || params.symbol,
+                        display_name: poc.display_name || marketDisplayName,
+                        contract_type: poc.contract_type || spec.apiContractType,
+                        longcode: poc.longcode || resolvedLongcode,
+                        buy_price: Number(poc.buy_price ?? buyPrice),
+                        bid_price: Number(poc.bid_price ?? buyPrice),
+                        payout: Number(poc.payout ?? payout),
+                        profit: finalProfit,
+                        currency: resolvedCurrency,
+                        entry_spot: entrySpot,
+                        exit_spot: exitSpot,
+                        transaction_ids: {
+                            buy: poc.transaction_ids?.buy ?? buyTxId,
+                            ...(poc.transaction_ids?.sell ? { sell: poc.transaction_ids.sell } : {}),
+                        },
+                        status: statusStr,
+                        is_completed: isTerminal,
+                    };
+
+                    transactions?.onBotContractEvent?.(mergedRecord);
+                    summary_card?.onBotContractEvent?.(mergedRecord);
+
+                    if (shouldLogSettlement) {
+                        journal?.onLogSuccess?.({
+                            log_type: finalProfit > 0 ? LogTypes.PROFIT : LogTypes.LOST,
+                            extra: {
+                                currency: resolvedCurrency,
+                                profit: finalProfit,
+                            },
+                        });
+                        unsubMsg?.();
+                    }
                 }
+
+                params.onContractUpdate?.(poc, isTerminal);
             })?.unsubscribe;
 
             void transport
