@@ -4,7 +4,13 @@ import { notify } from '../utils/broadcast';
 
 const getMiscInterface = tradeEngine => {
     return {
-        notify: args => globalObserver.emit('ui.log.notify', args),
+        notify: args => {
+            if (tradeEngine) {
+                tradeEngine._lastCustomJournalEpoch = tradeEngine.latestTick?.epoch ?? null;
+                tradeEngine._lastCustomJournalAt = Date.now();
+            }
+            globalObserver.emit('ui.log.notify', args);
+        },
         console: ({ type, message }) => console[type](message), // eslint-disable-line no-console
         notifyTelegram: (access_token, chat_id, text) => {
             const url = `https://api.telegram.org/bot${access_token}/sendMessage`;

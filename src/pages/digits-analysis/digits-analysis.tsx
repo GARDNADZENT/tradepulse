@@ -1,320 +1,277 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { getAppId } from '@/components/shared';
-import './digits-analysis.scss';
+import React, { useEffect, useMemo, useState } from 'react';
+import { observer } from 'mobx-react-lite';
+import { DBOT_TABS } from '@/constants/bot-contents';
+import { useStore } from '@/hooks/useStore';
+import { derivBus } from '@/lib/deriv/tick-bus';
+import { compileAIBotToXml, loadXmlIntoBotBuilder } from '@/utils/ai-bot-xml-builder';
+import '../riskmanagers-tools.scss';
 
-const VOLATILITY_MARKETS = [
-    { symbol: 'R_100', label: 'Volatility 100 Index' },
-    { symbol: '1HZ100V', label: 'Volatility 100 (1s) Index' },
-    { symbol: 'R_75', label: 'Volatility 75 Index' },
-    { symbol: '1HZ75V', label: 'Volatility 75 (1s) Index' },
-    { symbol: 'R_50', label: 'Volatility 50 Index' },
-    { symbol: '1HZ50V', label: 'Volatility 50 (1s) Index' },
-    { symbol: 'R_25', label: 'Volatility 25 Index' },
-    { symbol: '1HZ25V', label: 'Volatility 25 (1s) Index' },
+const MARKETS = [
     { symbol: 'R_10', label: 'Volatility 10 Index' },
+    { symbol: 'R_25', label: 'Volatility 25 Index' },
+    { symbol: 'R_50', label: 'Volatility 50 Index' },
+    { symbol: 'R_75', label: 'Volatility 75 Index' },
+    { symbol: 'R_100', label: 'Volatility 100 Index' },
     { symbol: '1HZ10V', label: 'Volatility 10 (1s) Index' },
+    { symbol: '1HZ25V', label: 'Volatility 25 (1s) Index' },
+    { symbol: '1HZ50V', label: 'Volatility 50 (1s) Index' },
+    { symbol: '1HZ75V', label: 'Volatility 75 (1s) Index' },
+    { symbol: '1HZ100V', label: 'Volatility 100 (1s) Index' },
+    { symbol: 'JD10', label: 'Jump 10 Index' },
+    { symbol: 'JD25', label: 'Jump 25 Index' },
+    { symbol: 'JD50', label: 'Jump 50 Index' },
+    { symbol: 'JD75', label: 'Jump 75 Index' },
+    { symbol: 'JD100', label: 'Jump 100 Index' },
 ];
 
-const TICK_WINDOWS = [100, 250, 500, 1000];
+const WINDOWS = [100, 250, 500, 1000];
 
-const inferPipSize = (prices: number[], fallbackPip?: number): number => {
-    if (typeof fallbackPip === 'number' && fallbackPip >= 0 && fallbackPip <= 6) return fallbackPip;
-    let maxDec = 2;
-    for (const p of prices.slice(-40)) {
-        const parts = String(p).split('.');
-        if (parts[1] && parts[1].length > maxDec) {
-            maxDec = Math.min(5, parts[1].length);
-        }
-    }
-    return maxDec;
+const getDigit = (value: number, pip = 2) => {
+    const fixed = Math.abs(value).toFixed(Math.max(0, pip));
+    return Number(fixed.charAt(fixed.length - 1)) || 0;
 };
 
-const extractLastDigit = (quote: number, pipSize: number): number => {
-    const fixed = Number(quote).toFixed(pipSize);
-    const ch = fixed[fixed.length - 1];
-    const d = Number(ch);
-    return Number.isFinite(d) ? d : 0;
-};
-
-export const DigitsAnalysis: React.FC = () => {
-    const [symbol, setSymbol] = useState<string>('R_100');
-    const [tickWindow, setTickWindow] = useState<number>(500);
+const DigitsAnalysis = observer(() => {
+    const { dashboard, load_modal, run_panel } = useStore();
+    const [symbol, setSymbol] = useState('R_50');
+    const [windowSize, setWindowSize] = useState(500);
     const [digits, setDigits] = useState<number[]>([]);
-    const [latestPrice, setLatestPrice] = useState<string>('—');
-    const [isLive, setIsLive] = useState<boolean>(false);
-
-    const pipRef = useRef<number>(2);
+    const [quote, setQuote] = useState<string>('—');
+    const [status, setStatus] = useState('Connecting…');
 
     useEffect(() => {
-        let closed = false;
-        setIsLive(false);
-        setDigits([]);
+        let cancelled = false;
+        setStatus('Loading live digits…');
 
-        const appId = getAppId() || 1089;
-        const ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${appId}`);
-
-        ws.onopen = () => {
-            if (closed) return;
-            ws.send(
-                JSON.stringify({
-                    ticks_history: symbol,
-                    adjust_start_time: 1,
-                    count: tickWindow,
-                    end: 'latest',
-                    style: 'ticks',
-                    subscribe: 1,
-                })
-            );
+        const syncFromBuffer = (sym: string, list: { t: number; price: number }[]) => {
+            if (cancelled || sym !== symbol || !list.length) return;
+            const pip = derivBus.getPipSize(symbol);
+            const mapped = list.slice(-windowSize).map(item => getDigit(item.price, pip));
+            setDigits(mapped);
+            setQuote(list[list.length - 1].price.toFixed(pip));
+            setStatus('Live');
         };
 
-        ws.onmessage = evt => {
-            if (closed) return;
-            try {
-                const msg = JSON.parse(evt.data);
-                if (msg.msg_type === 'history' && msg.history?.prices) {
-                    const rawPrices: number[] = msg.history.prices.map(Number);
-                    pipRef.current = inferPipSize(rawPrices, msg.pip_size);
-                    const extracted = rawPrices.map(p => extractLastDigit(p, pipRef.current));
-                    setDigits(extracted.slice(-tickWindow));
-                    if (rawPrices.length > 0) {
-                        setLatestPrice(rawPrices[rawPrices.length - 1].toFixed(pipRef.current));
-                    }
-                    setIsLive(true);
-                } else if (msg.msg_type === 'tick' && msg.tick) {
-                    if (typeof msg.tick.pip_size === 'number') {
-                        pipRef.current = msg.tick.pip_size;
-                    }
-                    const q = Number(msg.tick.quote);
-                    const d = extractLastDigit(q, pipRef.current);
-                    setLatestPrice(q.toFixed(pipRef.current));
-                    setIsLive(true);
-                    setDigits(prev => {
-                        const next = [...prev, d];
-                        return next.length > tickWindow ? next.slice(next.length - tickWindow) : next;
-                    });
-                }
-            } catch {}
-        };
+        const unsubHist = derivBus.onHistory(syncFromBuffer);
+        const unsubTick = derivBus.onTick((sym, tick) => {
+            if (cancelled || sym !== symbol) return;
+            const pip = derivBus.getPipSize(symbol);
+            const d = getDigit(tick.price, pip);
+            setQuote(tick.price.toFixed(pip));
+            setStatus('Live');
+            setDigits(prev => [...prev, d].slice(-windowSize));
+        });
 
-        ws.onerror = () => {
-            if (!closed) setIsLive(false);
-        };
+        const existing = derivBus.getTicks(symbol);
+        if (existing.length) {
+            syncFromBuffer(symbol, existing);
+        }
+        const releaseSub = derivBus.subscribe([symbol]);
 
         return () => {
-            closed = true;
-            try {
-                if (ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ forget_all: 'ticks' }));
-                }
-                ws.close();
-            } catch {}
+            cancelled = true;
+            unsubHist();
+            unsubTick();
+            releaseSub();
         };
-    }, [symbol, tickWindow]);
+    }, [symbol, windowSize]);
 
-    const stats = useMemo(() => {
-        const counts = Array(10).fill(0) as number[];
-        let even = 0;
-        let odd = 0;
-        let over4 = 0;
-        let under5 = 0;
+    const counts = useMemo(() => Array.from({ length: 10 }, (_, d) => digits.filter(x => x === d).length), [digits]);
+    const total = digits.length || 1;
+    const even = digits.filter(d => d % 2 === 0).length;
+    const odd = digits.length - even;
+    const over4 = digits.filter(d => d > 4).length;
+    const hottest = counts.indexOf(Math.max(...counts));
+    const coldest = counts.indexOf(Math.min(...counts));
+    const currentDigit = digits.length ? digits[digits.length - 1] : null;
 
-        for (const d of digits) {
-            if (d >= 0 && d <= 9) {
-                counts[d]++;
-                if (d % 2 === 0) even++;
-                else odd++;
-                if (d > 4) over4++;
-                else under5++;
-            }
-        }
+    const handleSendToDTrader = (contractType: string, barrier: number) => {
+        window.dispatchEvent(
+            new CustomEvent('tp-dtrader-prefill', {
+                detail: { symbol, contractType, barrier },
+            })
+        );
+        dashboard.setActiveTab(DBOT_TABS.DTRADER);
+    };
 
-        const total = digits.length || 1;
-        const pcts = counts.map(c => (c / total) * 100);
+    const handleLoadDigitBot = async (mode: 'DIFFERS_COLD' | 'EVEN_ODD' | 'OVER_UNDER', runNow = false) => {
+        const evenPct = (even / total) * 100;
+        const overPct = (over4 / total) * 100;
+        const contractType =
+            mode === 'DIFFERS_COLD'
+                ? 'DIGITDIFF'
+                : mode === 'EVEN_ODD'
+                  ? evenPct >= 50
+                      ? 'DIGITEVEN'
+                      : 'DIGITODD'
+                  : overPct >= 50
+                    ? 'DIGITOVER'
+                    : 'DIGITUNDER';
+        const barrier = mode === 'DIFFERS_COLD' ? coldest : contractType === 'DIGITOVER' ? 2 : 7;
 
-        let hottestDigit = 0;
-        let coldestDigit = 0;
-        for (let i = 1; i < 10; i++) {
-            if (counts[i] > counts[hottestDigit]) hottestDigit = i;
-            if (counts[i] < counts[coldestDigit]) coldestDigit = i;
-        }
+        const xml = compileAIBotToXml({
+            name: `Digits Analysis ${contractType} (${symbol})`,
+            symbol,
+            contractType,
+            barrier,
+            baseStake: 1,
+            martingaleMultiplier: mode === 'DIFFERS_COLD' ? 11 : 2.1,
+            takeProfit: 10,
+            stopLoss: 25,
+            virtualHookEnabled: true,
+            virtualHookStartMode: 'virtual',
+            virtualHookLosses: 1,
+            virtualHookWins: 1,
+        });
 
-        const maxPct = Math.max(...pcts, 14);
-        const currentDigit = digits.length > 0 ? digits[digits.length - 1] : null;
-
-        return {
-            counts,
-            pcts,
-            hottestDigit,
-            hottestPct: pcts[hottestDigit] || 0,
-            coldestDigit,
-            coldestPct: pcts[coldestDigit] || 0,
-            evenPct: (even / total) * 100,
-            oddPct: (odd / total) * 100,
-            over4Pct: (over4 / total) * 100,
-            under5Pct: (under5 / total) * 100,
-            maxPct,
-            currentDigit,
-            last30: digits.slice(-30),
-        };
-    }, [digits]);
-
-    const selectedMarketLabel = VOLATILITY_MARKETS.find(m => m.symbol === symbol)?.label || symbol;
+        await loadXmlIntoBotBuilder({
+            xml,
+            name: `Digits Analysis ${contractType} (${symbol})`,
+            dashboard,
+            load_modal,
+            runNow,
+            run_panel,
+        });
+    };
 
     return (
-        <div className='tp-digits-page'>
-            <div className='tp-digits-page__inner'>
-                <section className='tp-digits-card'>
-                    <header className='tp-digits-card__header'>
-                        <div className='tp-digits-card__title-group'>
-                            <h1 className='tp-digits-card__title'>
-                                {tickWindow}-Tick Live Digits &amp; Parity Analysis
-                            </h1>
-                            <span className='tp-digits-card__subtitle'>
-                                {selectedMarketLabel} · Quote: <strong>{latestPrice}</strong>
-                            </span>
-                        </div>
+        <div className='rm-tool'>
+            <div className='rm-tool__header'>
+                <div>
+                    <h2>Digits Analysis</h2>
+                    <span>{windowSize}-tick live digit distribution and parity analysis</span>
+                </div>
+                <div className='rm-tool__header-actions'>
+                    <span className='rm-status'>Quote: {quote}</span>
+                    <span className={status === 'Live' ? 'rm-status rm-status--live' : 'rm-status'}>{status}</span>
+                </div>
+            </div>
 
-                        <div className='tp-digits-card__controls'>
-                            <select
-                                className='tp-digits-card__select'
-                                value={symbol}
-                                onChange={e => setSymbol(e.target.value)}
-                                aria-label='Select synthetic market'
+            <div className='rm-card'>
+                <div className='rm-toolbar-row'>
+                    <select value={symbol} onChange={e => setSymbol(e.target.value)} aria-label='Market'>
+                        {MARKETS.map(m => (
+                            <option key={m.symbol} value={m.symbol}>
+                                {m.label} — {m.symbol}
+                            </option>
+                        ))}
+                    </select>
+
+                    <div className='rm-window-pills'>
+                        {WINDOWS.map(w => (
+                            <button
+                                key={w}
+                                type='button'
+                                className={`rm-window-pill${windowSize === w ? ' rm-window-pill--active' : ''}`}
+                                onClick={() => setWindowSize(w)}
                             >
-                                {VOLATILITY_MARKETS.map(m => (
-                                    <option key={m.symbol} value={m.symbol}>
-                                        {m.label}
-                                    </option>
-                                ))}
-                            </select>
-
-                            <select
-                                className='tp-digits-card__select tp-digits-card__select--compact'
-                                value={tickWindow}
-                                onChange={e => setTickWindow(Number(e.target.value))}
-                                aria-label='Select tick count'
-                            >
-                                {TICK_WINDOWS.map(w => (
-                                    <option key={w} value={w}>
-                                        {w} Ticks
-                                    </option>
-                                ))}
-                            </select>
-
-                            <span className={`tp-digits-card__live-pill${isLive ? ' tp-digits-card__live-pill--on' : ''}`}>
-                                <span className='tp-digits-card__live-dot' />
-                                {isLive ? `LIVE ${digits.length} TICKS` : 'CONNECTING…'}
-                            </span>
-                        </div>
-                    </header>
-
-                    <div className='tp-digits-card__kpis'>
-                        <div className='tp-digits-kpi'>
-                            <span className='tp-digits-kpi__label'>Sample Window</span>
-                            <strong className='tp-digits-kpi__value'>{digits.length || tickWindow} Ticks</strong>
-                        </div>
-                        <div className='tp-digits-kpi tp-digits-kpi--hot'>
-                            <span className='tp-digits-kpi__label'>Hottest Digit</span>
-                            <strong className='tp-digits-kpi__value'>
-                                {stats.hottestDigit} · {stats.hottestPct.toFixed(1)}%
-                            </strong>
-                        </div>
-                        <div className='tp-digits-kpi tp-digits-kpi--cold'>
-                            <span className='tp-digits-kpi__label'>Coldest Digit</span>
-                            <strong className='tp-digits-kpi__value'>
-                                {stats.coldestDigit} · {stats.coldestPct.toFixed(1)}%
-                            </strong>
-                        </div>
-                        <div className='tp-digits-kpi'>
-                            <span className='tp-digits-kpi__label'>Even Parity</span>
-                            <strong className='tp-digits-kpi__value'>{stats.evenPct.toFixed(1)}%</strong>
-                        </div>
-                        <div className='tp-digits-kpi'>
-                            <span className='tp-digits-kpi__label'>Odd Parity</span>
-                            <strong className='tp-digits-kpi__value'>{stats.oddPct.toFixed(1)}%</strong>
-                        </div>
+                                {w} Ticks
+                            </button>
+                        ))}
                     </div>
+                </div>
 
-                    <div className='tp-digits-card__bars'>
-                        {stats.pcts.map((pct, digit) => {
-                            const isHot = digit === stats.hottestDigit && digits.length > 0;
-                            const isCold = digit === stats.coldestDigit && digits.length > 0;
-                            const isCurrent = digit === stats.currentDigit;
-                            const barHeight = Math.max(8, Math.round((pct / stats.maxPct) * 100));
+                <div className='rm-analysis-summary'>
+                    <div>
+                        <strong>{digits.length}</strong>
+                        <span>Ticks Sampled</span>
+                    </div>
+                    <div>
+                        <strong style={{ color: '#34d399' }}>
+                            {hottest} ({((counts[hottest] / total) * 100).toFixed(1)}%)
+                        </strong>
+                        <span>Hottest Digit</span>
+                    </div>
+                    <div>
+                        <strong style={{ color: '#f87171' }}>
+                            {coldest} ({((counts[coldest] / total) * 100).toFixed(1)}%)
+                        </strong>
+                        <span>Coldest Digit</span>
+                    </div>
+                    <div>
+                        <strong>{((even / total) * 100).toFixed(1)}%</strong>
+                        <span>Even Parity</span>
+                    </div>
+                    <div>
+                        <strong>{((odd / total) * 100).toFixed(1)}%</strong>
+                        <span>Odd Parity</span>
+                    </div>
+                    <div>
+                        <strong>
+                            {((over4 / total) * 100).toFixed(1)}% / {(((digits.length - over4) / total) * 100).toFixed(1)}%
+                        </strong>
+                        <span>Over 4 / Under 5</span>
+                    </div>
+                </div>
 
-                            return (
-                                <div
-                                    key={digit}
-                                    className={`tp-digit-col${isCurrent ? ' tp-digit-col--active' : ''}`}
-                                >
-                                    <span
-                                        className={`tp-digit-col__pct${isHot ? ' tp-digit-col__pct--hot' : ''}${isCold ? ' tp-digit-col__pct--cold' : ''}`}
-                                    >
-                                        {pct.toFixed(1)}%
-                                    </span>
-                                    <div className='tp-digit-col__track'>
-                                        <div
-                                            className={`tp-digit-col__fill${isHot ? ' tp-digit-col__fill--hot' : ''}${isCold ? ' tp-digit-col__fill--cold' : ''}`}
-                                            style={{ height: `${barHeight}%` }}
-                                        />
-                                    </div>
-                                    <span
-                                        className={`tp-digit-col__badge${isCurrent ? ' tp-digit-col__badge--current' : ''}${isHot ? ' tp-digit-col__badge--hot' : ''}`}
-                                    >
-                                        {digit}
-                                    </span>
-                                    <span className='tp-digit-col__count'>{stats.counts[digit]}x</span>
+                <div className='rm-bars'>
+                    {counts.map((count, d) => {
+                        const pct = (count / total) * 100;
+                        const isHot = digits.length > 0 && d === hottest;
+                        const isCold = digits.length > 0 && d === coldest;
+                        const isCurrent = d === currentDigit;
+                        return (
+                            <div
+                                className={`rm-bar${isHot ? ' rm-bar--hot' : ''}${isCold ? ' rm-bar--cold' : ''}${isCurrent ? ' rm-bar--current' : ''}`}
+                                key={d}
+                            >
+                                <span>{d}</span>
+                                <div>
+                                    <i style={{ width: `${Math.max(2, Math.min(100, pct * 4))}%` }} />
                                 </div>
-                            );
-                        })}
-                    </div>
+                                <strong>{pct.toFixed(1)}%</strong>
+                            </div>
+                        );
+                    })}
+                </div>
 
-                    <div className='tp-digits-card__splits'>
-                        <div className='tp-split-meter'>
-                            <div className='tp-split-meter__labels'>
-                                <span>Even ({stats.evenPct.toFixed(1)}%)</span>
-                                <span>Odd ({stats.oddPct.toFixed(1)}%)</span>
-                            </div>
-                            <div className='tp-split-meter__bar'>
-                                <div className='tp-split-meter__left' style={{ width: `${stats.evenPct}%` }} />
-                            </div>
-                        </div>
-
-                        <div className='tp-split-meter'>
-                            <div className='tp-split-meter__labels'>
-                                <span>Under 5 (0–4: {stats.under5Pct.toFixed(1)}%)</span>
-                                <span>Over 4 (5–9: {stats.over4Pct.toFixed(1)}%)</span>
-                            </div>
-                            <div className='tp-split-meter__bar'>
-                                <div
-                                    className='tp-split-meter__left tp-split-meter__left--emerald'
-                                    style={{ width: `${stats.under5Pct}%` }}
-                                />
-                            </div>
-                        </div>
+                <div style={{ marginTop: '1.8rem' }}>
+                    <div className='rm-muted'>Last 30 Live Tick Digits (Latest highlighted)</div>
+                    <div className='rm-last-digits'>
+                        {digits.slice(-30).map((d, i, arr) => (
+                            <span
+                                key={`${i}-${d}`}
+                                className={`${d % 2 === 0 ? 'is-even' : 'is-odd'}${i === arr.length - 1 ? ' is-latest' : ''}`}
+                            >
+                                {d}
+                            </span>
+                        ))}
                     </div>
+                </div>
 
-                    <div className='tp-digits-card__tape-wrap'>
-                        <div className='tp-digits-card__tape-title'>Last 30 Tick Digits</div>
-                        <div className='tp-digits-card__tape'>
-                            {stats.last30.map((d, idx) => {
-                                const isNewest = idx === stats.last30.length - 1;
-                                const isEven = d % 2 === 0;
-                                return (
-                                    <span
-                                        key={`${idx}-${d}`}
-                                        className={`tp-tick-pill${isEven ? ' tp-tick-pill--even' : ' tp-tick-pill--odd'}${isNewest ? ' tp-tick-pill--latest' : ''}`}
-                                    >
-                                        {d}
-                                    </span>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </section>
+                <div className='rm-actions-bar'>
+                    <button
+                        type='button'
+                        className='rm-button rm-button--primary'
+                        onClick={() => handleSendToDTrader('DIGITDIFF', coldest)}
+                    >
+                        Trade Differs {coldest} in DTrader
+                    </button>
+                    <button
+                        type='button'
+                        className='rm-button rm-button--secondary'
+                        onClick={() => void handleLoadDigitBot('DIFFERS_COLD', false)}
+                    >
+                        Load Differs ({coldest}) Bot
+                    </button>
+                    <button
+                        type='button'
+                        className='rm-button rm-button--secondary'
+                        onClick={() => void handleLoadDigitBot('EVEN_ODD', false)}
+                    >
+                        Load Dominant Parity Bot
+                    </button>
+                    <button
+                        type='button'
+                        className='rm-button rm-button--emerald'
+                        onClick={() => void handleLoadDigitBot('OVER_UNDER', true)}
+                    >
+                        Load &amp; Run Over/Under Bot
+                    </button>
+                </div>
             </div>
         </div>
     );
-};
+});
 
 export default DigitsAnalysis;

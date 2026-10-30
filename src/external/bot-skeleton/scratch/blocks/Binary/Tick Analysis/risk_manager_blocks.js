@@ -63,21 +63,31 @@ getGenerator().forBlock.vh_virtual_streak_ready = block => {
     const streak = Math.max(1, Number(block.getFieldValue('STREAK')) || 2);
     const cond = block.getFieldValue('CONDITION') || 'LTE';
     const barrier = Number(block.getFieldValue('BARRIER')) || 0;
+    const condLabel =
+        cond === 'LTE'
+            ? '<= ' + barrier
+            : cond === 'GTE'
+              ? '>= ' + barrier
+              : cond === 'EVEN'
+                ? 'all even'
+                : 'all odd';
 
     const code =
         '(function(){var l=Bot.getLastDigitList();if(!l||l.length<' +
         streak +
-        '){return false;}for(var i=l.length-' +
+        '){return false;}var s=l.slice(-' +
         streak +
-        ';i<l.length;i++){var d=Number(l[i]);' +
+        ');var ok=true;for(var i=0;i<s.length;i++){var d=Number(s[i]);' +
         (cond === 'LTE'
-            ? 'if(!(d<=' + barrier + '))return false;'
+            ? 'if(!(d<=' + barrier + ')){ok=false;break;}'
             : cond === 'GTE'
-              ? 'if(!(d>=' + barrier + '))return false;'
+              ? 'if(!(d>=' + barrier + ')){ok=false;break;}'
               : cond === 'EVEN'
-                ? 'if(d%2!==0)return false;'
-                : 'if(d%2===0)return false;') +
-        '}return true;})()';
+                ? 'if(d%2!==0){ok=false;break;}'
+                : 'if(d%2===0){ok=false;break;}') +
+        '}if(Bot.logBotCondition){Bot.logBotCondition(' +
+        JSON.stringify(condLabel) +
+        ',s,ok);}return ok;})()';
 
     return [code, getGenerator().ORDER_ATOMIC];
 };
@@ -198,15 +208,24 @@ getGenerator().forBlock.al_parity_majority = block => {
     const parity = block.getFieldValue('PARITY') || 'EVEN';
     const threshold = Number(block.getFieldValue('THRESHOLD')) || 55;
     const rem = parity === 'EVEN' ? '0' : '1';
+    const parityLabel = parity === 'EVEN' ? 'Even' : 'Odd';
 
     const code =
         '(function(){var l=Bot.getLastDigitList();if(!l||!l.length){return false;}var s=l.slice(-' +
         win +
         ');var c=0;for(var i=0;i<s.length;i++){if(Math.abs(Number(s[i]))%2===' +
         rem +
-        ')c++;}return ((c/s.length)*100)>=' +
+        ')c++;}var pct=(c/s.length)*100;var ok=pct>=' +
         threshold +
-        ';})()';
+        ';var lastD=s[s.length-1];if(Bot.logBotCondition){Bot.logBotCondition(' +
+        JSON.stringify(parityLabel + '>=' + threshold + '%') +
+        ',[lastD],ok,' +
+        JSON.stringify('Last digit: ') +
+        '+lastD+' +
+        JSON.stringify(' · ' + parityLabel + ' (' + win + 't): ') +
+        '+pct.toFixed(1)+' +
+        JSON.stringify('% >= ' + threshold + '%: ') +
+        ');}return ok;})()';
 
     return [code, getGenerator().ORDER_ATOMIC];
 };
@@ -279,6 +298,7 @@ getGenerator().forBlock.al_over_under_majority = block => {
     const barrier = Number(block.getFieldValue('BARRIER')) || 4;
     const threshold = Number(block.getFieldValue('THRESHOLD')) || 55;
     const op = dir === 'OVER' ? '>' : '<';
+    const dirLabel = (dir === 'OVER' ? 'Over ' : 'Under ') + barrier;
 
     const code =
         '(function(){var l=Bot.getLastDigitList();if(!l||!l.length){return false;}var s=l.slice(-' +
@@ -286,9 +306,17 @@ getGenerator().forBlock.al_over_under_majority = block => {
         ');var c=0;for(var i=0;i<s.length;i++){if(Number(s[i])' +
         op +
         barrier +
-        ')c++;}return ((c/s.length)*100)>=' +
+        ')c++;}var pct=(c/s.length)*100;var ok=pct>=' +
         threshold +
-        ';})()';
+        ';var lastD=s[s.length-1];if(Bot.logBotCondition){Bot.logBotCondition(' +
+        JSON.stringify(dirLabel + '>=' + threshold + '%') +
+        ',[lastD],ok,' +
+        JSON.stringify('Last digit: ') +
+        '+lastD+' +
+        JSON.stringify(' · ' + dirLabel + ' (' + win + 't): ') +
+        '+pct.toFixed(1)+' +
+        JSON.stringify('% >= ' + threshold + '%: ') +
+        ');}return ok;})()';
 
     return [code, getGenerator().ORDER_ATOMIC];
 };

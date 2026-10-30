@@ -1,5 +1,5 @@
 // @ts-nocheck — vendored bot code with known upstream type gaps; see AGENTS.md
-import React, { lazy, Suspense, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -9,6 +9,7 @@ import Dialog from '@/components/shared_ui/dialog';
 import MobileWrapper from '@/components/shared_ui/mobile-wrapper';
 import Tabs from '@/components/shared_ui/tabs/tabs';
 import TradeTypeConfirmationModal from '@/components/trade-type-confirmation-modal';
+import TradingViewComponent from '@/components/trading-view-chart/trading-view';
 import TradingViewModal from '@/components/trading-view-chart/trading-view-modal';
 import { DBOT_TABS, TAB_IDS } from '@/constants/bot-contents';
 import { api_base, updateWorkspaceName } from '@/external/bot-skeleton';
@@ -35,27 +36,23 @@ import {
     LabelPairedPlayLgFillIcon,
     LabelPairedPuzzlePieceTwoCaptionBoldIcon,
 } from '@deriv/quill-icons/LabelPaired';
-import { LegacyGuide1pxIcon } from '@deriv/quill-icons/Legacy';
 import { Localize, localize } from '@deriv-com/translations';
 import { useDevice } from '@deriv-com/ui';
 import RunPanel from '../../components/run-panel';
+import AIDeveloper from '../ai-developer';
+import AIBots from '../ai-bots';
+import AnalysisTool from '../analysis-tool';
+import AutoTrades from '../auto-trades/auto-trades';
+import Calculator from '../calculator';
 import ChartModal from '../chart/chart-modal';
+import CopyTrading from '../copy-trading/copy-trading';
 import Dashboard from '../dashboard';
 import RunStrategy from '../dashboard/run-strategy';
-import './main.scss';
-
-import TradingBots from '../free-bots/trading-bots';
-import ManualTrade from '../manual-trade';
-import { TradePulse } from '../tradepulse';
-import AutoTrades from '../auto-trades/auto-trades';
 import DigitsAnalysis from '../digits-analysis/digits-analysis';
-import CopyTrading from '../copy-trading/copy-trading';
-import RiskCalculator from '../free-bots/risk-calculator';
-import TradingViewComponent from '@/components/trading-view-chart/trading-view';
+import DTrader from '../dtrader';
+import FreeBots from '../free-bots/free-bots';
+import { TradePulse } from '../tradepulse';
 import './main.scss';
-
-const ChartWrapper = lazy(() => import('../chart/chart-wrapper'));
-const Tutorial = lazy(() => import('../tutorials'));
 
 const AppWrapper = observer(() => {
     const { connectionStatus } = useApiBase();
@@ -64,8 +61,6 @@ const AppWrapper = observer(() => {
     const {
         active_tab,
         active_tour,
-        is_chart_modal_visible,
-        is_trading_view_modal_visible,
         setActiveTab,
         setWebSocketState,
         setActiveTour,
@@ -86,119 +81,86 @@ const AppWrapper = observer(() => {
         [key: string]: string;
     };
     const { clear } = summary_card;
-    const { DASHBOARD, BOT_BUILDER, CHART, MANUAL_TRADE } = DBOT_TABS;
+    const { DASHBOARD, BOT_BUILDER } = DBOT_TABS;
     const init_render = React.useRef(true);
+
     const hash = [
         'dashboard',
         'bot_builder',
-        'special_bots',
-        'digits_analysis',
-        'copy_trading',
-        'risk_calculator',
-        'trading_view',
-        'chart',
-        'manual_trade',
-        'tradepulse',
+        'ai_developer',
+        'free_bots',
+        'dtrader',
+        'ai_bots',
         'auto_trades',
-        'tutorial',
+        'trading_view',
+        'copy_trading',
+        'calculator',
+        'analysis_tool',
+        'digits_analysis',
+        'tradepulse',
     ];
+
     const { isDesktop } = useDevice();
     const location = useLocation();
     const navigate = useNavigate();
     const [left_tab_shadow, setLeftTabShadow] = useState<boolean>(false);
     const [right_tab_shadow, setRightTabShadow] = useState<boolean>(false);
-
-    // Trade type modal state
     const [tradeTypeModalState, setTradeTypeModalState] = useState(getModalState());
 
-    /**
-     * Helper function to get modal props with enhanced type safety and clear documentation
-     *
-     * Props serve distinct purposes:
-     * - current_trade_type: Technical identifier for API/internal use (format: "category/type")
-     * - current_trade_type_display_name: Human-readable name for UI display
-     *
-     * This separation ensures proper data flow between technical systems and user interface
-     */
     const getTradeTypeModalProps = () => {
         const { tradeTypeData } = tradeTypeModalState;
-
         return {
             is_visible: tradeTypeModalState.isVisible,
             trade_type_display_name: tradeTypeData?.displayName || '',
-
-            // Technical identifier for internal/API use (e.g., "callput/callput")
-            // Used by backend systems and technical integrations
             current_trade_type: tradeTypeData?.currentTradeType
                 ? `${tradeTypeData.currentTradeType.tradeTypeCategory}/${tradeTypeData.currentTradeType.tradeType}`
                 : 'N/A',
-
-            // Human-readable display name for UI (e.g., "Rise/Fall")
-            // Used for user-facing text and modal content
             current_trade_type_display_name: tradeTypeData?.currentTradeTypeDisplayName || 'N/A',
-
             onConfirm: handleTradeTypeConfirm,
             onCancel: handleTradeTypeCancel,
         };
     };
 
-    // App Builder embeds the bot at /bot/preview — open the bot builder there by
-    // default (instead of the dashboard) when no explicit #tab hash is present.
     const is_preview_mode = window.location.pathname.includes('/preview');
-    let tab_value: number | string = active_tab;
     const GetHashedValue = (tab: number) => {
-        tab_value = location.hash?.split('#')[1];
+        const tab_value = location.hash?.split('#')[1];
         if (!tab_value) return is_preview_mode ? BOT_BUILDER : tab;
-        return Number(hash.indexOf(String(tab_value)));
+        const idx = hash.indexOf(String(tab_value));
+        return idx >= 0 ? idx : DASHBOARD;
     };
     const active_hash_tab = GetHashedValue(active_tab);
 
-    // Set up modal state change listener
     React.useEffect(() => {
         setModalStateChangeCallback(new_state => {
             setTradeTypeModalState(new_state);
         });
     }, [is_loading]);
 
-    // Reset URL parameter processing when location changes
     React.useEffect(() => {
         resetUrlParamProcessing();
     }, [location.search]);
 
     React.useEffect(() => {
         const el_dashboard = document.getElementById('id-dbot-dashboard');
-        const el_tutorial = document.getElementById('id-tutorials');
+        const el_last = document.getElementById('id-tradepulse');
+        if (!el_dashboard || !el_last) return;
 
         const observer_dashboard = new window.IntersectionObserver(
-            ([entry]) => {
-                if (entry.isIntersecting) {
-                    setLeftTabShadow(false);
-                    return;
-                }
-                setLeftTabShadow(true);
-            },
-            {
-                root: null,
-                threshold: 0.5, // set offset 0.1 means trigger if atleast 10% of element in viewport
-            }
+            ([entry]) => setLeftTabShadow(!entry.isIntersecting),
+            { root: null, threshold: 0.5 }
         );
-
-        const observer_tutorial = new window.IntersectionObserver(
-            ([entry]) => {
-                if (entry.isIntersecting) {
-                    setRightTabShadow(false);
-                    return;
-                }
-                setRightTabShadow(true);
-            },
-            {
-                root: null,
-                threshold: 0.5, // set offset 0.1 means trigger if atleast 10% of element in viewport
-            }
+        const observer_last = new window.IntersectionObserver(
+            ([entry]) => setRightTabShadow(!entry.isIntersecting),
+            { root: null, threshold: 0.5 }
         );
         observer_dashboard.observe(el_dashboard);
-        observer_tutorial.observe(el_tutorial);
-    });
+        observer_last.observe(el_last);
+
+        return () => {
+            observer_dashboard.disconnect();
+            observer_last.disconnect();
+        };
+    }, []);
 
     React.useEffect(() => {
         if (connectionStatus !== CONNECTION_STATUS.OPENED) {
@@ -212,12 +174,10 @@ const AppWrapper = observer(() => {
         }
     }, [clear, connectionStatus, setWebSocketState, stopBot]);
 
-    // Update tab shadows height to match bot builder height
     const updateTabShadowsHeight = () => {
         const botBuilderEl = document.getElementById('id-bot-builder');
         const leftShadow = document.querySelector('.tabs-shadow--left') as HTMLElement;
         const rightShadow = document.querySelector('.tabs-shadow--right') as HTMLElement;
-
         if (botBuilderEl && leftShadow && rightShadow) {
             const height = botBuilderEl.offsetHeight;
             leftShadow.style.height = `${height}px`;
@@ -227,105 +187,63 @@ const AppWrapper = observer(() => {
 
     React.useEffect(() => {
         let pollTimeoutId: ReturnType<typeof setTimeout> | null = null;
-
-        // Handle URL trade type parameters when switching to Bot Builder tab
         if (active_tab === BOT_BUILDER) {
-            // Use requestAnimationFrame to ensure Blockly workspace is fully initialized
             requestAnimationFrame(() => {
-                // Disable automatic URL parameter application to prevent changes before modal
                 disableUrlParameterApplication();
-
-                // Set up listener for manual trade type changes (only once)
                 setupTradeTypeChangeListener();
-
-                // Create unified handler for both immediate and delayed execution
                 const handleTradeTypeModal = () => {
                     checkAndShowTradeTypeModal(
-                        // onConfirm: Changes are now handled by the modal component
                         () => {
-                            // Re-enable URL parameter application for future parameters
                             enableUrlParameterApplication();
                         },
-                        // onCancel: URL parameter removal is now handled by the modal component
                         () => {}
                     );
                 };
 
-                // Wait for Blockly to finish loading before checking for URL parameters
                 if (!blockly_store.is_loading) {
-                    // Blockly is loaded, but add longer delay to ensure workspace is fully initialized
-                    // and trade type fields are populated
                     setTimeout(() => {
                         handleTradeTypeModal();
                     }, 500);
                 } else {
-                    // Blockly is still loading, wait for it to finish with optimized polling
                     let pollAttempts = 0;
-                    const maxPollAttempts = 10; // Maximum 5 seconds (10 * 500ms) - optimized performance
-
+                    const maxPollAttempts = 10;
                     const checkBlocklyLoaded = () => {
                         if (!blockly_store.is_loading) {
                             handleTradeTypeModal();
-                            return; // Exit polling once loaded
+                            return;
                         }
-
                         if (pollAttempts < maxPollAttempts) {
                             pollAttempts++;
-                            // Use 500ms intervals for better performance (5x improvement from 100ms)
                             pollTimeoutId = setTimeout(checkBlocklyLoaded, 500);
-                        } else {
-                            console.warn(
-                                'Blockly loading timeout after 5 seconds - proceeding without URL parameter check'
-                            );
                         }
                     };
-
                     checkBlocklyLoaded();
                 }
             });
         }
-
-        // Cleanup function to prevent memory leaks
         return () => {
-            if (pollTimeoutId) {
-                clearTimeout(pollTimeoutId);
-                pollTimeoutId = null;
-            }
+            if (pollTimeoutId) clearTimeout(pollTimeoutId);
         };
     }, [active_tab, is_loading]);
 
     React.useEffect(() => {
-        // Run on mount and when active tab changes
         updateTabShadowsHeight();
+        if (is_open) setTourDialogVisibility(false);
 
-        if (is_open) {
-            setTourDialogVisibility(false);
-        }
         if (init_render.current) {
             setActiveTab(Number(active_hash_tab));
             if (!isDesktop) handleTabChange(Number(active_hash_tab));
             init_render.current = false;
         } else {
-            // Preserve URL parameters when navigating
             const currentSearch = window.location.search;
             navigate(`${currentSearch}#${hash[active_tab] || hash[0]}`);
         }
-        if (active_tour !== '') {
-            setActiveTour('');
-        }
+        if (active_tour !== '') setActiveTour('');
 
-        // Prevent scrolling when tutorial tab is active (only on mobile)
+        document.body.style.overflow = '';
         const mainElement = document.querySelector('.main__container');
-        if (active_tab === DBOT_TABS.TUTORIAL && !isDesktop) {
-            document.body.style.overflow = 'hidden';
-            if (mainElement instanceof HTMLElement) {
-                mainElement.classList.add('no-scroll');
-            }
-        } else {
-            document.body.style.overflow = '';
-            if (mainElement instanceof HTMLElement) {
-                mainElement.classList.remove('no-scroll');
-            }
+        if (mainElement instanceof HTMLElement) {
+            mainElement.classList.remove('no-scroll');
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [active_tab]);
@@ -334,27 +252,23 @@ const AppWrapper = observer(() => {
         const trashcan_init_id = setTimeout(() => {
             if (active_tab === BOT_BUILDER && Blockly?.derivWorkspace?.trashcan) {
                 const trashcanY = window.innerHeight - 250;
-                let trashcanX;
-                if (is_drawer_open) {
-                    trashcanX = isDbotRTL() ? 380 : window.innerWidth - 460;
-                } else {
-                    trashcanX = isDbotRTL() ? 20 : window.innerWidth - 100;
-                }
+                const trashcanX = is_drawer_open
+                    ? isDbotRTL()
+                        ? 380
+                        : window.innerWidth - 460
+                    : isDbotRTL()
+                      ? 20
+                      : window.innerWidth - 100;
                 Blockly?.derivWorkspace?.trashcan?.setTrashcanPosition(trashcanX, trashcanY);
             }
         }, 100);
-
-        return () => {
-            clearTimeout(trashcan_init_id); // Clear the timeout on unmount
-        };
-        //eslint-disable-next-line react-hooks/exhaustive-deps
+        return () => clearTimeout(trashcan_init_id);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [active_tab, is_drawer_open]);
 
     useEffect(() => {
         let timer: ReturnType<typeof setTimeout>;
         if (dashboard_strategies.length > 0) {
-            // Needed to pass this to the Callback Queue as on tab changes
-            // document title getting override by 'Bot | Deriv' only
             timer = setTimeout(() => {
                 updateWorkspaceName();
             });
@@ -379,28 +293,27 @@ const AppWrapper = observer(() => {
         [active_tab]
     );
 
-    // [AI]
     const handleLoginGeneration = async () => {
         const oauthUrl = await generateOAuthURL();
         if (oauthUrl) {
             window.location.replace(oauthUrl);
-        } else {
-            console.error('Failed to generate OAuth URL');
         }
     };
-    // [/AI]
+
     const scrollMainTabs = (dir: 'left' | 'right') => {
         const listEl = document.querySelector('.dc-tabs__list--header--main__tabs') as HTMLElement | null;
         if (!listEl) return;
         listEl.scrollBy({ left: dir === 'left' ? -260 : 260, behavior: 'smooth' });
     };
 
+    const isExecSurface = [DASHBOARD, BOT_BUILDER].includes(active_tab);
+
     return (
         <React.Fragment>
             <div
                 className={classNames('main', {
-                    'main--manual-trade-active': active_tab === MANUAL_TRADE,
-                    'main--has-exec-dock': [DASHBOARD, BOT_BUILDER, CHART].includes(active_tab),
+                    'main--has-exec-dock': isExecSurface,
+                    'main--full-page-tab': !isExecSurface,
                 })}
             >
                 <div
@@ -427,12 +340,13 @@ const AppWrapper = observer(() => {
                             onTabItemClick={handleTabChange}
                             top
                         >
+                            {/* 0: Dashboard */}
                             <div
                                 label={
                                     <>
                                         <LabelPairedObjectsColumnCaptionRegularIcon
-                                            height='16px'
-                                            width='16px'
+                                            height='15px'
+                                            width='15px'
                                             fill='var(--text-general)'
                                         />
                                         <Localize i18n_default_text='Dashboard' />
@@ -442,12 +356,14 @@ const AppWrapper = observer(() => {
                             >
                                 <Dashboard handleTabChange={handleTabChange} />
                             </div>
+
+                            {/* 1: Bot Builder */}
                             <div
                                 label={
                                     <>
                                         <LabelPairedPuzzlePieceTwoCaptionBoldIcon
-                                            height='16px'
-                                            width='16px'
+                                            height='15px'
+                                            width='15px'
                                             fill='var(--text-general)'
                                         />
                                         <Localize i18n_default_text='Bot Builder' />
@@ -455,6 +371,23 @@ const AppWrapper = observer(() => {
                                 }
                                 id='id-bot-builder'
                             />
+
+                            {/* 2: AI Developer */}
+                            <div
+                                label={
+                                    <>
+                                        <svg width='15' height='15' viewBox='0 0 24 24' fill='none'>
+                                            <path d='M12 2a4 4 0 0 1 4 4v1h1a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-7a3 3 0 0 1 3-3h1V6a4 4 0 0 1 4-4zm-2 9a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm4 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z' />
+                                        </svg>
+                                        <Localize i18n_default_text='AI Developer' />
+                                    </>
+                                }
+                                id='id-ai-developer'
+                            >
+                                <AIDeveloper />
+                            </div>
+
+                            {/* 3: Free Bots */}
                             <div
                                 label={
                                     <>
@@ -466,23 +399,76 @@ const AppWrapper = observer(() => {
                                 }
                                 id='id-trading-bots'
                             >
-                                <TradingBots />
+                                <FreeBots />
                             </div>
+
+                            {/* 4: DTrader */}
+                            <div
+                                label={
+                                    <>
+                                        <LabelPairedPlayLgFillIcon
+                                            height='14px'
+                                            width='14px'
+                                            fill='var(--text-general)'
+                                        />
+                                        <Localize i18n_default_text='DTrader' />
+                                    </>
+                                }
+                                id='id-dtrader'
+                            >
+                                <DTrader />
+                            </div>
+
+                            {/* 5: AI Bots */}
+                            <div
+                                label={
+                                    <>
+                                        <svg width='15' height='15' viewBox='0 0 24 24' fill='none'>
+                                            <path d='M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 3h2v-3h2v3h2v2h-2v3h-2v-3h-2v-2z' />
+                                        </svg>
+                                        <Localize i18n_default_text='AI Bots' />
+                                    </>
+                                }
+                                id='id-ai-bots'
+                            >
+                                <AIBots />
+                            </div>
+
+                            {/* 6: Auto Trades */}
+                            <div
+                                label={
+                                    <>
+                                        <svg width='15' height='15' viewBox='0 0 24 24' fill='none'>
+                                            <path d='M13 2L3 14h7l-1 8 10-12h-7l1-8z' />
+                                        </svg>
+                                        <Localize i18n_default_text='Auto Trades' />
+                                    </>
+                                }
+                                id='id-auto-trades'
+                            >
+                                <AutoTrades />
+                            </div>
+
+                            {/* 7: TradingView */}
                             <div
                                 label={
                                     <>
                                         <LabelPairedChartLineCaptionRegularIcon
-                                            height='16px'
-                                            width='16px'
+                                            height='15px'
+                                            width='15px'
                                             fill='var(--text-general)'
                                         />
-                                        <Localize i18n_default_text='Digits Analysis' />
+                                        <Localize i18n_default_text='TradingView' />
                                     </>
                                 }
-                                id='id-digits-analysis'
+                                id='id-trading-view'
                             >
-                                <DigitsAnalysis />
+                                <div style={{ width: '100%', height: '100%', minHeight: 'calc(100vh - 9.6rem)' }}>
+                                    <TradingViewComponent />
+                                </div>
                             </div>
+
+                            {/* 8: Copy Trading */}
                             <div
                                 label={
                                     <>
@@ -496,77 +482,55 @@ const AppWrapper = observer(() => {
                             >
                                 <CopyTrading />
                             </div>
+
+                            {/* 9: Calculator */}
                             <div
                                 label={
                                     <>
                                         <svg width='15' height='15' viewBox='0 0 24 24' fill='none'>
-                                            <path d='M12 2L4 5.4v6.1c0 5.05 3.41 9.77 8 10.9 4.59-1.13 8-5.85 8-10.9V5.4L12 2zm1 14h-2v-3H8v-2h3V8h2v3h3v2h-3v3z' />
+                                            <path d='M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 4v4h10V6H7zm0 6v2h2v-2H7zm4 0v2h2v-2h-2zm4 0v2h2v-2h-2zM7 16v2h2v-2H7zm4 0v2h2v-2h-2zm4 0v2h2v-2h-2z' />
                                         </svg>
                                         <Localize i18n_default_text='Calculator' />
                                     </>
                                 }
-                                id='id-risk-calculator'
+                                id='id-calculator'
                             >
-                                <RiskCalculator />
+                                <Calculator />
                             </div>
+
+                            {/* 10: Analysis Tool */}
                             <div
                                 label={
                                     <>
                                         <LabelPairedChartLineCaptionRegularIcon
-                                            height='16px'
-                                            width='16px'
-                                            fill='var(--text-general)'
-                                        />
-                                        <Localize i18n_default_text='TradingView' />
-                                    </>
-                                }
-                                id='id-trading-view'
-                            >
-                                <div
-                                    style={{
-                                        width: '100%',
-                                        height: 'var(--tab-content-height, calc(100vh - 9.6rem))',
-                                    }}
-                                >
-                                    <TradingViewComponent />
-                                </div>
-                            </div>
-                            <div
-                                label={
-                                    <>
-                                        <LabelPairedChartLineCaptionRegularIcon
-                                            height='16px'
-                                            width='16px'
+                                            height='15px'
+                                            width='15px'
                                             fill='var(--text-general)'
                                         />
                                         <Localize i18n_default_text='Analysis Tool' />
                                     </>
                                 }
-                                id={
-                                    is_chart_modal_visible || is_trading_view_modal_visible
-                                        ? 'id-charts--disabled'
-                                        : 'id-charts'
-                                }
+                                id='id-analysis-tool'
                             >
-                                <Suspense fallback={<div className='app-root__loading'>Loading chart...</div>}>
-                                    <ChartWrapper show_digits_stats={false} />
-                                </Suspense>
+                                <AnalysisTool />
                             </div>
+
+                            {/* 11: Digits Analysis */}
                             <div
                                 label={
                                     <>
-                                        <LabelPairedPlayLgFillIcon
-                                            height='15px'
-                                            width='15px'
-                                            fill='var(--text-general)'
-                                        />
-                                        <Localize i18n_default_text='DTrader' />
+                                        <svg width='15' height='15' viewBox='0 0 24 24' fill='none'>
+                                            <path d='M3 3h4v18H3V3zm7 6h4v12h-4V9zm7-4h4v16h-4V5z' />
+                                        </svg>
+                                        <Localize i18n_default_text='Digits Analysis' />
                                     </>
                                 }
-                                id='id-manual-trade'
+                                id='id-digits-analysis'
                             >
-                                <ManualTrade />
+                                <DigitsAnalysis />
                             </div>
+
+                            {/* 12: TradePulse */}
                             <div
                                 label={
                                     <>
@@ -579,45 +543,6 @@ const AppWrapper = observer(() => {
                                 id='id-tradepulse'
                             >
                                 <TradePulse />
-                            </div>
-                            <div
-                                label={
-                                    <>
-                                        <LabelPairedPlayLgFillIcon
-                                            height='15px'
-                                            width='15px'
-                                            fill='var(--text-general)'
-                                        />
-                                        <Localize i18n_default_text='Auto Trades' />
-                                    </>
-                                }
-                                id='id-auto-trades'
-                            >
-                                <AutoTrades />
-                            </div>
-                            <div
-                                label={
-                                    <>
-                                        <LegacyGuide1pxIcon
-                                            height='15px'
-                                            width='15px'
-                                            fill='var(--text-general)'
-                                            className='icon-general-fill-g-path'
-                                        />
-                                        <Localize i18n_default_text='Tutorials' />
-                                    </>
-                                }
-                                id='id-tutorials'
-                            >
-                                <div className='tutorials-wrapper'>
-                                    <Suspense
-                                        fallback={
-                                            <div className='app-root__loading'>Loading tutorials...</div>
-                                        }
-                                    >
-                                        <Tutorial handleTabChange={handleTabChange} />
-                                    </Suspense>
-                                </div>
                             </div>
                         </Tabs>
                         {isDesktop && (
@@ -634,7 +559,8 @@ const AppWrapper = observer(() => {
                     </div>
                 </div>
             </div>
-            {[DASHBOARD, BOT_BUILDER, CHART].includes(active_tab) && (
+
+            {isExecSurface && (
                 <DesktopWrapper>
                     <div className='main__run-strategy-wrapper'>
                         <RunStrategy />
@@ -644,9 +570,8 @@ const AppWrapper = observer(() => {
                     <TradingViewModal />
                 </DesktopWrapper>
             )}
-            {[DASHBOARD, BOT_BUILDER, CHART].includes(active_tab) && (
-                <MobileWrapper>{!is_open && <RunPanel />}</MobileWrapper>
-            )}
+            {isExecSurface && <MobileWrapper>{!is_open && <RunPanel />}</MobileWrapper>}
+
             <Dialog
                 cancel_button_text={cancel_button_text || localize('Cancel')}
                 className='dc-dialog__wrapper--fixed'
@@ -660,13 +585,12 @@ const AppWrapper = observer(() => {
                 portal_element_id='modal_root'
                 title={title}
                 login={handleLoginGeneration}
-                dismissable={dismissable} // Prevents closing on outside clicks
+                dismissable={dismissable}
                 is_closed_on_cancel={is_closed_on_cancel}
             >
                 {message}
             </Dialog>
 
-            {/* Trade Type Confirmation Modal */}
             {(() => {
                 const modalProps = getTradeTypeModalProps();
                 return (

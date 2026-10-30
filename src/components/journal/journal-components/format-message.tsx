@@ -106,24 +106,33 @@ const FormatMessage = ({ logType, className, extra }: TFormatMessageProps) => {
             }
             case LogTypes.TICK_DIGITS: {
                 const digitsList = Array.isArray(extra?.digits) ? extra.digits : [];
-                const count = extra?.window_size || digitsList.length || 2;
+                const count = extra?.window_size || digitsList.length || 1;
+                if (count <= 1) {
+                    const singleDigit = digitsList.length ? digitsList[digitsList.length - 1] : '-';
+                    return <span className='journal__tick-digits'>{`Last digit: ${singleDigit}`}</span>;
+                }
                 return (
                     <span className='journal__tick-digits'>
-                        {`Last ${count} digit${count === 1 ? '' : 's'}: ${digitsList.join(', ')}`}
+                        {`Last ${count} digits: ${digitsList.join(', ')}`}
                     </span>
                 );
             }
             case LogTypes.DIGITS_ANALYSIS: {
-                const { condition, digits = [], result } = extra;
+                const { condition, digits = [], result, summary } = extra;
                 const conditionText =
                     condition === 'ALL_EVEN' ? 'all even' : condition === 'ALL_ODD' ? 'all odd' : condition;
+                const prefix = summary
+                    ? summary
+                    : digits.length <= 1
+                      ? `Last digit: ${digits[0] ?? '-'} (${conditionText}: `
+                      : `Last ${digits.length} digits: ${digits.join(', ')} (${conditionText}: `;
                 return (
                     <span className='journal__tick-digits'>
-                        {`Last ${digits.length} digits: ${digits.join(', ')} (${conditionText}: `}
+                        {prefix}
                         <strong style={{ color: result ? '#10b981' : '#f87171' }}>
                             {result ? 'TRUE' : 'FALSE'}
                         </strong>
-                        {')'}
+                        {summary ? '' : ')'}
                     </span>
                 );
             }

@@ -1,0 +1,490 @@
+import { DBOT_TABS } from '@/constants/bot-contents';
+import { api_base } from '@/external/bot-skeleton';
+import chart_api from '@/external/bot-skeleton/services/api/chart-api';
+
+export type AIBotContractKind =
+    | 'DIGITOVER'
+    | 'DIGITUNDER'
+    | 'DIGITEVEN'
+    | 'DIGITODD'
+    | 'DIGITMATCH'
+    | 'DIGITDIFF'
+    | 'CALL'
+    | 'PUT';
+
+export type AIBotEntryFilter =
+    | 'INSTANT'
+    | 'STREAK'
+    | 'PARITY_MAJORITY'
+    | 'OVER_UNDER_MAJORITY'
+    | 'EXACT_DIGIT';
+
+export interface AIBotSpec {
+    name: string;
+    symbol: string;
+    contractType: AIBotContractKind;
+    barrier?: number;
+    recoveryBarrier?: number;
+    durationTicks?: number;
+    baseStake: number;
+    martingaleMultiplier: number;
+    takeProfit: number;
+    stopLoss: number;
+    virtualHookEnabled?: boolean;
+    virtualHookStartMode?: 'virtual' | 'real';
+    virtualHookLosses?: number;
+    virtualHookWins?: number;
+    entryFilter?: AIBotEntryFilter;
+    entryWindow?: number;
+    entryThreshold?: number;
+    entryDigit?: number;
+}
+
+const getSubmarketForSymbol = (symbol: string): string => {
+    if (symbol.startsWith('JD')) return 'jump_index';
+    if (symbol.startsWith('CRASH') || symbol.startsWith('BOOM')) return 'crash_index';
+    return 'random_index';
+};
+
+const getTradeCategoryAndType = (ct: AIBotContractKind) => {
+    switch (ct) {
+        case 'DIGITOVER':
+        case 'DIGITUNDER':
+            return { cat: 'digits', type: 'overunder', hasPred: true };
+        case 'DIGITEVEN':
+        case 'DIGITODD':
+            return { cat: 'digits', type: 'evenodd', hasPred: false };
+        case 'DIGITMATCH':
+        case 'DIGITDIFF':
+            return { cat: 'digits', type: 'matchesdiffers', hasPred: true };
+        case 'CALL':
+        case 'PUT':
+        default:
+            return { cat: 'callput', type: 'callput', hasPred: false };
+    }
+};
+
+export function compileAIBotToXml(spec: AIBotSpec): string {
+    const symbol = spec.symbol || 'R_50';
+    const submarket = getSubmarketForSymbol(symbol);
+    const { cat, type, hasPred } = getTradeCategoryAndType(spec.contractType);
+    const baseStake = Math.max(0.35, Number(spec.baseStake) || 1);
+    const martingale = Math.max(1, Number(spec.martingaleMultiplier) || 2);
+    const takeProfit = Math.max(0.5, Number(spec.takeProfit) || 10);
+    const stopLoss = Math.max(1, Number(spec.stopLoss) || 25);
+    const duration = Math.max(1, Math.min(10, Math.round(Number(spec.durationTicks) || 1)));
+    const barrier = Math.max(0, Math.min(9, Math.round(Number(spec.barrier ?? 4))));
+    const recBarrier = Math.max(
+        0,
+        Math.min(
+            9,
+            Math.round(
+                Number(
+                    spec.recoveryBarrier ??
+                        (spec.contractType === 'DIGITOVER'
+                            ? Math.min(8, barrier + 1)
+                            : spec.contractType === 'DIGITUNDER'
+                              ? Math.max(1, barrier - 1)
+                              : barrier)
+                )
+            )
+        )
+    );
+
+    const vhEnabled = Boolean(spec.virtualHookEnabled);
+    const vhStartMode = spec.virtualHookStartMode === 'real' ? 'real' : 'virtual';
+    const vhLosses = Math.max(1, Math.round(Number(spec.virtualHookLosses) || 2));
+    const vhWins = Math.max(1, Math.round(Number(spec.virtualHookWins) || 1));
+
+    const entryFilter = spec.entryFilter || 'INSTANT';
+    const entryWin = Math.max(2, Math.round(Number(spec.entryWindow) || 2));
+    const entryThresh = Math.max(50, Math.min(95, Math.round(Number(spec.entryThreshold) || 58)));
+    const entryDigit = Math.max(0, Math.min(9, Math.round(Number(spec.entryDigit ?? barrier))));
+
+    let conditionBlockXml = '';
+    if (entryFilter === 'STREAK') {
+        const streakCond =
+            spec.contractType === 'DIGITOVER'
+                ? 'LTE'
+                : spec.contractType === 'DIGITUNDER'
+                  ? 'GTE'
+                  : spec.contractType === 'DIGITEVEN'
+                    ? 'ODD'
+                    : 'EVEN';
+        conditionBlockXml = `
+          <block type="vh_virtual_streak_ready" id="cond_streak">
+            <field name="STREAK">${Math.min(10, entryWin)}</field>
+            <field name="CONDITION">${streakCond}</field>
+            <field name="BARRIER">${barrier}</field>
+          </block>`;
+    } else if (entryFilter === 'PARITY_MAJORITY') {
+        const parity = spec.contractType === 'DIGITODD' ? 'ODD' : 'EVEN';
+        conditionBlockXml = `
+          <block type="al_parity_majority" id="cond_parity">
+            <field name="WINDOW">${Math.max(10, entryWin)}</field>
+            <field name="PARITY">${parity}</field>
+            <field name="THRESHOLD">${entryThresh}</field>
+          </block>`;
+    } else if (entryFilter === 'OVER_UNDER_MAJORITY') {
+        const dir = spec.contractType === 'DIGITUNDER' ? 'UNDER' : 'OVER';
+        conditionBlockXml = `
+          <block type="al_over_under_majority" id="cond_ou">
+            <field name="WINDOW">${Math.max(10, entryWin)}</field>
+            <field name="DIR">${dir}</field>
+            <field name="BARRIER">${barrier}</field>
+            <field name="THRESHOLD">${entryThresh}</field>
+          </block>`;
+    } else if (entryFilter === 'EXACT_DIGIT') {
+        conditionBlockXml = `
+          <block type="logic_compare" id="cond_exact">
+            <field name="OP">EQ</field>
+            <value name="A">
+              <block type="last_digit" id="cond_ld"></block>
+            </value>
+            <value name="B">
+              <block type="math_number" id="cond_ld_num">
+                <field name="NUM">${entryDigit}</field>
+              </block>
+            </value>
+          </block>`;
+    }
+
+    const purchaseBlock = `<block type="purchase" id="bp_purchase">
+        <field name="PURCHASE_LIST">${spec.contractType}</field>
+      </block>`;
+
+    const beforePurchaseStack = conditionBlockXml
+        ? `<block type="controls_if" id="bp_gate">
+            <value name="IF0">${conditionBlockXml}
+            </value>
+            <statement name="DO0">
+              ${purchaseBlock}
+            </statement>
+          </block>`
+        : purchaseBlock;
+
+    const vhConfigXml = vhEnabled
+        ? `<next>
+            <block type="virtual_hook_config" id="init_vh">
+              <field name="VH_ENABLED">ENABLED</field>
+              <field name="START_MODE">${vhStartMode}</field>
+              <value name="ENTER_AFTER_LOSSES">
+                <block type="math_number" id="vh_l"><field name="NUM">${vhLosses}</field></block>
+              </value>
+              <value name="RETURN_AFTER_WINS">
+                <block type="math_number" id="vh_w"><field name="NUM">${vhWins}</field></block>
+              </value>
+            </block>
+          </next>`
+        : '';
+
+    const predictionOptionXml = hasPred
+        ? `<value name="PREDICTION">
+          <shadow type="math_number_positive" id="shad_pred" inline="true">
+            <field name="NUM">${barrier}</field>
+          </shadow>
+          <block type="variables_get" id="opt_get_pred">
+            <field name="VAR" id="var_active_pred">Active Prediction</field>
+          </block>
+        </value>`
+        : '';
+
+    return `<xml xmlns="http://www.w3.org/1999/xhtml" collection="false" is_dbot="true">
+  <variables>
+    <variable id="var_base_stake">Base Stake</variable>
+    <variable id="var_active_stake">Active Stake</variable>
+    <variable id="var_martingale">Martingale Factor</variable>
+    <variable id="var_tp">Take Profit</variable>
+    <variable id="var_sl">Stop Loss</variable>
+    <variable id="var_pred_before">Entry Prediction</variable>
+    <variable id="var_pred_after">Recovery Prediction</variable>
+    <variable id="var_active_pred">Active Prediction</variable>
+  </variables>
+  <block type="trade_definition" id="td_root" x="0" y="0">
+    <statement name="TRADE_OPTIONS">
+      <block type="trade_definition_market" id="td_market" deletable="false" movable="false">
+        <field name="MARKET_LIST">synthetic_index</field>
+        <field name="SUBMARKET_LIST">${submarket}</field>
+        <field name="SYMBOL_LIST">${symbol}</field>
+        <next>
+          <block type="trade_definition_tradetype" id="td_tradetype" deletable="false" movable="false">
+            <field name="TRADETYPECAT_LIST">${cat}</field>
+            <field name="TRADETYPE_LIST">${type}</field>
+            <next>
+              <block type="trade_definition_contracttype" id="td_contracttype" deletable="false" movable="false">
+                <field name="TYPE_LIST">both</field>
+                <next>
+                  <block type="trade_definition_candleinterval" id="td_candle" deletable="false" movable="false">
+                    <field name="CANDLEINTERVAL_LIST">60</field>
+                    <next>
+                      <block type="trade_definition_restartbuysell" id="td_rbs" deletable="false" movable="false">
+                        <field name="TIME_MACHINE_ENABLED">FALSE</field>
+                        <next>
+                          <block type="trade_definition_restartonerror" id="td_roe" deletable="false" movable="false">
+                            <field name="RESTARTONERROR">TRUE</field>
+                          </block>
+                        </next>
+                      </block>
+                    </next>
+                  </block>
+                </next>
+              </block>
+            </next>
+          </block>
+        </next>
+      </block>
+    </statement>
+    <statement name="INITIALIZATION">
+      <block type="variables_set" id="init_bs">
+        <field name="VAR" id="var_base_stake">Base Stake</field>
+        <value name="VALUE"><block type="math_number" id="n_bs"><field name="NUM">${baseStake}</field></block></value>
+        <next>
+          <block type="variables_set" id="init_as">
+            <field name="VAR" id="var_active_stake">Active Stake</field>
+            <value name="VALUE"><block type="variables_get" id="g_bs"><field name="VAR" id="var_base_stake">Base Stake</field></block></value>
+            <next>
+              <block type="variables_set" id="init_mg">
+                <field name="VAR" id="var_martingale">Martingale Factor</field>
+                <value name="VALUE"><block type="math_number" id="n_mg"><field name="NUM">${martingale}</field></block></value>
+                <next>
+                  <block type="variables_set" id="init_tp">
+                    <field name="VAR" id="var_tp">Take Profit</field>
+                    <value name="VALUE"><block type="math_number" id="n_tp"><field name="NUM">${takeProfit}</field></block></value>
+                    <next>
+                      <block type="variables_set" id="init_sl">
+                        <field name="VAR" id="var_sl">Stop Loss</field>
+                        <value name="VALUE"><block type="math_number" id="n_sl"><field name="NUM">${stopLoss}</field></block></value>
+                        <next>
+                          <block type="variables_set" id="init_pb">
+                            <field name="VAR" id="var_pred_before">Entry Prediction</field>
+                            <value name="VALUE"><block type="math_number" id="n_pb"><field name="NUM">${barrier}</field></block></value>
+                            <next>
+                              <block type="variables_set" id="init_pa">
+                                <field name="VAR" id="var_pred_after">Recovery Prediction</field>
+                                <value name="VALUE"><block type="math_number" id="n_pa"><field name="NUM">${recBarrier}</field></block></value>
+                                <next>
+                                  <block type="variables_set" id="init_ap">
+                                    <field name="VAR" id="var_active_pred">Active Prediction</field>
+                                    <value name="VALUE"><block type="variables_get" id="g_pb"><field name="VAR" id="var_pred_before">Entry Prediction</field></block></value>
+                                    ${vhConfigXml}
+                                  </block>
+                                </next>
+                              </block>
+                            </next>
+                          </block>
+                        </next>
+                      </block>
+                    </next>
+                  </block>
+                </next>
+              </block>
+            </next>
+          </block>
+        </next>
+      </block>
+    </statement>
+    <statement name="SUBMARKET">
+      <block type="trade_definition_tradeoptions" id="td_options">
+        <mutation has_first_barrier="false" has_second_barrier="false" has_prediction="${hasPred ? 'true' : 'false'}"></mutation>
+        <field name="DURATIONTYPE_LIST">t</field>
+        <field name="CURRENCY_LIST">USD</field>
+        <value name="DURATION">
+          <shadow type="math_number_positive" id="shad_dur"><field name="NUM">${duration}</field></shadow>
+        </value>
+        <value name="AMOUNT">
+          <shadow type="math_number_positive" id="shad_amt"><field name="NUM">${baseStake}</field></shadow>
+          <block type="variables_get" id="opt_get_stake"><field name="VAR" id="var_active_stake">Active Stake</field></block>
+        </value>
+        ${predictionOptionXml}
+      </block>
+    </statement>
+  </block>
+  <block type="before_purchase" id="bp_root" deletable="false" x="0" y="680">
+    <statement name="BEFOREPURCHASE_STACK">
+      ${beforePurchaseStack}
+    </statement>
+  </block>
+  <block type="during_purchase" id="dp_root" x="680" y="0">
+    <statement name="DURING_PURCHASE_STACK">
+      <block type="controls_if" id="dp_if">
+        <value name="IF0"><block type="check_sell" id="dp_cs"></block></value>
+      </block>
+    </statement>
+  </block>
+  <block type="after_purchase" id="ap_root" x="680" y="200">
+    <statement name="AFTERPURCHASE_STACK">
+      <block type="controls_if" id="ap_wl">
+        <mutation else="1"></mutation>
+        <value name="IF0">
+          <block type="contract_check_result" id="ap_win"><field name="CHECK_RESULT">win</field></block>
+        </value>
+        <statement name="DO0">
+          <block type="variables_set" id="w_rst_s">
+            <field name="VAR" id="var_active_stake">Active Stake</field>
+            <value name="VALUE"><block type="variables_get" id="w_g_bs"><field name="VAR" id="var_base_stake">Base Stake</field></block></value>
+            <next>
+              <block type="variables_set" id="w_rst_p">
+                <field name="VAR" id="var_active_pred">Active Prediction</field>
+                <value name="VALUE"><block type="variables_get" id="w_g_pb"><field name="VAR" id="var_pred_before">Entry Prediction</field></block></value>
+              </block>
+            </next>
+          </block>
+        </statement>
+        <statement name="ELSE">
+          <block type="variables_set" id="l_set_p">
+            <field name="VAR" id="var_active_pred">Active Prediction</field>
+            <value name="VALUE"><block type="variables_get" id="l_g_pa"><field name="VAR" id="var_pred_after">Recovery Prediction</field></block></value>
+            <next>
+              <block type="variables_set" id="l_set_s">
+                <field name="VAR" id="var_active_stake">Active Stake</field>
+                <value name="VALUE">
+                  <block type="math_arithmetic" id="l_mul">
+                    <field name="OP">MULTIPLY</field>
+                    <value name="A"><block type="variables_get" id="l_cs"><field name="VAR" id="var_active_stake">Active Stake</field></block></value>
+                    <value name="B"><block type="variables_get" id="l_mg"><field name="VAR" id="var_martingale">Martingale Factor</field></block></value>
+                  </block>
+                </value>
+              </block>
+            </next>
+          </block>
+        </statement>
+        <next>
+          <block type="controls_if" id="ap_tp_sl">
+            <mutation elseif="1" else="1"></mutation>
+            <value name="IF0">
+              <block type="logic_compare" id="chk_tp">
+                <field name="OP">GTE</field>
+                <value name="A"><block type="total_profit" id="tp_val"></block></value>
+                <value name="B"><block type="variables_get" id="g_tp"><field name="VAR" id="var_tp">Take Profit</field></block></value>
+              </block>
+            </value>
+            <statement name="DO0">
+              <block type="text_print" id="prt_tp">
+                <value name="TEXT"><shadow type="text" id="txt_tp"><field name="TEXT">Target Profit Reached!</field></shadow></value>
+              </block>
+            </statement>
+            <value name="IF1">
+              <block type="logic_compare" id="chk_sl">
+                <field name="OP">LTE</field>
+                <value name="A"><block type="total_profit" id="sl_val"></block></value>
+                <value name="B">
+                  <block type="math_single" id="neg_sl">
+                    <field name="OP">NEG</field>
+                    <value name="NUM"><block type="variables_get" id="g_sl"><field name="VAR" id="var_sl">Stop Loss</field></block></value>
+                  </block>
+                </value>
+              </block>
+            </value>
+            <statement name="DO1">
+              <block type="text_print" id="prt_sl">
+                <value name="TEXT"><shadow type="text" id="txt_sl"><field name="TEXT">Stop Loss Reached.</field></shadow></value>
+              </block>
+            </statement>
+            <statement name="ELSE">
+              <block type="trade_again" id="ap_again"></block>
+            </statement>
+          </block>
+        </next>
+      </block>
+    </statement>
+  </block>
+</xml>`;
+}
+
+export async function loadXmlIntoBotBuilder(options: {
+    xml: string;
+    name: string;
+    dashboard: any;
+    load_modal: any;
+    runNow?: boolean;
+    run_panel?: any;
+}) {
+    const { xml, name, dashboard, load_modal, runNow, run_panel } = options;
+    dashboard?.setActiveTab?.(DBOT_TABS.BOT_BUILDER);
+
+    for (let attempt = 0; attempt < 25; attempt++) {
+        if ((window as any).Blockly?.derivWorkspace) break;
+        await new Promise(resolve => setTimeout(resolve, 60));
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 80));
+    const id = `ai-bot-${Date.now()}`;
+    await load_modal?.loadStrategyToBuilder?.({ id, xml, name, save_type: 'local' }, true);
+
+    const ws = (window as any).Blockly?.derivWorkspace;
+    if (ws) {
+        try {
+            ws.getAllBlocks?.().forEach((b: any) => b.setErrorHighlighted?.(false));
+            (window as any).Blockly?.svgResize?.(ws);
+        } catch {}
+    }
+
+    if (runNow && run_panel?.onRunButtonClick) {
+        await new Promise(resolve => setTimeout(resolve, 220));
+        if (!run_panel.is_running) {
+            run_panel.onRunButtonClick();
+        }
+    }
+}
+
+export async function executeLiveDerivTrade(params: {
+    symbol: string;
+    contractType: string;
+    stake: number;
+    duration?: number;
+    barrier?: number | string;
+    currency?: string;
+}): Promise<{ contractId: number; buyPrice: number; payout: number }> {
+    const transport: any = api_base?.api?.send ? api_base.api : chart_api?.api;
+    if (!transport?.send) {
+        throw new Error('Connect your Deriv account first to execute live trades.');
+    }
+
+    const payload: Record<string, any> = {
+        proposal: 1,
+        amount: Math.max(0.35, Number(params.stake) || 1),
+        basis: 'stake',
+        contract_type: params.contractType,
+        currency: params.currency || 'USD',
+        duration: Math.max(1, Number(params.duration) || 1),
+        duration_unit: 't',
+        symbol: params.symbol,
+    };
+
+    if (
+        ['DIGITOVER', 'DIGITUNDER', 'DIGITMATCH', 'DIGITDIFF', 'HIGHER', 'LOWER', 'TOUCH', 'NOTOUCH'].includes(
+            params.contractType
+        ) &&
+        params.barrier !== undefined &&
+        params.barrier !== ''
+    ) {
+        payload.barrier = String(params.barrier);
+    }
+
+    const propRes = await transport.send(payload);
+    if (propRes?.error) {
+        throw new Error(propRes.error.message || 'Proposal failed.');
+    }
+    const prop = propRes?.proposal;
+    if (!prop?.id) {
+        throw new Error('Unable to obtain a live proposal from Deriv.');
+    }
+
+    const buyRes = await transport.send({
+        buy: prop.id,
+        price: Number(prop.ask_price),
+    });
+    if (buyRes?.error) {
+        throw new Error(buyRes.error.message || 'Buy order rejected.');
+    }
+    const contractId = Number(buyRes?.buy?.contract_id);
+    if (!contractId) {
+        throw new Error('Deriv did not return a contract ID.');
+    }
+
+    return {
+        contractId,
+        buyPrice: Number(buyRes.buy.buy_price ?? prop.ask_price),
+        payout: Number(buyRes.buy.payout ?? prop.payout),
+    };
+}

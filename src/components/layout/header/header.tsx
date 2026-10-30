@@ -259,9 +259,9 @@ const AppHeader = observer(() => {
                         <button
                             type='button'
                             className='app-header__chat-pill'
-                            onClick={() => dashboard?.setActiveTab?.(DBOT_TABS.TUTORIAL)}
-                            title='Guides & Support'
-                            aria-label='Guides & Support'
+                            onClick={() => dashboard?.setActiveTab?.(DBOT_TABS.AI_DEVELOPER)}
+                            title='AI Strategy Developer'
+                            aria-label='AI Strategy Developer'
                         >
                             <svg width='15' height='15' viewBox='0 0 24 24' fill='none' aria-hidden='true'>
                                 <path

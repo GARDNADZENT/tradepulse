@@ -78,7 +78,12 @@ const getBotInterface = tradeEngine => {
         },
         setJournalDigitWindow: count => {
             if (tradeEngine) {
-                tradeEngine.journal_digit_window = Math.max(1, Math.min(10, Number(count) || 2));
+                tradeEngine.journal_digit_window = Math.max(1, Math.min(10, Number(count) || 1));
+            }
+        },
+        logBotCondition: (condition, digits, result, summary) => {
+            if (tradeEngine && typeof tradeEngine.logBotCondition === 'function') {
+                tradeEngine.logBotCondition(condition, digits, result, summary);
             }
         },
     };

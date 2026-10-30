@@ -24,7 +24,7 @@ const InfoPanel = observer(() => {
         setFaqTitle,
     } = dashboard;
     const switchTab = (link: boolean, label: string, faq_id: string) => {
-        const tutorial_link = link ? setActiveTab(DBOT_TABS.TUTORIAL) : null;
+        const tutorial_link = link ? setActiveTab(DBOT_TABS.AI_DEVELOPER) : null;
         const tutorial_label = label === 'Guide' ? setActiveTabTutorial(0) : setActiveTabTutorial(1);
         setFaqTitle(faq_id);
         return {
