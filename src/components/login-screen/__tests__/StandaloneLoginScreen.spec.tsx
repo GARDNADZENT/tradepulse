@@ -70,6 +70,13 @@ describe('StandaloneLoginScreen', () => {
             'noopener,noreferrer'
         );
 
+        fireEvent.click(screen.getByRole('button', { name: /Create Free Account/i }));
+        expect(openSpy).toHaveBeenCalledWith(
+            'https://deriv.partners/rx?sidc=B4F1E565-EF73-420E-AB22-BD701A02E061&utm_campaign=dynamicworks&utm_medium=affiliate&utm_source=CU16236',
+            '_blank',
+            'noopener,noreferrer'
+        );
+
         // PAT Login opens token modal
         fireEvent.click(screen.getByRole('button', { name: /PAT Login \(Personal Access Token\)/i }));
         expect(screen.getByTestId('pat-modal')).toBeInTheDocument();

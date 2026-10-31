@@ -16,6 +16,12 @@ export type TSocialAccountConfig = {
 };
 
 /**
+ * Official Deriv Affiliate Account Creation Link (DynamicWorks CU16236).
+ */
+export const DERIV_CREATE_ACCOUNT_URL =
+    'https://deriv.partners/rx?sidc=B4F1E565-EF73-420E-AB22-BD701A02E061&utm_campaign=dynamicworks&utm_medium=affiliate&utm_source=CU16236';
+
+/**
  * Official TradersPulse Social & Community Links.
  * Add or update any URL below — empty strings ('') stay visible on the Login Screen
  * as ready-to-connect placeholders until you paste your link.

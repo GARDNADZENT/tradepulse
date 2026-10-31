@@ -7,6 +7,7 @@ import {
     resolveReferralViaProxy,
 } from '@/external/deriv-core';
 import type { AuthConfig } from '@/external/deriv-core';
+import { DERIV_CREATE_ACCOUNT_URL } from '@/constants/social-links';
 import { DerivWSAccountsService } from '@/services/derivws-accounts.service';
 import brandConfig from '../../../../../brand.config.json';
 
@@ -137,6 +138,9 @@ const cacheReferral = (referral: ResolvedReferral): void => {
  */
 export const generateOAuthURL = async (prompt?: string): Promise<string> => {
     try {
+        if (prompt === 'registration') {
+            return DERIV_CREATE_ACCOUNT_URL;
+        }
         const redirectUri = process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI;
         const clientId = process.env.NEXT_PUBLIC_DERIV_APP_ID;
         if (!clientId) return '';
@@ -148,7 +152,7 @@ export const generateOAuthURL = async (prompt?: string): Promise<string> => {
         };
 
         // Static referral link (fallback for direct visits without affiliate click)
-        const referralLink = process.env.NEXT_PUBLIC_DERIV_REFERRAL_LINK;
+        const referralLink = process.env.NEXT_PUBLIC_DERIV_REFERRAL_LINK || DERIV_CREATE_ACCOUNT_URL;
         if (referralLink) {
             const referral = parseReferralLink(referralLink);
             if (referral) {

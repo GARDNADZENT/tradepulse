@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import ApiTokenModal from '@/components/api-token-modal/api-token-modal';
 import { generateOAuthURL } from '@/components/shared';
-import { SOCIAL_LINKS, TSocialPlatformId } from '@/constants/social-links';
+import { DERIV_CREATE_ACCOUNT_URL, SOCIAL_LINKS, TSocialPlatformId } from '@/constants/social-links';
 import './LoginScreen.scss';
 
 const PARTICLES = 36;
@@ -167,7 +167,6 @@ const StandaloneLoginScreen: React.FC = () => {
     const [show, setShow] = useState(() => !isUserLoggedIn() && !isOAuthCallbackInProgress());
     const [visible, setVisible] = useState(false);
     const [isNewLoginLoading, setIsNewLoginLoading] = useState(false);
-    const [isNewSignupLoading, setIsNewSignupLoading] = useState(false);
     const [newLoginError, setNewLoginError] = useState('');
     const [socialHint, setSocialHint] = useState('');
     const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
@@ -213,28 +212,11 @@ const StandaloneLoginScreen: React.FC = () => {
         [isNewLoginLoading]
     );
 
-    const handleNewAccountsSignup = useCallback(
-        async (e: React.MouseEvent) => {
-            e.preventDefault();
-            if (isNewSignupLoading) return;
-            setIsNewSignupLoading(true);
-            setNewLoginError('');
-            try {
-                const url = await generateOAuthURL('registration');
-                if (url) {
-                    window.location.replace(url);
-                } else {
-                    setIsNewSignupLoading(false);
-                    setNewLoginError('Sign up failed to start. Please try again.');
-                }
-            } catch (error) {
-                console.error('[Signup]', error);
-                setIsNewSignupLoading(false);
-                setNewLoginError('Sign up failed to start. Please try again.');
-            }
-        },
-        [isNewSignupLoading]
-    );
+    const handleNewAccountsSignup = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        setNewLoginError('');
+        window.open(DERIV_CREATE_ACCOUNT_URL, '_blank', 'noopener,noreferrer');
+    }, []);
 
     const handleSocialClick = (label: string, url: string) => {
         const trimmed = url.trim();
@@ -349,9 +331,8 @@ const StandaloneLoginScreen: React.FC = () => {
 
                     <button
                         type='button'
-                        className={`login-screen__btn login-screen__btn--create${isNewSignupLoading ? ' login-screen__btn--loading' : ''}`}
+                        className='login-screen__btn login-screen__btn--create'
                         onClick={handleNewAccountsSignup}
-                        disabled={isNewSignupLoading}
                     >
                         <svg width='17' height='17' viewBox='0 0 24 24' fill='none' aria-hidden='true'>
                             <circle cx='10' cy='8' r='3.5' stroke='currentColor' strokeWidth='1.9' />
@@ -362,9 +343,7 @@ const StandaloneLoginScreen: React.FC = () => {
                                 strokeLinecap='round'
                             />
                         </svg>
-                        <span className='login-screen__btn-text'>
-                            {isNewSignupLoading ? 'Redirecting…' : 'Create Free Account'}
-                        </span>
+                        <span className='login-screen__btn-text'>Create Free Account</span>
                     </button>
 
                     {/* Official Community & Socials 4x2 Grid */}

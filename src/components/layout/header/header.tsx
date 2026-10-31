@@ -5,6 +5,7 @@ import ApiTokenModal from '@/components/api-token-modal/api-token-modal';
 import { generateOAuthURL } from '@/components/shared';
 import Button from '@/components/shared_ui/button';
 import { DBOT_TABS } from '@/constants/bot-contents';
+import { DERIV_CREATE_ACCOUNT_URL } from '@/constants/social-links';
 import useActiveAccount from '@/hooks/api/account/useActiveAccount';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useLogout } from '@/hooks/useLogout';
@@ -78,19 +79,9 @@ const AppHeader = observer(() => {
         return () => clearTimeout(timer);
     }, [isAuthorizing, activeLoginid, setIsAuthorizing, authTimeout, isOAuthPending]);
 
-    const handleSignup = useCallback(async () => {
-        try {
-            setIsAuthorizing(true);
-            const oauthUrl = await generateOAuthURL('registration');
-            if (oauthUrl) {
-                window.location.replace(oauthUrl);
-            } else {
-                setIsAuthorizing(false);
-            }
-        } catch {
-            setIsAuthorizing(false);
-        }
-    }, [setIsAuthorizing]);
+    const handleSignup = useCallback(() => {
+        window.open(DERIV_CREATE_ACCOUNT_URL, '_blank', 'noopener,noreferrer');
+    }, []);
 
     const handleLogin = useCallback(async () => {
         try {
@@ -165,7 +156,7 @@ const AppHeader = observer(() => {
                         <Localize i18n_default_text='Log in' />
                     </Button>
                     {isDesktop && (
-                        <Button primary_light disabled={!isAuthConfigured} onClick={handleSignup}>
+                        <Button primary_light onClick={handleSignup}>
                             <Localize i18n_default_text='Sign up' />
                         </Button>
                     )}
