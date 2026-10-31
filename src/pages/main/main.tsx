@@ -331,7 +331,7 @@ const AppWrapper = observer(() => {
         listEl.scrollBy({ left: dir === 'left' ? -260 : 260, behavior: 'smooth' });
     };
 
-    const isExecSurface = [DASHBOARD, BOT_BUILDER, FREE_BOTS].includes(active_tab);
+    const isExecSurface = [BOT_BUILDER, FREE_BOTS].includes(active_tab);
     const isExecScrollTab = active_tab === FREE_BOTS;
 
     return (
