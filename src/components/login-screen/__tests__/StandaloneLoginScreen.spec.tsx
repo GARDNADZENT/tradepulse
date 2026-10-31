@@ -41,14 +41,31 @@ describe('StandaloneLoginScreen', () => {
         }
 
         // Empty URL social tile shows gentle coming-soon feedback
-        fireEvent.click(screen.getByRole('button', { name: 'Telegram' }));
-        expect(screen.getByText(/Telegram channel link will be connected soon/i)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Instagram' }));
+        expect(screen.getByText(/Instagram channel link will be connected soon/i)).toBeInTheDocument();
         expect(openSpy).not.toHaveBeenCalled();
 
-        // Configured URL social tile opens in a new tab
+        // Configured URL social tiles open in a new tab
         fireEvent.click(screen.getByRole('button', { name: 'WhatsApp' }));
         expect(openSpy).toHaveBeenCalledWith(
-            expect.stringContaining('whatsapp.com'),
+            'https://chat.whatsapp.com/HiWVW11p2o55KhioHB9fVR?s=cl&p=a&iam=2',
+            '_blank',
+            'noopener,noreferrer'
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: 'Telegram' }));
+        expect(openSpy).toHaveBeenCalledWith('https://t.me/gadnadolo', '_blank', 'noopener,noreferrer');
+
+        fireEvent.click(screen.getByRole('button', { name: 'YouTube' }));
+        expect(openSpy).toHaveBeenCalledWith(
+            'https://www.youtube.com/@gardnadzenttechnologies4239',
+            '_blank',
+            'noopener,noreferrer'
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: 'TikTok' }));
+        expect(openSpy).toHaveBeenCalledWith(
+            'https://vm.tiktok.com/ZS9yxAFjuXbnh-Kd3HM/',
             '_blank',
             'noopener,noreferrer'
         );

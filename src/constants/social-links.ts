@@ -24,22 +24,22 @@ export const SOCIAL_LINKS: TSocialAccountConfig[] = [
     {
         id: 'telegram',
         label: 'Telegram',
-        url: '',
+        url: 'https://t.me/gadnadolo',
     },
     {
         id: 'whatsapp',
         label: 'WhatsApp',
-        url: 'https://whatsapp.com/channel/0029VbBmfLc3LdQbqcezuz0d',
+        url: 'https://chat.whatsapp.com/HiWVW11p2o55KhioHB9fVR?s=cl&p=a&iam=2',
     },
     {
         id: 'youtube',
         label: 'YouTube',
-        url: '',
+        url: 'https://www.youtube.com/@gardnadzenttechnologies4239',
     },
     {
         id: 'tiktok',
         label: 'TikTok',
-        url: '',
+        url: 'https://vm.tiktok.com/ZS9yxAFjuXbnh-Kd3HM/',
     },
     {
         id: 'instagram',
