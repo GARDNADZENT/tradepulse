@@ -253,7 +253,7 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
                         {button_props.text}
                     </Button>
                     <div
-                        className={classNames('animation__container', className, {
+                        className={classNames('animation__container', {
                             'animation--running': contract_stage > 0,
                             'animation--completed': show_overlay,
                             'animation--disabled': is_disabled,
