@@ -19,7 +19,12 @@ import {
     setIsAuthorizing,
 } from './observables/connection-status-stream';
 import ApiHelpers from './api-helpers';
-import { generateDerivApiInstance, V2GetActiveAccountId } from './appId';
+import {
+    generateDerivApiInstance,
+    hasStoredAuthCredentials,
+    isCurrentSocketPublic,
+    V2GetActiveAccountId,
+} from './appId';
 import chart_api from './chart-api';
 
 type CurrentSubscription = {
@@ -59,6 +64,7 @@ class APIBase {
     time_interval: ReturnType<typeof setInterval> | null = null;
     has_active_symbols = false;
     is_stopping = false;
+    is_initializing = false;
     active_symbols: any[] = [];
     current_auth_subscriptions: SubscriptionPromise[] = [];
     is_authorized = false;
@@ -82,6 +88,21 @@ class APIBase {
             });
         });
         this.current_auth_subscriptions = [];
+    };
+
+    private readonly handleSocketOpen = (event?: Event) => {
+        if (event?.target && this.api?.connection && event.target !== (this.api.connection as unknown)) {
+            return;
+        }
+        this.onsocketopen();
+    };
+
+    private readonly handleSocketClose = (event?: Event) => {
+        if (this.is_stopping || this.is_initializing) return;
+        if (event?.target && this.api?.connection && event.target !== (this.api.connection as unknown)) {
+            return;
+        }
+        this.onsocketclose();
     };
 
     onsocketopen() {
@@ -117,89 +138,106 @@ class APIBase {
         // Check if we have an account_id from URL or localStorage
         let activeAccountId: string | null = getAccountId();
 
-        // If no account_id in localStorage, check sessionStorage for accounts
+        // If no account_id in localStorage, check stored accounts (sessionStorage / localStorage)
         if (!activeAccountId) {
             try {
-                const storedAccounts = sessionStorage.getItem('deriv_accounts');
-                if (storedAccounts) {
-                    const accounts = JSON.parse(storedAccounts);
-                    if (accounts && accounts.length > 0 && accounts[0].account_id) {
-                        // Use the first account as default
-                        const accountId = accounts[0].account_id as string;
-                        activeAccountId = accountId;
-                        localStorage.setItem('active_loginid', accountId);
-
-                        // Set account type based on account_id prefix
-                        const isDemo = accountId.startsWith('VRT') || accountId.startsWith('VRTC');
-                        localStorage.setItem('account_type', isDemo ? 'demo' : 'real');
-                    }
+                const accounts = DerivWSAccountsService.getStoredAccounts();
+                if (accounts && accounts.length > 0 && accounts[0].account_id) {
+                    const accountId = accounts[0].account_id as string;
+                    activeAccountId = accountId;
+                    localStorage.setItem('active_loginid', accountId);
+                    localStorage.setItem('account_type', isDemoAccount(accountId) ? 'demo' : 'real');
                 }
             } catch (error) {
-                console.error('[APIBase] Error reading accounts from sessionStorage:', error);
+                console.error('[APIBase] Error reading stored accounts:', error);
             }
+        }
+
+        // If an unauthenticated public socket opened while auth credentials now exist,
+        // immediately upgrade to an authenticated OTP/V3 WebSocket instead of calling balance() on /ws/public.
+        if (activeAccountId && isCurrentSocketPublic() && hasStoredAuthCredentials()) {
+            await this.init(true);
+            return;
         }
 
         // Now proceed with normal authorization if we have an account_id
         if (activeAccountId) {
             setIsAuthorizing(true);
             await this.authorizeAndSubscribe();
+        } else {
+            setIsAuthorizing(false);
         }
     }
 
     onsocketclose() {
+        if (this.is_stopping || this.is_initializing) return;
         setConnectionStatus(CONNECTION_STATUS.CLOSED);
         this.reconnectIfNotConnected();
     }
 
     async init(force_create_connection = false) {
-        this.toggleRunButton(true);
+        if (this.is_initializing && !force_create_connection) return;
+        this.is_initializing = true;
+        this.is_stopping = false;
 
-        if (this.api) {
-            this.unsubscribeAllSubscriptions();
-        }
+        try {
+            this.toggleRunButton(true);
 
-        // Reset reconnection attempts counter on successful connection initialization
-        if (!force_create_connection) {
-            this.reconnection_attempts = 0;
-        }
-
-        if (!this.api || this.api?.connection.readyState !== 1 || force_create_connection) {
-            if (this.api?.connection) {
-                ApiHelpers.disposeInstance();
-                setConnectionStatus(CONNECTION_STATUS.CLOSED);
-                this.api.disconnect();
-                this.api.connection.removeEventListener('open', this.onsocketopen.bind(this));
-                this.api.connection.removeEventListener('close', this.onsocketclose.bind(this));
+            if (this.api) {
+                this.unsubscribeAllSubscriptions();
             }
 
-            this.api = await generateDerivApiInstance();
+            // Reset reconnection attempts counter on successful connection initialization
+            if (!force_create_connection) {
+                this.reconnection_attempts = 0;
+            }
 
-            this.api?.connection.addEventListener('open', this.onsocketopen.bind(this));
-            this.api?.connection.addEventListener('close', this.onsocketclose.bind(this));
+            if (!this.api || this.api?.connection.readyState !== 1 || force_create_connection) {
+                if (this.api?.connection) {
+                    ApiHelpers.disposeInstance();
+                    setConnectionStatus(CONNECTION_STATUS.CLOSED);
+                    this.api.connection.removeEventListener('open', this.handleSocketOpen);
+                    this.api.connection.removeEventListener('close', this.handleSocketClose);
+                    this.api.disconnect();
+                }
 
-            // Store the current account ID used for this WebSocket connection
-            // This will be used to check if we need to regenerate the connection when the tab becomes active
-            const currentClientStore = globalObserver.getState('client.store');
-            if (currentClientStore) {
-                const active_login_id = getAccountId();
-                if (active_login_id) {
-                    currentClientStore.setWebSocketLoginId(active_login_id);
+                this.api = await generateDerivApiInstance(force_create_connection);
+
+                this.api?.connection.removeEventListener('open', this.handleSocketOpen);
+                this.api?.connection.removeEventListener('close', this.handleSocketClose);
+                this.api?.connection.addEventListener('open', this.handleSocketOpen);
+                this.api?.connection.addEventListener('close', this.handleSocketClose);
+
+                // Store the current account ID used for this WebSocket connection
+                const currentClientStore = globalObserver.getState('client.store');
+                if (currentClientStore) {
+                    const active_login_id = getAccountId();
+                    if (active_login_id) {
+                        currentClientStore.setWebSocketLoginId(active_login_id);
+                    }
+                }
+
+                // If socket already reached OPEN before listener attached, run open flow immediately
+                if (this.api?.connection.readyState === 1) {
+                    this.onsocketopen();
                 }
             }
+
+            const hasAccountID = V2GetActiveAccountId();
+
+            if (!this.has_active_symbols && !hasAccountID) {
+                this.active_symbols_promise = this.getActiveSymbols().then(() => undefined);
+            }
+
+            this.initEventListeners();
+
+            if (this.time_interval) clearInterval(this.time_interval);
+            this.time_interval = null;
+
+            await chart_api.init(force_create_connection);
+        } finally {
+            this.is_initializing = false;
         }
-
-        const hasAccountID = V2GetActiveAccountId();
-
-        if (!this.has_active_symbols && !hasAccountID) {
-            this.active_symbols_promise = this.getActiveSymbols().then(() => undefined);
-        }
-
-        this.initEventListeners();
-
-        if (this.time_interval) clearInterval(this.time_interval);
-        this.time_interval = null;
-
-        chart_api.init(force_create_connection);
     }
 
     getConnectionStatus() {
@@ -211,8 +249,12 @@ class APIBase {
     }
 
     terminate() {
-        // eslint-disable-next-line no-console
-        if (this.api) this.api.disconnect();
+        this.is_stopping = true;
+        if (this.api) {
+            this.api.connection?.removeEventListener('open', this.handleSocketOpen);
+            this.api.connection?.removeEventListener('close', this.handleSocketClose);
+            this.api.disconnect();
+        }
     }
 
     initEventListeners() {
@@ -224,11 +266,12 @@ class APIBase {
 
     async createNewInstance(account_id: string) {
         if (this.account_id !== account_id) {
-            await this.init();
+            await this.init(true);
         }
     }
 
     reconnectIfNotConnected = () => {
+        if (this.is_initializing || this.is_stopping) return;
         if (this.api?.connection?.readyState && this.api?.connection?.readyState > 1) {
             this.reconnection_attempts += 1;
 
@@ -260,11 +303,17 @@ class APIBase {
 
         try {
             let v3AuthorizedAccounts: any[] | null = null;
+            let v3AuthorizedLoginId = '';
             if (typeof window !== 'undefined' && localStorage.getItem('deriv_pat_mode') === 'v3') {
                 const v3Token =
                     localStorage.getItem('deriv_api_token') || localStorage.getItem('authToken') || '';
                 if (v3Token && typeof this.api.authorize === 'function') {
-                    const authRes: any = await this.api.authorize(v3Token);
+                    let authRes: any;
+                    try {
+                        authRes = await this.api.authorize(v3Token);
+                    } catch (v3Err: any) {
+                        authRes = v3Err;
+                    }
                     if (authRes?.error) {
                         const errorMessage = isBackendError(authRes.error)
                             ? handleBackendError(authRes.error)
@@ -273,61 +322,101 @@ class APIBase {
                         setIsAuthorizing(false);
                         return { ...authRes.error, localizedMessage: errorMessage };
                     }
+                    if (authRes?.authorize?.loginid) {
+                        v3AuthorizedLoginId = String(authRes.authorize.loginid);
+                    }
                     if (Array.isArray(authRes?.authorize?.account_list)) {
                         v3AuthorizedAccounts = authRes.authorize.account_list;
                     }
                 }
             }
 
-            const { balance, error } = await this.api.balance();
+            let balance: any;
+            let error: any;
+            try {
+                const balanceRes: any = await this.api.balance();
+                balance = balanceRes?.balance;
+                error = balanceRes?.error;
+            } catch (balanceErr: any) {
+                error = balanceErr?.error || balanceErr;
+            }
 
             if (error) {
+                // If balance() failed with AuthorizationRequired because a public socket answered
+                // while stored auth credentials exist, upgrade to an authenticated socket immediately.
+                if (error?.code === 'AuthorizationRequired' && isCurrentSocketPublic() && hasStoredAuthCredentials()) {
+                    setIsAuthorizing(false);
+                    await this.init(true);
+                    return;
+                }
+
                 const errorMessage = isBackendError(error)
                     ? handleBackendError(error)
                     : error.message || 'Authorization failed';
 
-                // Authorization error
                 console.error('Authorization error:', errorMessage);
 
                 setIsAuthorizing(false);
                 return { ...error, localizedMessage: errorMessage };
             }
 
-            this.account_info = {
-                balance: balance?.balance,
-                currency: balance?.currency,
-                loginid: balance?.loginid,
-            };
-            this.token = balance?.loginid;
+            const storedAccounts = DerivWSAccountsService.getStoredAccounts();
+            const resolvedLoginId = String(
+                balance?.loginid ||
+                    balance?.account_id ||
+                    v3AuthorizedLoginId ||
+                    this.account_id ||
+                    getAccountId() ||
+                    storedAccounts?.[0]?.account_id ||
+                    ''
+            );
+            const matchingStored = storedAccounts?.find(a => a.account_id === resolvedLoginId);
+            const resolvedBalance =
+                typeof balance?.balance === 'number'
+                    ? balance.balance
+                    : matchingStored
+                      ? parseFloat(matchingStored.balance) || 0
+                      : 0;
+            const resolvedCurrency = String(balance?.currency || matchingStored?.currency || 'USD');
 
-            const account_type = getAccountType(balance?.loginid);
-            const currentAccount = balance?.loginid
+            this.account_info = {
+                balance: resolvedBalance,
+                currency: resolvedCurrency,
+                loginid: resolvedLoginId,
+            };
+            this.token = resolvedLoginId;
+
+            const account_type = getAccountType(resolvedLoginId);
+            const currentAccount = resolvedLoginId
                 ? {
-                      balance: balance.balance,
-                      currency: balance.currency || 'USD',
+                      balance: resolvedBalance,
+                      currency: resolvedCurrency,
                       is_virtual: account_type === 'real' ? 0 : 1,
-                      loginid: balance.loginid,
+                      loginid: resolvedLoginId,
                   }
                 : null;
 
-            // Build full account list from sessionStorage (populated during OAuth / V2 PAT flow)
+            // Build full account list from stored accounts (populated during OAuth / V2 PAT flow)
             // Falls back to V3 authorize account_list or current account
-            const storedAccounts = DerivWSAccountsService.getStoredAccounts();
             const accountList =
                 storedAccounts && storedAccounts.length > 0
                     ? storedAccounts
                           .filter(a => !a.status || a.status === 'active')
                           .map(a => ({
-                              balance: parseFloat(a.balance) || 0,
-                              currency: a.currency || 'USD',
-                              is_virtual: a.account_type === 'demo' ? 1 : 0,
+                              balance:
+                                  a.account_id === resolvedLoginId
+                                      ? resolvedBalance
+                                      : parseFloat(a.balance) || 0,
+                              currency: a.currency || resolvedCurrency,
+                              is_virtual:
+                                  a.account_type === 'demo' || isDemoAccount(a.account_id) ? 1 : 0,
                               loginid: a.account_id,
                           }))
                     : v3AuthorizedAccounts && v3AuthorizedAccounts.length > 0
                       ? v3AuthorizedAccounts.map((a: any) => ({
-                            balance: a.loginid === balance?.loginid ? balance?.balance : Number(a.balance) || 0,
-                            currency: a.currency || balance?.currency || 'USD',
-                            is_virtual: a.is_virtual ? 1 : 0,
+                            balance: a.loginid === resolvedLoginId ? resolvedBalance : Number(a.balance) || 0,
+                            currency: a.currency || resolvedCurrency,
+                            is_virtual: a.is_virtual || isDemoAccount(a.loginid) ? 1 : 0,
                             loginid: a.loginid,
                         }))
                       : currentAccount
@@ -335,47 +424,48 @@ class APIBase {
                         : [];
 
             setAccountList(accountList); // Observable stream
-            setAuthData({
-                balance: balance?.balance,
-                currency: balance?.currency,
-                loginid: balance?.loginid,
-                is_virtual: account_type === 'real' ? 0 : 1,
-                account_list: accountList,
-            });
-
-            // // Set account_type in localStorage based on loginid prefix using centralized utility
-            const loginid = balance?.loginid || '';
-            const isDemo = isDemoAccount(loginid);
-
-            if (isDemo) {
-                localStorage.setItem('account_type', 'demo');
-            } else {
-                localStorage.setItem('account_type', 'real');
+            if (resolvedLoginId) {
+                setAuthData({
+                    balance: resolvedBalance,
+                    currency: resolvedCurrency,
+                    loginid: resolvedLoginId,
+                    is_virtual: account_type === 'real' ? 0 : 1,
+                    account_list: accountList,
+                });
             }
 
-            globalObserver.emit('api.authorize', {
-                account_list: accountList,
-                current_account: {
-                    loginid: balance?.loginid,
-                    currency: balance?.currency || 'USD',
-                    is_virtual: account_type === 'real' ? 0 : 1,
-                    balance: typeof balance?.balance === 'number' ? balance.balance : undefined,
-                },
-            });
+            const isDemo = isDemoAccount(resolvedLoginId);
+            if (resolvedLoginId) {
+                localStorage.setItem('account_type', isDemo ? 'demo' : 'real');
+            }
+
+            if (resolvedLoginId) {
+                globalObserver.emit('api.authorize', {
+                    account_list: accountList,
+                    current_account: {
+                        loginid: resolvedLoginId,
+                        currency: resolvedCurrency,
+                        is_virtual: account_type === 'real' ? 0 : 1,
+                        balance: resolvedBalance,
+                    },
+                });
+            }
 
             // Update the WebSocket login ID in the client store
             const currentClientStore = globalObserver.getState('client.store');
-            if (currentClientStore && balance?.loginid) {
-                currentClientStore.setWebSocketLoginId(balance.loginid);
+            if (currentClientStore && resolvedLoginId) {
+                currentClientStore.setWebSocketLoginId(resolvedLoginId);
             }
 
             setIsAuthorized(true);
             this.is_authorized = true;
             localStorage.setItem('client_account_details', JSON.stringify(accountList));
-            localStorage.setItem('client.country', balance?.country);
+            if (balance?.country) {
+                localStorage.setItem('client.country', balance.country);
+            }
 
-            if (balance?.loginid) {
-                localStorage.setItem('active_loginid', balance.loginid);
+            if (resolvedLoginId) {
+                localStorage.setItem('active_loginid', resolvedLoginId);
             }
 
             if (this.has_active_symbols) {

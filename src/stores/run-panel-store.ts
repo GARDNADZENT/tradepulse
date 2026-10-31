@@ -6,6 +6,11 @@ import { generateOAuthURL, isSafari, mobileOSDetect, standalone_routes } from '@
 import { contract_stages, TContractStage } from '@/constants/contract-stage';
 import { run_panel } from '@/constants/run-panel';
 import { ErrorTypes, MessageTypes, observer, unrecoverable_errors } from '@/external/bot-skeleton';
+import { api_base } from '@/external/bot-skeleton/services/api/api-base';
+import {
+    hasStoredAuthCredentials,
+    isCurrentSocketPublic,
+} from '@/external/bot-skeleton/services/api/appId';
 import { getSelectedTradeType } from '@/external/bot-skeleton/scratch/utils';
 import { handleBackendError, isBackendError } from '@/utils/error-handler';
 // import { journalError, switch_account_notification } from '@/utils/bot-notifications';
@@ -185,6 +190,9 @@ export default class RunPanelStore {
         this.dbot.saveRecentWorkspace();
         this.dbot.unHighlightAllBlocks();
         if (!client.is_logged_in) {
+            client.hydrateFromStoredSession?.();
+        }
+        if (!client.is_logged_in) {
             this.showLoginDialog();
             return;
         }
@@ -195,6 +203,15 @@ export default class RunPanelStore {
          * syncronously, so keep above await.
          */
         if (is_ios || isSafari()) this.preloadAudio();
+
+        // Ensure the trading WebSocket is upgraded from public to authenticated for PAT/OAuth sessions
+        if ((!api_base.is_authorized || isCurrentSocketPublic()) && hasStoredAuthCredentials()) {
+            try {
+                await api_base.init(true);
+            } catch {
+                // Bot tradeEngine will surface any connection error cleanly via journal
+            }
+        }
 
         this.registerBotListeners();
 

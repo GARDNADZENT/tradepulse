@@ -69,24 +69,31 @@ export class DerivWSAccountsService {
     }
 
     /**
-     * Stores accounts list in sessionStorage
+     * Stores accounts list in sessionStorage and localStorage for cross-reload/tab parity
      * @param accounts Array of DerivAccount objects
      */
     static storeAccounts(accounts: DerivAccount[]): void {
-        sessionStorage.setItem('deriv_accounts', JSON.stringify(accounts));
+        const serialized = JSON.stringify(accounts);
+        sessionStorage.setItem('deriv_accounts', serialized);
+        localStorage.setItem('deriv_accounts', serialized);
     }
 
     /**
-     * Retrieves accounts list from sessionStorage
+     * Retrieves accounts list from sessionStorage (falling back to localStorage)
      * @returns Array of DerivAccount objects or null if not found
      */
     static getStoredAccounts(): DerivAccount[] | null {
         try {
-            const accountsStr = sessionStorage.getItem('deriv_accounts');
+            const accountsStr =
+                sessionStorage.getItem('deriv_accounts') || localStorage.getItem('deriv_accounts');
             if (!accountsStr) {
                 return null;
             }
-            return JSON.parse(accountsStr) as DerivAccount[];
+            const parsed = JSON.parse(accountsStr) as DerivAccount[];
+            if (!sessionStorage.getItem('deriv_accounts') && Array.isArray(parsed) && parsed.length > 0) {
+                sessionStorage.setItem('deriv_accounts', accountsStr);
+            }
+            return parsed;
         } catch (error) {
             console.error('[DerivWS] Error parsing stored accounts:', error);
             return null;
@@ -106,16 +113,59 @@ export class DerivWSAccountsService {
     }
 
     /**
-     * Clears stored accounts from sessionStorage
+     * Clears stored accounts from sessionStorage and localStorage
      */
     static clearStoredAccounts(): void {
         sessionStorage.removeItem('deriv_accounts');
+        localStorage.removeItem('deriv_accounts');
+    }
+
+    /**
+     * Executes a DerivWS REST call with automatic Deriv-App-ID header negotiation
+     * so both user-scoped Personal Access Tokens (pat_...) and app-scoped OAuth tokens succeed.
+     */
+    private static async fetchWithAppIdFallback(
+        endpoint: string,
+        method: 'GET' | 'POST',
+        accessToken: string
+    ): Promise<Response> {
+        const appId = getAppId();
+        const isPatToken = accessToken.startsWith('pat_');
+        const primaryIncludeAppId = Boolean(appId && !isPatToken);
+
+        const buildHeaders = (includeAppId: boolean): Record<string, string> => {
+            const headers: Record<string, string> = {
+                Authorization: `Bearer ${accessToken}`,
+                Accept: 'application/json',
+            };
+            if (includeAppId && appId) {
+                headers['Deriv-App-ID'] = appId;
+            }
+            return headers;
+        };
+
+        const response = await fetch(endpoint, {
+            method,
+            headers: buildHeaders(primaryIncludeAppId),
+        });
+
+        if (!response.ok && appId) {
+            const retryResponse = await fetch(endpoint, {
+                method,
+                headers: buildHeaders(!primaryIncludeAppId),
+            });
+            if (retryResponse.ok) {
+                return retryResponse;
+            }
+        }
+
+        return response;
     }
 
     /**
      * Fetches accounts list from derivatives/accounts endpoint with singleton pattern
      * Prevents duplicate API calls by caching the promise
-     * @param accessToken Bearer token from OAuth authentication
+     * @param accessToken Bearer token from OAuth or PAT authentication
      * @returns Promise with array of DerivAccount objects
      */
     static async fetchAccountsList(accessToken: string): Promise<DerivAccount[]> {
@@ -131,12 +181,7 @@ export class DerivWSAccountsService {
                 const OptionsDir = brandConfig.platform.derivws.directories.options;
                 const endpoint = `${baseURL}${OptionsDir}accounts`;
 
-                const response = await fetch(endpoint, {
-                    method: 'GET',
-                    headers: {
-                        Authorization: `Bearer ${accessToken}`,
-                    },
-                });
+                const response = await this.fetchWithAppIdFallback(endpoint, 'GET', accessToken);
 
                 if (!response.ok) {
                     throw new Error(`Failed to fetch accounts: ${response.status} ${response.statusText}`);
@@ -151,7 +196,7 @@ export class DerivWSAccountsService {
                     console.warn('[DerivWS] No accounts found in response');
                 }
 
-                // Store accounts in sessionStorage for future use
+                // Store accounts in sessionStorage/localStorage for future use
                 this.storeAccounts(accounts);
 
                 return accounts;
@@ -175,7 +220,7 @@ export class DerivWSAccountsService {
     /**
      * Fetches OTP and WebSocket URL for a specific account with singleton pattern
      * Prevents duplicate OTP calls for the same account by caching the promise
-     * @param accessToken Bearer token from OAuth authentication
+     * @param accessToken Bearer token from OAuth or PAT authentication
      * @param accountId Account ID to get OTP for
      * @returns Promise with WebSocket URL
      */
@@ -195,20 +240,18 @@ export class DerivWSAccountsService {
                 const optionsDir = brandConfig.platform.derivws.directories.options;
                 const endpoint = `${baseURL}${optionsDir}accounts/${accountId}/otp`;
 
-                const response = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: {
-                        Authorization: `Bearer ${accessToken}`,
-                    },
-                });
+                const response = await this.fetchWithAppIdFallback(endpoint, 'POST', accessToken);
 
                 if (!response.ok) {
                     throw new Error(`Failed to fetch OTP: ${response.status} ${response.statusText}`);
                 }
 
-                const otpResponse: OTPResponse = await response.json();
-                // Parse the nested JSON string
-                const websocketURL = otpResponse.data.url;
+                const otpResponse: OTPResponse & { url?: string } = await response.json();
+                const parsedData =
+                    typeof otpResponse?.data === 'string'
+                        ? (JSON.parse(otpResponse.data) as OTPResponseData)
+                        : otpResponse?.data;
+                const websocketURL = parsedData?.url || otpResponse?.url;
 
                 if (!websocketURL) {
                     throw new Error('WebSocket URL not found in OTP response');

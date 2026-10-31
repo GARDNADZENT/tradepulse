@@ -224,7 +224,6 @@ const AppHeader = observer(() => {
                 <Wrapper variant='left'>
                     <MobileMenu onLogout={handleLogout} />
                     <AppLogo />
-                    {!isDesktop && <span className='app-header__brand-text'>TRADERSPULSE</span>}
                     {isDesktop && (
                         <button
                             type='button'

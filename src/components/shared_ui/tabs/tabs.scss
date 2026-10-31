@@ -172,7 +172,7 @@
         }
     }
 
-    // Primary Top Application Navigation Bar (#0066FF Electric Royal Blue — Single-Row)
+    // Primary Top Application Navigation Bar
     &__list--header--main__tabs {
         width: 100% !important;
         min-height: 44px;
@@ -194,9 +194,16 @@
             display: none;
         }
 
-        @include mobile-or-tablet-screen {
-            padding: 4px 10px !important;
-            gap: 3px;
+        // Ensure inner <ul> never paints a nested box inside the header tab strip
+        > .dc-tabs__list {
+            background: transparent !important;
+            border-bottom: none !important;
+            width: max-content !important;
+            min-width: 100%;
+            height: 100%;
+            line-height: inherit;
+            gap: 4px;
+            justify-content: flex-start !important;
         }
 
         .dc-tabs__active-line {
@@ -258,6 +265,64 @@
                 svg > path,
                 svg > g > path {
                     fill: #ffffff !important;
+                }
+            }
+        }
+
+        // Mobile & Tablet: Frameless dark-glass horizontal pill navigation bar
+        @include mobile-or-tablet-screen {
+            min-height: 48px;
+            height: 48px;
+            line-height: 34px;
+            padding: 7px 12px !important;
+            gap: 8px;
+            background: rgba(4, 11, 26, 0.94) !important;
+            border-bottom: 1px solid rgba(59, 130, 246, 0.14) !important;
+            box-shadow: none !important;
+
+            > .dc-tabs__list {
+                gap: 8px;
+            }
+
+            .dc-tabs__item {
+                height: 34px;
+                padding: 0 13px !important;
+                border-radius: 999px !important;
+                font-size: 12.5px !important;
+                background: rgba(13, 25, 50, 0.85) !important;
+                border: 1px solid rgba(59, 130, 246, 0.18) !important;
+                color: #cbd5e1 !important;
+
+                * {
+                    color: #cbd5e1 !important;
+                }
+
+                svg,
+                svg > path,
+                svg > g > path {
+                    fill: #94a3b8 !important;
+                }
+
+                &:not(.dc-tabs__active):hover {
+                    background: rgba(20, 38, 74, 0.95) !important;
+                    border-color: rgba(96, 165, 250, 0.35) !important;
+                }
+
+                &.dc-tabs__active {
+                    background: linear-gradient(135deg, #2563eb 0%, #0066ff 100%) !important;
+                    border: 1px solid rgba(96, 165, 250, 0.55) !important;
+                    color: #ffffff !important;
+                    box-shadow: 0 4px 14px rgba(0, 102, 255, 0.42) !important;
+
+                    * {
+                        color: #ffffff !important;
+                    }
+
+                    svg,
+                    svg > path,
+                    svg > g > path {
+                        fill: #ffffff !important;
+                    }
                 }
             }
         }

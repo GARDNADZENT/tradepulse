@@ -3,12 +3,20 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { getLegacyWsAppId } from '@/components/shared';
 import ApiTokenModal from '../api-token-modal';
 
+const mockEmit = jest.fn();
+const mockSetIsLoggedIn = jest.fn();
+const mockSetLoginId = jest.fn();
+const mockSetAccountListStore = jest.fn();
+
 jest.mock('@/external/bot-skeleton', () => ({
     api_base: {
         init: jest.fn(async () => undefined),
         api: {
             authorize: jest.fn(async () => ({})),
         },
+    },
+    observer: {
+        emit: (...args: unknown[]) => mockEmit(...args),
     },
 }));
 
@@ -22,10 +30,11 @@ jest.mock('@/external/bot-skeleton/services/api/observables/connection-status-st
 jest.mock('@/hooks/useStore', () => ({
     useStore: () => ({
         client: {
-            setLoginId: jest.fn(),
+            setAccountList: mockSetAccountListStore,
+            setLoginId: mockSetLoginId,
             setCurrency: jest.fn(),
             setBalance: jest.fn(),
-            setIsLoggedIn: jest.fn(),
+            setIsLoggedIn: mockSetIsLoggedIn,
         },
     }),
 }));
@@ -98,6 +107,58 @@ describe('ApiTokenModal (PAT Login)', () => {
 
         expect(localStorage.getItem('active_loginid')).toBe('VRTC900111');
         expect(JSON.parse(localStorage.getItem('auth_info') || '{}').access_token).toBe('ory_st_valid_v2_pat_token');
+        expect(mockSetIsLoggedIn).toHaveBeenCalledWith(true);
+        expect(mockEmit).toHaveBeenCalledWith(
+            'api.authorize',
+            expect.objectContaining({
+                current_account: expect.objectContaining({ loginid: 'VRTC900111' }),
+            })
+        );
+    });
+
+    it('authenticates pat_... tokens on DOT Demo Options accounts with full client.is_logged_in parity', async () => {
+        process.env.NEXT_PUBLIC_DERIV_APP_ID = 'app_synthetic_oauth_id';
+        const seenHeaders: Record<string, string>[] = [];
+
+        global.fetch = jest.fn(async (_url: string, init?: RequestInit) => {
+            seenHeaders.push((init?.headers || {}) as Record<string, string>);
+            return {
+                ok: true,
+                status: 200,
+                json: async () => ({
+                    data: [
+                        {
+                            account_id: 'DOT00000001',
+                            balance: '9847.67',
+                            currency: 'USD',
+                            group: 'demo',
+                            status: 'active',
+                            account_type: 'demo',
+                        },
+                    ],
+                }),
+            };
+        }) as any;
+
+        render(<ApiTokenModal isOpen={true} onClose={jest.fn()} />);
+
+        fireEvent.change(screen.getByLabelText(/Personal Access Token/i), {
+            target: { value: 'pat_synthetic_test_token_001' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: /Connect Account/i }));
+
+        await waitFor(() => {
+            expect(screen.getByText(/Connected to DOT00000001/i)).toBeInTheDocument();
+        });
+
+        // First request for pat_... tokens omits Deriv-App-ID so user-scoped PATs succeed cleanly
+        expect(seenHeaders[0]['Deriv-App-ID']).toBeUndefined();
+        expect(localStorage.getItem('active_loginid')).toBe('DOT00000001');
+        expect(localStorage.getItem('account_type')).toBe('demo');
+        expect(JSON.parse(localStorage.getItem('deriv_accounts') || '[]')[0].account_id).toBe('DOT00000001');
+        expect(JSON.parse(sessionStorage.getItem('deriv_accounts') || '[]')[0].account_id).toBe('DOT00000001');
+        expect(mockSetLoginId).toHaveBeenCalledWith('DOT00000001');
+        expect(mockSetIsLoggedIn).toHaveBeenCalledWith(true);
     });
 
     it('automatically fails over from ws.derivws.com to ws.binaryws.com for V3 API Tokens', async () => {

@@ -54,8 +54,14 @@
 
     &--mobile {
         .app-header__logo {
-            padding-inline-start: 0.6rem;
-            padding-inline-end: 0.6rem;
+            padding-inline-start: 0.5rem;
+            padding-inline-end: 0.4rem;
+        }
+
+        .app-header__logo-img {
+            width: 3.3rem;
+            height: 3.3rem;
+            border-radius: 0.75rem;
         }
 
         .app-header__logo-stack {

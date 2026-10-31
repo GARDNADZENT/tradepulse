@@ -5,6 +5,10 @@ import { toMoment } from '@/components/shared';
 import { FORM_ERROR_MESSAGES } from '@/components/shared/constants/form-error-messages';
 import { initFormErrorMessages } from '@/components/shared/utils/validation/declarative-validation-rules';
 import { api_base } from '@/external/bot-skeleton';
+import {
+    hasStoredAuthCredentials,
+    isCurrentSocketPublic,
+} from '@/external/bot-skeleton/services/api/appId';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useLogout } from '@/hooks/useLogout';
 import { useStore } from '@/hooks/useStore';
@@ -37,20 +41,30 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
     const handleLogout = useLogout();
 
     const activeAccount = useMemo(
-        () => accountList?.find(account => account.loginid === activeLoginid),
+        () =>
+            accountList?.find(account => account.loginid === activeLoginid) ||
+            (activeLoginid ? accountList?.[0] : undefined),
         [activeLoginid, accountList]
     );
 
     useEffect(() => {
-        if (client && activeAccount && isAuthorized) {
-            client?.setLoginId(activeLoginid);
-            client?.setAccountList(accountList);
+        if (client && activeLoginid && isAuthorized) {
+            client?.setLoginId(activeAccount?.loginid || activeLoginid);
+            if (accountList?.length) {
+                client?.setAccountList(accountList);
+            }
+            if (activeAccount?.currency) {
+                client?.setCurrency(activeAccount.currency);
+            }
+            if (typeof activeAccount?.balance === 'number') {
+                client?.setBalance(activeAccount.balance.toString());
+            }
             client?.setIsLoggedIn(true);
-        } else if (client && !isAuthorized) {
-            // Ensure client shows as not logged in until authorization is complete
+        } else if (client && !isAuthorized && !isAuthorizing && !activeLoginid) {
+            // Ensure client shows as not logged in only when no authorized session exists
             client?.setIsLoggedIn(false);
         }
-    }, [accountList, activeAccount, activeLoginid, client, isAuthorized]);
+    }, [accountList, activeAccount, activeLoginid, client, isAuthorized, isAuthorizing]);
 
     useEffect(() => {
         initFormErrorMessages(FORM_ERROR_MESSAGES());
@@ -122,11 +136,11 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
             const { msg_type, error } = data;
 
             // Handle auth errors by calling client.logout() directly instead of useLogout hook
-            // This prevents redundant logout operations since useLogout internally calls client.logout()
+            // Ignore AuthorizationRequired on a stale public socket while auth credentials exist
             if (
-                error?.code === 'AuthorizationRequired' ||
                 error?.code === 'DisabledClient' ||
-                error?.code === 'InvalidToken'
+                error?.code === 'InvalidToken' ||
+                (error?.code === 'AuthorizationRequired' && !(isCurrentSocketPublic() && hasStoredAuthCredentials()))
             ) {
                 // Clear all URL query parameters for these auth errors
                 clearInvalidTokenParams();

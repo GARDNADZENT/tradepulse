@@ -3,10 +3,16 @@
 
 .app-header {
     background: #050914 !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid rgba(59, 130, 246, 0.14);
     color: #ffffff;
     height: 5.2rem !important;
     min-height: 5.2rem !important;
+
+    &--mobile {
+        padding-inline: 1rem !important;
+        background: rgba(4, 10, 24, 0.96) !important;
+        backdrop-filter: blur(12px);
+    }
 
     &__chat-pill {
         width: 3.2rem;
@@ -48,12 +54,13 @@
         width: 3.4rem;
         height: 3.4rem;
         border-radius: 999px;
-        border: 1px solid rgba(255, 255, 255, 0.16);
-        background: #0e1525;
+        border: 1px solid rgba(59, 130, 246, 0.24);
+        background: #0b1428;
         color: #ffffff;
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        flex-shrink: 0;
         cursor: pointer;
         margin-inline-start: 0.6rem;
         transition: border-color 0.15s ease, transform 0.12s ease;
@@ -61,6 +68,13 @@
         &:hover {
             border-color: #0066ff;
             transform: translateY(-1px);
+        }
+
+        @include mobile-or-tablet-screen {
+            width: 3.3rem;
+            height: 3.3rem;
+            margin-inline-start: 0.5rem;
+            margin-inline-end: 0 !important;
         }
     }
 
@@ -394,10 +408,19 @@
     padding-block: 8px;
     align-items: center;
 
+    @include mobile-or-tablet-screen {
+        padding-block: 4px;
+        gap: 0.2rem;
+    }
+
     button {
         font-weight: 400;
         margin-inline-end: 1.6rem;
         border-radius: 16px;
+
+        @include mobile-or-tablet-screen {
+            margin-inline-end: 0.6rem;
+        }
 
         // Login / Sign up are disabled until the OAuth app id is configured.
         // Keep them visually unchanged when disabled (no faded/0.32 opacity).

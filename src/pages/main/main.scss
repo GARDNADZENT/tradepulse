@@ -25,6 +25,20 @@
         right: 0;
         background: linear-gradient(88.07deg, transparent 1.63%, #0066ff 65%);
     }
+
+    @include mobile-or-tablet-screen {
+        top: 0;
+        height: 47px;
+        width: 24px;
+
+        &--left {
+            background: linear-gradient(270deg, transparent 0%, rgba(4, 11, 26, 0.94) 85%);
+        }
+
+        &--right {
+            background: linear-gradient(90deg, transparent 0%, rgba(4, 11, 26, 0.94) 85%);
+        }
+    }
 }
 
 .main {

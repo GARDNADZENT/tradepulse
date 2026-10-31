@@ -46,6 +46,7 @@ const router = createBrowserRouter(
                                     <InstallPrompt />
                                     <CoreStoreProvider>
                                         <Layout />
+                                        <StandaloneLoginScreen />
                                     </CoreStoreProvider>
                                 </LocalStorageSyncWrapper>
                             </StoreProvider>
@@ -76,12 +77,7 @@ function App() {
     // Handle account switching via URL parameter
     useAccountSwitching();
 
-    return (
-        <>
-            <RouterProvider router={router} />
-            <StandaloneLoginScreen />
-        </>
-    );
+    return <RouterProvider router={router} />;
 }
 
 export default App;

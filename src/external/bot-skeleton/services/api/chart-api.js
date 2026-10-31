@@ -4,6 +4,13 @@ class ChartAPI {
     api;
     chart_active_symbols = null; // Separate variable for chart-specific symbols
 
+    handleSocketClose = event => {
+        if (event?.target && this.api?.connection && event.target !== this.api.connection) {
+            return;
+        }
+        this.onsocketclose();
+    };
+
     onsocketclose() {
         this.reconnectIfNotConnected();
     }
@@ -11,17 +18,13 @@ class ChartAPI {
     init = async (force_create_connection = false) => {
         if (!this.api || force_create_connection) {
             if (this.api?.connection) {
-                this.api.disconnect();
-                this.api.connection.removeEventListener('close', this.onsocketclose.bind(this));
+                // Do NOT call this.api.disconnect() here: chart_api shares the singleton
+                // DerivAPI instance managed by api_base, and disconnecting here would close
+                // a freshly created authenticated WebSocket right after api_base.init(true).
+                this.api.connection.removeEventListener('close', this.handleSocketClose);
             }
-            this.api = await generateDerivApiInstance();
-            this.api?.connection.addEventListener('close', this.onsocketclose.bind(this));
-
-            // Intercept the send method to filter active_symbols responses for chart
-            // this.interceptApiCalls();
-
-            // Force inject symbols after a short delay to ensure api_base is ready
-            // this.forceInjectSymbols();
+            this.api = await generateDerivApiInstance(false);
+            this.api?.connection.addEventListener('close', this.handleSocketClose);
         }
         this.getTime();
     };

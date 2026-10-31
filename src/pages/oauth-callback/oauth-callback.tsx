@@ -3,8 +3,13 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAppId } from '@/components/shared';
 import { handleOAuthCallback, cleanupUrl } from '@/external/deriv-core';
-import { setAuthData, setAccountList } from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
+import {
+    setAuthData,
+    setAccountList,
+    setIsAuthorized,
+} from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
 import { statusService } from '@/services/supabase/status.service';
+import { isDemoAccount } from '@/utils/account-helpers';
 
 const OAuthCallback = () => {
     const navigate = useNavigate();
@@ -31,14 +36,14 @@ const OAuthCallback = () => {
                     const firstAccount = accounts[0];
                     localStorage.setItem('active_loginid', firstAccount.account_id);
                     const isDemo =
-                        firstAccount.account_id.startsWith('VRT') || firstAccount.account_id.startsWith('VRTC');
+                        firstAccount.account_type === 'demo' || isDemoAccount(firstAccount.account_id);
                     localStorage.setItem('account_type', isDemo ? 'demo' : 'real');
 
                     const mappedAccounts = accounts.map(acc => ({
                         loginid: acc.account_id,
                         balance: parseFloat(acc.balance) || 0,
                         currency: acc.currency || 'USD',
-                        is_virtual: acc.account_type === 'demo' ? 1 : 0,
+                        is_virtual: acc.account_type === 'demo' || isDemoAccount(acc.account_id) ? 1 : 0,
                     }));
                     setAccountList(mappedAccounts);
                     setAuthData({
@@ -48,6 +53,7 @@ const OAuthCallback = () => {
                         is_virtual: isDemo ? 1 : 0,
                         account_list: mappedAccounts,
                     });
+                    setIsAuthorized(true);
 
                     const { api_base } = await import('@/external/bot-skeleton');
                     await api_base.init(true);

@@ -269,6 +269,9 @@ const DashboardComponent = observer((_props: TMobileIconGuide) => {
                         {/* Simple Centered Hero */}
                         <section className='tp-dash__hero'>
                             <h1 className='tp-dash__hero-title'>{localize('Hello Trader!')}</h1>
+                            <p className='tp-dash__hero-sub'>
+                                {localize('Choose a workspace or launch an AI bot below')}
+                            </p>
                         </section>
 
                         {/* Left-Accented Action Cards Grid */}

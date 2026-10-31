@@ -1,13 +1,15 @@
 // @ts-nocheck — vendored bot code with known upstream type gaps; see AGENTS.md
 import { action, computed, makeObservable, observable } from 'mobx';
 /* [AI] - Analytics removed - utility functions moved to @/utils/account-helpers */
-import { getAccountId } from '@/utils/account-helpers';
+import { getAccountId, isDemoAccount } from '@/utils/account-helpers';
 /* [/AI] */
 import { isEmptyObject } from '@/components/shared';
 import { isMultipliersOnly, isOptionsBlocked } from '@/components/shared/common/utility';
 import { removeCookies } from '@/components/shared/utils/storage/storage';
+import { getAuthInfo } from '@/external/deriv-core';
 import { observer as globalObserver, observer } from '@/external/bot-skeleton';
 import { api_base } from '@/external/bot-skeleton/services/api/api-base';
+import { DerivWSAccountsService } from '@/services/derivws-accounts.service';
 import { ErrorLogger } from '@/utils/error-logger';
 import type { Balance } from '@deriv/api-types';
 import {
@@ -49,9 +51,11 @@ export default class ClientStore {
         }
 
         // Update current account details from new API structure
-        if (data?.current_account) {
+        if (data?.current_account?.loginid) {
             this.setLoginId(data.current_account.loginid);
-            this.setCurrency(data.current_account.currency);
+            if (data.current_account.currency) {
+                this.setCurrency(data.current_account.currency);
+            }
             this.setIsLoggedIn(true);
             localStorage.setItem('active_loginid', data.current_account.loginid);
 
@@ -64,10 +68,101 @@ export default class ClientStore {
         }
     };
 
+    hydrateFromStoredSession = (): boolean => {
+        if (typeof window === 'undefined') return false;
+        try {
+            const activeLoginId = localStorage.getItem('active_loginid') || '';
+            if (!activeLoginId || activeLoginId === 'null' || activeLoginId === 'undefined') {
+                return false;
+            }
+
+            const authInfo = getAuthInfo();
+            const patMode = localStorage.getItem('deriv_pat_mode');
+            const patToken = localStorage.getItem('deriv_api_token') || localStorage.getItem('authToken') || '';
+            let hasAccountToken = false;
+            try {
+                const accountsMap = JSON.parse(localStorage.getItem('accountsList') || '{}');
+                hasAccountToken = Boolean(accountsMap && accountsMap[activeLoginId]);
+            } catch {
+                hasAccountToken = false;
+            }
+
+            const hasValidCredentials = Boolean(
+                authInfo?.access_token || (patMode === 'v3' && patToken) || hasAccountToken
+            );
+            if (!hasValidCredentials) return false;
+
+            const storedDerivAccounts = DerivWSAccountsService.getStoredAccounts();
+            let hydratedAccounts: TAuthData['account_list'] = [];
+
+            if (storedDerivAccounts && storedDerivAccounts.length > 0) {
+                hydratedAccounts = storedDerivAccounts
+                    .filter(acc => !acc.status || acc.status === 'active')
+                    .map(acc => ({
+                        loginid: acc.account_id,
+                        balance: parseFloat(acc.balance) || 0,
+                        currency: acc.currency || 'USD',
+                        is_virtual: acc.account_type === 'demo' || isDemoAccount(acc.account_id) ? 1 : 0,
+                    }));
+            } else {
+                try {
+                    const rawClientAccounts = JSON.parse(localStorage.getItem('client.accounts') || '{}');
+                    const entries = Object.entries(rawClientAccounts);
+                    if (entries.length > 0) {
+                        hydratedAccounts = entries.map(([id, info]: [string, any]) => ({
+                            loginid: info?.loginid || id,
+                            balance: Number(info?.balance) || 0,
+                            currency: info?.currency || 'USD',
+                            is_virtual: info?.is_virtual || isDemoAccount(id) ? 1 : 0,
+                        }));
+                    }
+                } catch {
+                    // ignore malformed client.accounts
+                }
+            }
+
+            if (hydratedAccounts.length === 0) {
+                hydratedAccounts = [
+                    {
+                        loginid: activeLoginId,
+                        balance: 0,
+                        currency: 'USD',
+                        is_virtual: isDemoAccount(activeLoginId) ? 1 : 0,
+                    },
+                ];
+            }
+
+            const currentAcc =
+                hydratedAccounts.find(acc => acc.loginid === activeLoginId) || hydratedAccounts[0];
+
+            this.setAccountList(hydratedAccounts);
+            this.setLoginId(currentAcc.loginid);
+            this.setCurrency(currentAcc.currency || 'USD');
+            if (typeof currentAcc.balance === 'number') {
+                this.setBalance(currentAcc.balance.toString());
+            }
+            this.setIsLoggedIn(true);
+
+            if (!authData$.getValue()?.loginid) {
+                setAccountList(hydratedAccounts);
+                setAuthData({
+                    loginid: currentAcc.loginid,
+                    balance: currentAcc.balance ?? 0,
+                    currency: currentAcc.currency || 'USD',
+                    is_virtual: currentAcc.is_virtual ?? (isDemoAccount(currentAcc.loginid) ? 1 : 0),
+                    account_list: hydratedAccounts,
+                });
+                setIsAuthorized(true);
+            }
+
+            return true;
+        } catch {
+            return false;
+        }
+    };
+
     constructor(root_store: RootStore) {
         this.root_store = root_store;
-        // Subscribe to auth data changes
-        this.authDataSubscription = authData$.subscribe(() => {});
 
         observer.register('api.authorize', this.onAuthorizeEvent);
 
@@ -109,6 +204,7 @@ export default class ClientStore {
 
             residence: computed,
 
+            hydrateFromStoredSession: action,
             logout: action,
             onAuthorizeEvent: action,
             setAccountList: action,
@@ -124,6 +220,26 @@ export default class ClientStore {
             is_trading_experience_incomplete: computed,
             is_cr_account: computed,
             account_open_date: computed,
+        });
+
+        // Hydrate any persisted OAuth or PAT session immediately on boot
+        this.hydrateFromStoredSession();
+
+        // Keep MobX client store synchronized whenever authData$ emits an authorized account
+        this.authDataSubscription = authData$.subscribe(authData => {
+            if (authData?.loginid) {
+                if (Array.isArray(authData.account_list) && authData.account_list.length > 0) {
+                    this.setAccountList(authData.account_list);
+                }
+                this.setLoginId(authData.loginid);
+                if (authData.currency) {
+                    this.setCurrency(authData.currency);
+                }
+                if (typeof authData.balance === 'number') {
+                    this.setBalance(authData.balance.toString());
+                }
+                this.setIsLoggedIn(true);
+            }
         });
     }
 
@@ -271,6 +387,8 @@ export default class ClientStore {
             localStorage.removeItem('accountsList');
             localStorage.removeItem('authToken');
             localStorage.removeItem('deriv_api_token');
+            localStorage.removeItem('deriv_pat_mode');
+            localStorage.removeItem('deriv_v3_ws_url');
             localStorage.removeItem('clientAccounts');
             localStorage.removeItem('client.accounts');
             localStorage.removeItem('account_type');
@@ -398,10 +516,6 @@ export default class ClientStore {
 
                 this.all_accounts_balance = null;
 
-                localStorage.removeItem('accountsList');
-                localStorage.removeItem('authToken');
-                localStorage.removeItem('clientAccounts');
-                localStorage.removeItem('account_type'); // Clear account type on logout
                 removeCookies('client_information');
 
                 setIsAuthorized(false);

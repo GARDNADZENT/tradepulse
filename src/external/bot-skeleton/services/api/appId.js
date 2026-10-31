@@ -1,4 +1,5 @@
 import { getSocketURL } from '@/components/shared';
+import { getAuthInfo } from '@/external/deriv-core';
 import DerivAPIBasic from '@deriv/deriv-api/dist/DerivAPIBasic';
 import APIMiddleware from './api-middleware';
 
@@ -8,6 +9,27 @@ import APIMiddleware from './api-middleware';
 let derivApiInstance = null;
 let derivApiPromise = null;
 let currentWebSocketURL = null;
+
+export const getCurrentWebSocketURL = () => currentWebSocketURL;
+
+export const hasStoredAuthCredentials = () => {
+    try {
+        const authInfo = getAuthInfo();
+        if (authInfo?.access_token) return true;
+        if (typeof window !== 'undefined') {
+            const patMode = window.localStorage.getItem('deriv_pat_mode');
+            const v3Token =
+                window.localStorage.getItem('deriv_api_token') || window.localStorage.getItem('authToken');
+            if (patMode === 'v3' && v3Token) return true;
+        }
+    } catch {
+        // ignore storage errors
+    }
+    return false;
+};
+
+export const isCurrentSocketPublic = () =>
+    Boolean(currentWebSocketURL && currentWebSocketURL.endsWith('/ws/public'));
 
 /**
  * Clears the singleton instance (useful for logout or forced reconnection)
@@ -33,8 +55,11 @@ export const clearDerivApiInstance = () => {
  * @returns Promise with DerivAPIBasic instance
  */
 export const generateDerivApiInstance = async (forceNew = false) => {
-    // If forcing new instance, clear existing one
-    if (forceNew) {
+    // Upgrade immediately if credentials now exist while the singleton is still on /ws/public
+    const shouldUpgradeFromPublic = isCurrentSocketPublic() && hasStoredAuthCredentials();
+
+    // If forcing new instance (or upgrading from public after PAT/OAuth login), clear existing one
+    if (forceNew || shouldUpgradeFromPublic) {
         console.log('[DerivAPI] Forcing new instance creation');
         clearDerivApiInstance();
     }

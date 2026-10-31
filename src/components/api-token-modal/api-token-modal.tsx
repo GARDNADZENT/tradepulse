@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { DERIV_V3_WS_ENDPOINTS, getAppId, getLegacyWsAppId, isProduction } from '@/components/shared';
 import { clearAuthInfo, storeAuthInfo } from '@/external/deriv-core';
-import { api_base } from '@/external/bot-skeleton';
+import { api_base, observer as globalObserver } from '@/external/bot-skeleton';
 import {
     setAccountList,
     setAuthData,
@@ -10,6 +10,7 @@ import {
 } from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
 import { useStore } from '@/hooks/useStore';
 import { DerivAccount, DerivWSAccountsService } from '@/services/derivws-accounts.service';
+import { isDemoAccount } from '@/utils/account-helpers';
 import brandConfig from '../../../brand.config.json';
 import './api-token-modal.scss';
 
@@ -43,15 +44,28 @@ async function tryAuthenticateV2Pat(cleanToken: string): Promise<DerivAccount[] 
 
     for (const endpoint of endpoints) {
         const headerVariants: Record<string, string>[] = [];
-        if (clientId) {
+        const isPatToken = cleanToken.startsWith('pat_');
+        if (isPatToken) {
             headerVariants.push({
                 Authorization: `Bearer ${cleanToken}`,
-                'Deriv-App-ID': clientId,
+            });
+            if (clientId) {
+                headerVariants.push({
+                    Authorization: `Bearer ${cleanToken}`,
+                    'Deriv-App-ID': clientId,
+                });
+            }
+        } else {
+            if (clientId) {
+                headerVariants.push({
+                    Authorization: `Bearer ${cleanToken}`,
+                    'Deriv-App-ID': clientId,
+                });
+            }
+            headerVariants.push({
+                Authorization: `Bearer ${cleanToken}`,
             });
         }
-        headerVariants.push({
-            Authorization: `Bearer ${cleanToken}`,
-        });
 
         for (const headers of headerVariants) {
             try {
@@ -216,8 +230,7 @@ export const ApiTokenModal: React.FC<TApiTokenModalProps> = ({ isOpen, onClose }
                 const loginid = String(primary.account_id || '');
                 const currency = String(primary.currency || 'USD');
                 const balance = parseFloat(primary.balance) || 0;
-                const isDemo =
-                    primary.account_type === 'demo' || loginid.startsWith('VRT') || loginid.startsWith('VRTC');
+                const isDemo = primary.account_type === 'demo' || isDemoAccount(loginid);
 
                 localStorage.removeItem('deriv_pat_mode');
                 localStorage.removeItem('deriv_v3_ws_url');
@@ -236,10 +249,7 @@ export const ApiTokenModal: React.FC<TApiTokenModalProps> = ({ isOpen, onClose }
                 const accountsListMap: Record<string, string> = {};
                 const clientAccountsMap: Record<string, any> = {};
                 usableAccounts.forEach(acc => {
-                    const accIsDemo =
-                        acc.account_type === 'demo' ||
-                        acc.account_id.startsWith('VRT') ||
-                        acc.account_id.startsWith('VRTC');
+                    const accIsDemo = acc.account_type === 'demo' || isDemoAccount(acc.account_id);
                     accountsListMap[acc.account_id] = cleanToken;
                     clientAccountsMap[acc.account_id] = {
                         token: cleanToken,
@@ -262,7 +272,7 @@ export const ApiTokenModal: React.FC<TApiTokenModalProps> = ({ isOpen, onClose }
                     loginid: acc.account_id,
                     balance: parseFloat(acc.balance) || 0,
                     currency: acc.currency || 'USD',
-                    is_virtual: acc.account_type === 'demo' ? 1 : 0,
+                    is_virtual: acc.account_type === 'demo' || isDemoAccount(acc.account_id) ? 1 : 0,
                 }));
 
                 setIsAuthorizing(false);
@@ -276,8 +286,21 @@ export const ApiTokenModal: React.FC<TApiTokenModalProps> = ({ isOpen, onClose }
                     account_list: mappedAccountList,
                 });
 
+                try {
+                    globalObserver?.emit?.('api.authorize', {
+                        account_list: mappedAccountList,
+                        current_account: {
+                            loginid,
+                            currency,
+                            is_virtual: isDemo ? 1 : 0,
+                            balance,
+                        },
+                    });
+                } catch {}
+
                 if (client) {
                     try {
+                        client.setAccountList?.(mappedAccountList);
                         client.setLoginId?.(loginid);
                         client.setCurrency?.(currency);
                         client.setBalance?.(balance.toFixed(2));
@@ -288,6 +311,14 @@ export const ApiTokenModal: React.FC<TApiTokenModalProps> = ({ isOpen, onClose }
                 try {
                     await api_base?.init?.(true);
                 } catch {}
+
+                // Re-assert authorized state after WebSocket init so PAT Login matches OAuth Login 1:1
+                setIsAuthorized(true);
+                if (client) {
+                    try {
+                        client.setIsLoggedIn?.(true);
+                    } catch {}
+                }
 
                 window.dispatchEvent(new Event('storage'));
                 setSuccessMsg(`Connected to ${loginid} (${balance.toFixed(2)} ${currency})`);
@@ -301,7 +332,7 @@ export const ApiTokenModal: React.FC<TApiTokenModalProps> = ({ isOpen, onClose }
             const loginid = String(authResult.loginid || '');
             const currency = String(authResult.currency || 'USD');
             const balance = Number(authResult.balance ?? 0);
-            const isDemo = Boolean(authResult.is_virtual) || loginid.startsWith('VR');
+            const isDemo = Boolean(authResult.is_virtual) || isDemoAccount(loginid);
             const rawAccountList = Array.isArray(authResult.account_list) ? authResult.account_list : [];
 
             clearAuthInfo();
@@ -331,7 +362,7 @@ export const ApiTokenModal: React.FC<TApiTokenModalProps> = ({ isOpen, onClose }
                     clientAccountsMap[acc.loginid] = {
                         token: acc.loginid === loginid ? cleanToken : '',
                         currency: acc.currency || currency,
-                        is_virtual: acc.is_virtual ? 1 : 0,
+                        is_virtual: acc.is_virtual || isDemoAccount(acc.loginid) ? 1 : 0,
                         loginid: acc.loginid,
                     };
                 }
@@ -351,7 +382,7 @@ export const ApiTokenModal: React.FC<TApiTokenModalProps> = ({ isOpen, onClose }
                           loginid: acc.loginid,
                           balance: acc.loginid === loginid ? balance : Number(acc.balance) || 0,
                           currency: acc.currency || currency,
-                          is_virtual: acc.is_virtual ? 1 : 0,
+                          is_virtual: acc.is_virtual || isDemoAccount(acc.loginid) ? 1 : 0,
                       }))
                     : [
                           {
@@ -370,8 +401,21 @@ export const ApiTokenModal: React.FC<TApiTokenModalProps> = ({ isOpen, onClose }
                 account_list: mappedAccounts,
             });
 
+            try {
+                globalObserver?.emit?.('api.authorize', {
+                    account_list: mappedAccounts,
+                    current_account: {
+                        loginid,
+                        currency,
+                        is_virtual: isDemo ? 1 : 0,
+                        balance,
+                    },
+                });
+            } catch {}
+
             if (client) {
                 try {
+                    client.setAccountList?.(mappedAccounts);
                     client.setLoginId?.(loginid);
                     client.setCurrency?.(currency);
                     client.setBalance?.(balance.toFixed(2));
@@ -382,6 +426,13 @@ export const ApiTokenModal: React.FC<TApiTokenModalProps> = ({ isOpen, onClose }
             try {
                 await api_base?.init?.(true);
             } catch {}
+
+            setIsAuthorized(true);
+            if (client) {
+                try {
+                    client.setIsLoggedIn?.(true);
+                } catch {}
+            }
 
             window.dispatchEvent(new Event('storage'));
             setSuccessMsg(`Connected to ${loginid} (${balance.toFixed(2)} ${currency})`);
@@ -409,6 +460,13 @@ export const ApiTokenModal: React.FC<TApiTokenModalProps> = ({ isOpen, onClose }
         setIsAuthorized(false);
         setAuthData(null);
         setAccountList([]);
+        if (client) {
+            try {
+                client.setAccountList?.([]);
+                client.setLoginId?.('');
+                client.setIsLoggedIn?.(false);
+            } catch {}
+        }
         window.dispatchEvent(new Event('storage'));
         setTokenInput('');
         setSuccessMsg('');

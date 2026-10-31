@@ -380,6 +380,16 @@ const AccountSwitcher = observer(({ activeAccount, onLogout }: TAccountSwitcher)
                     )}
 
                     <div className='acc-dropdown__footer'>
+                        {isVirtual && !showAsReal && !trippleTrickActive && (
+                            <button
+                                type='button'
+                                className='acc-dropdown__reset-btn'
+                                disabled={resetBusy}
+                                onClick={handleResetBalance}
+                            >
+                                <span>{resetBusy ? 'Resetting balance…' : 'Reset Demo Balance'}</span>
+                            </button>
+                        )}
                         <button
                             type='button'
                             data-testid='dt_account_card_logout'
