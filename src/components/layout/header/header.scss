@@ -2,6 +2,9 @@
 @use 'components/shared/styles/mixins' as *;
 
 .app-header {
+    position: relative;
+    z-index: 500;
+    overflow: visible !important;
     background: #050914 !important;
     border-bottom: 1px solid rgba(59, 130, 246, 0.14);
     color: #ffffff;
@@ -10,8 +13,7 @@
 
     &--mobile {
         padding-inline: 1rem !important;
-        background: rgba(4, 10, 24, 0.96) !important;
-        backdrop-filter: blur(12px);
+        background: #040a18 !important;
     }
 
     &__chat-pill {

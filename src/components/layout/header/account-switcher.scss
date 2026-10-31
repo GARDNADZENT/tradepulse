@@ -768,18 +768,45 @@
     position: absolute;
     top: calc(100% + 6px);
     right: 0;
-    z-index: 300;
+    z-index: 9500;
     min-width: 28rem;
-    max-width: calc(100vw - 2rem);
+    max-width: calc(100vw - 2.4rem);
+    max-height: calc(100vh - 7.4rem);
+    max-height: calc(100dvh - 7.4rem);
     background-color: #0b101d;
     border: 1px solid #1e293b;
     border-radius: 12px;
-    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.62);
-    overflow: hidden;
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.68);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
 
-    @include mobile-or-tablet-screen {
-        min-width: 25.5rem;
-        right: -3.6rem;
+    &--portal {
+        position: fixed;
+        z-index: 9500;
+    }
+
+    &--mobile {
+        min-width: 0;
+        width: min(32rem, calc(100vw - 2.4rem));
+        border-color: rgba(59, 130, 246, 0.34);
+        box-shadow: 0 22px 48px rgba(0, 0, 0, 0.78);
+    }
+
+    &__backdrop {
+        position: fixed;
+        top: 5.2rem;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 9499;
+        background: rgba(2, 6, 23, 0.48);
+        -webkit-tap-highlight-color: transparent;
+
+        .theme--light & {
+            background: rgba(15, 23, 42, 0.25);
+        }
     }
 
     .theme--light & {
@@ -989,6 +1016,8 @@
     background: #0b1120;
     gap: 0.9rem;
     cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
     transition: border-color 0.15s ease, background 0.15s ease;
 
     .theme--light & {

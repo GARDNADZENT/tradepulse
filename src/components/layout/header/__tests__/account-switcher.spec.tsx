@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AccountSwitcher from '../account-switcher';
 
+declare const require: (id: string) => any;
+
 const mockCheckAndRegenerateWebSocket = jest.fn();
 
 const mockAccountList = [
@@ -257,5 +259,47 @@ describe('AccountSwitcher', () => {
             expect(sendViaNewSystemWithPromise).toHaveBeenCalledWith({ topup_virtual: 1 });
             expect(sendViaNewSystemWithPromise).toHaveBeenCalledWith({ balance: 1 });
         });
+    });
+
+    it('renders portaled mobile account dropdown above layout layers and closes on backdrop tap', () => {
+        const originalInnerWidth = window.innerWidth;
+        Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 375 });
+
+        try {
+            const mockOnLogout = jest.fn();
+            const { container } = render(
+                <AccountSwitcher activeAccount={mockDemoActiveAccount} onLogout={mockOnLogout} />
+            );
+            const trigger = screen.getByTestId('dt_acc_info');
+            fireEvent.click(trigger);
+
+            const dropdown = screen.getByTestId('dt_acc_dropdown');
+            expect(dropdown).toBeInTheDocument();
+            // Portaled to document.body so header/body stacking contexts cannot hide it on mobile
+            expect(dropdown.parentElement).toBe(document.body);
+            expect(dropdown).toHaveClass('acc-dropdown--portal');
+            expect(dropdown).toHaveClass('acc-dropdown--mobile');
+            expect(dropdown.style.position).toBe('fixed');
+
+            // Ensure wrapper itself does not trap the dropdown inside the header stacking context
+            expect(container.querySelector('[data-testid="dt_acc_dropdown"]')).toBeNull();
+
+            // Tapping an interactive control inside the portaled dropdown works without outside-click race
+            const backdrop = screen.getByTestId('dt_acc_dropdown_backdrop');
+            expect(backdrop).toBeInTheDocument();
+            fireEvent.mouseDown(dropdown);
+            expect(screen.getByTestId('dt_acc_dropdown')).toBeInTheDocument();
+
+            // Tapping the mobile backdrop closes the dropdown cleanly
+            fireEvent.mouseDown(backdrop);
+            fireEvent.click(backdrop);
+            expect(screen.queryByTestId('dt_acc_dropdown')).not.toBeInTheDocument();
+        } finally {
+            Object.defineProperty(window, 'innerWidth', {
+                writable: true,
+                configurable: true,
+                value: originalInnerWidth,
+            });
+        }
     });
 });

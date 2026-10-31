@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
 import { addComma, getCurrencyDisplayCode, getDecimalPlaces } from '@/components/shared';
@@ -24,7 +25,12 @@ const AccountSwitcher = observer(({ activeAccount, onLogout }: TAccountSwitcher)
     );
     const [resetBusy, setResetBusy] = useState(false);
     const [logoutBusy, setLogoutBusy] = useState(false);
+    const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+    const [isMobileViewport, setIsMobileViewport] = useState(
+        () => typeof window !== 'undefined' && window.innerWidth <= 768
+    );
     const wrapperRef = useRef<HTMLDivElement>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
     const { accountList, activeLoginid } = useApiBase();
     const { client, run_panel } = useStore() ?? {};
 
@@ -53,7 +59,11 @@ const AccountSwitcher = observer(({ activeAccount, onLogout }: TAccountSwitcher)
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
-            if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+            const target = e.target as Node | null;
+            if (!target) return;
+            const insideTrigger = wrapperRef.current?.contains(target) ?? false;
+            const insideDropdown = dropdownRef.current?.contains(target) ?? false;
+            if (!insideTrigger && !insideDropdown) {
                 setIsOpen(false);
             }
         };
@@ -67,6 +77,47 @@ const AccountSwitcher = observer(({ activeAccount, onLogout }: TAccountSwitcher)
             document.removeEventListener('keydown', handleKeyDown);
         };
     }, []);
+
+    const updateDropdownPosition = useCallback(() => {
+        if (typeof window === 'undefined') return;
+        const mobile = window.innerWidth <= 768;
+        setIsMobileViewport(mobile);
+        const rect = wrapperRef.current?.getBoundingClientRect();
+        if (!rect) return;
+
+        if (mobile) {
+            const topOffset = rect.bottom > 0 ? Math.max(54, Math.round(rect.bottom + 8)) : 58;
+            setDropdownStyle({
+                position: 'fixed',
+                top: `${topOffset}px`,
+                right: '12px',
+                left: 'auto',
+                width: 'min(320px, calc(100vw - 24px))',
+                minWidth: 0,
+            });
+            return;
+        }
+
+        const topOffset = rect.bottom > 0 ? Math.round(rect.bottom + 6) : 56;
+        const rightOffset = rect.right > 0 ? Math.max(12, Math.round(window.innerWidth - rect.right)) : 16;
+        setDropdownStyle({
+            position: 'fixed',
+            top: `${topOffset}px`,
+            right: `${rightOffset}px`,
+            left: 'auto',
+        });
+    }, []);
+
+    useLayoutEffect(() => {
+        if (!isOpen) return;
+        updateDropdownPosition();
+        window.addEventListener('resize', updateDropdownPosition);
+        window.addEventListener('scroll', updateDropdownPosition, true);
+        return () => {
+            window.removeEventListener('resize', updateDropdownPosition);
+            window.removeEventListener('scroll', updateDropdownPosition, true);
+        };
+    }, [isOpen, updateDropdownPosition]);
 
     const toggleDropdown = useCallback(() => {
         if (is_bot_running) return;
@@ -303,131 +354,154 @@ const AccountSwitcher = observer(({ activeAccount, onLogout }: TAccountSwitcher)
                     )}
                 </div>
             </AccountInfoWrapper>
-            {isOpen && (
-                <div
-                    data-testid='dt_acc_dropdown'
-                    className='acc-dropdown acc-dropdown--card'
-                    role='dialog'
-                    aria-label='Active Account Details'
-                >
-                    <div className='acc-dropdown__section-head'>Active Account Details</div>
-                    <div className='acc-dropdown__details'>
-                        <div className='acc-dropdown__detail-row'>
-                            <span>Account ID</span>
-                            <strong>{resolvedLoginId || '—'}</strong>
-                        </div>
-                        <div className='acc-dropdown__detail-row'>
-                            <span>Type</span>
-                            <strong>{isRealDisplay ? 'Real Account' : 'Demo Account'}</strong>
-                        </div>
-                        <div className='acc-dropdown__detail-row'>
-                            <span>Currency</span>
-                            <strong>{displayCurrencyCode}</strong>
-                        </div>
-                        <div className='acc-dropdown__detail-row'>
-                            <span>Balance</span>
-                            <strong className='acc-dropdown__detail-balance'>
-                                {balance} {displayCurrencyCode}
-                            </strong>
-                        </div>
-                    </div>
-
-                    {formattedAccounts.length > 1 && (
-                        <>
-                            <div className='acc-dropdown__section-head acc-dropdown__section-head--sub'>
-                                Switch Account
-                            </div>
-                            <div className='acc-dropdown__switch-list' role='listbox'>
-                                {formattedAccounts.map((account, idx) => {
-                                    const rowIsDemo = account.isVirtual && !account._isFakeReal;
-                                    return (
-                                        <div
-                                            key={
-                                                account._isFakeReal
-                                                    ? `${account.loginid}-real`
-                                                    : `${account.loginid}-${idx}`
-                                            }
-                                            role='option'
-                                            aria-selected={account.isActive}
-                                            tabIndex={0}
-                                            className={classNames('acc-dropdown__switch-row', {
-                                                'is-selected': account.isActive,
-                                            })}
-                                            onClick={() => !account.isActive && handleAccountSelect(account.loginid)}
-                                            onKeyDown={e => {
-                                                if (!account.isActive && (e.key === 'Enter' || e.key === ' ')) {
-                                                    e.preventDefault();
-                                                    handleAccountSelect(account.loginid);
-                                                }
-                                            }}
-                                        >
-                                            <div className='acc-dropdown__switch-left'>
-                                                <i className={account.isActive ? 'is-on' : ''} />
-                                                <span>
-                                                    {rowIsDemo ? 'DEMO' : 'LIVE'} · {account.loginid}
-                                                </span>
-                                            </div>
-                                            <strong className='acc-dropdown__switch-bal'>
-                                                {account.currency
-                                                    ? `${account.balance} ${getCurrencyDisplayCode(account.currency)}`
-                                                    : '—'}
-                                            </strong>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </>
-                    )}
-
-                    <div className='acc-dropdown__footer'>
-                        {isVirtual && !showAsReal && !trippleTrickActive && (
-                            <button
-                                type='button'
-                                className='acc-dropdown__reset-btn'
-                                disabled={resetBusy}
-                                onClick={handleResetBalance}
-                            >
-                                <span>{resetBusy ? 'Resetting balance…' : 'Reset Demo Balance'}</span>
-                            </button>
+            {isOpen &&
+                typeof document !== 'undefined' &&
+                createPortal(
+                    <>
+                        {isMobileViewport && (
+                            <div
+                                data-testid='dt_acc_dropdown_backdrop'
+                                className='acc-dropdown__backdrop'
+                                aria-hidden='true'
+                                onMouseDown={e => e.stopPropagation()}
+                                onClick={() => setIsOpen(false)}
+                            />
                         )}
-                        <button
-                            type='button'
-                            data-testid='dt_account_card_logout'
-                            className='acc-dropdown__logout-btn'
-                            disabled={logoutBusy}
-                            onClick={() => void handleLogoutClick()}
+                        <div
+                            ref={dropdownRef}
+                            data-testid='dt_acc_dropdown'
+                            style={dropdownStyle}
+                            className={classNames('acc-dropdown acc-dropdown--card acc-dropdown--portal', {
+                                'acc-dropdown--mobile': isMobileViewport,
+                            })}
+                            role='dialog'
+                            aria-label='Active Account Details'
                         >
-                            <svg width='15' height='15' viewBox='0 0 24 24' fill='none' aria-hidden='true'>
-                                <path
-                                    d='M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4'
-                                    stroke='currentColor'
-                                    strokeWidth='2'
-                                    strokeLinecap='round'
-                                    strokeLinejoin='round'
-                                />
-                                <polyline
-                                    points='16 17 21 12 16 7'
-                                    stroke='currentColor'
-                                    strokeWidth='2'
-                                    strokeLinecap='round'
-                                    strokeLinejoin='round'
-                                />
-                                <line
-                                    x1='21'
-                                    y1='12'
-                                    x2='9'
-                                    y2='12'
-                                    stroke='currentColor'
-                                    strokeWidth='2'
-                                    strokeLinecap='round'
-                                    strokeLinejoin='round'
-                                />
-                            </svg>
-                            <span>{logoutBusy ? 'Logging out…' : 'Log out'}</span>
-                        </button>
-                    </div>
-                </div>
-            )}
+                            <div className='acc-dropdown__section-head'>Active Account Details</div>
+                            <div className='acc-dropdown__details'>
+                                <div className='acc-dropdown__detail-row'>
+                                    <span>Account ID</span>
+                                    <strong>{resolvedLoginId || '—'}</strong>
+                                </div>
+                                <div className='acc-dropdown__detail-row'>
+                                    <span>Type</span>
+                                    <strong>{isRealDisplay ? 'Real Account' : 'Demo Account'}</strong>
+                                </div>
+                                <div className='acc-dropdown__detail-row'>
+                                    <span>Currency</span>
+                                    <strong>{displayCurrencyCode}</strong>
+                                </div>
+                                <div className='acc-dropdown__detail-row'>
+                                    <span>Balance</span>
+                                    <strong className='acc-dropdown__detail-balance'>
+                                        {balance} {displayCurrencyCode}
+                                    </strong>
+                                </div>
+                            </div>
+
+                            {formattedAccounts.length > 1 && (
+                                <>
+                                    <div className='acc-dropdown__section-head acc-dropdown__section-head--sub'>
+                                        Switch Account
+                                    </div>
+                                    <div className='acc-dropdown__switch-list' role='listbox'>
+                                        {formattedAccounts.map((account, idx) => {
+                                            const rowIsDemo = account.isVirtual && !account._isFakeReal;
+                                            return (
+                                                <div
+                                                    key={
+                                                        account._isFakeReal
+                                                            ? `${account.loginid}-real`
+                                                            : `${account.loginid}-${idx}`
+                                                    }
+                                                    role='option'
+                                                    aria-selected={account.isActive}
+                                                    tabIndex={0}
+                                                    className={classNames('acc-dropdown__switch-row', {
+                                                        'is-selected': account.isActive,
+                                                    })}
+                                                    onClick={() =>
+                                                        !account.isActive && handleAccountSelect(account.loginid)
+                                                    }
+                                                    onKeyDown={e => {
+                                                        if (
+                                                            !account.isActive &&
+                                                            (e.key === 'Enter' || e.key === ' ')
+                                                        ) {
+                                                            e.preventDefault();
+                                                            handleAccountSelect(account.loginid);
+                                                        }
+                                                    }}
+                                                >
+                                                    <div className='acc-dropdown__switch-left'>
+                                                        <i className={account.isActive ? 'is-on' : ''} />
+                                                        <span>
+                                                            {rowIsDemo ? 'DEMO' : 'LIVE'} · {account.loginid}
+                                                        </span>
+                                                    </div>
+                                                    <strong className='acc-dropdown__switch-bal'>
+                                                        {account.currency
+                                                            ? `${account.balance} ${getCurrencyDisplayCode(account.currency)}`
+                                                            : '—'}
+                                                    </strong>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </>
+                            )}
+
+                            <div className='acc-dropdown__footer'>
+                                {isVirtual && !showAsReal && !trippleTrickActive && (
+                                    <button
+                                        type='button'
+                                        className='acc-dropdown__reset-btn'
+                                        disabled={resetBusy}
+                                        onClick={handleResetBalance}
+                                    >
+                                        <span>{resetBusy ? 'Resetting balance…' : 'Reset Demo Balance'}</span>
+                                    </button>
+                                )}
+                                <button
+                                    type='button'
+                                    data-testid='dt_account_card_logout'
+                                    className='acc-dropdown__logout-btn'
+                                    disabled={logoutBusy}
+                                    onClick={() => void handleLogoutClick()}
+                                >
+                                    <svg width='15' height='15' viewBox='0 0 24 24' fill='none' aria-hidden='true'>
+                                        <path
+                                            d='M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4'
+                                            stroke='currentColor'
+                                            strokeWidth='2'
+                                            strokeLinecap='round'
+                                            strokeLinejoin='round'
+                                        />
+                                        <polyline
+                                            points='16 17 21 12 16 7'
+                                            stroke='currentColor'
+                                            strokeWidth='2'
+                                            strokeLinecap='round'
+                                            strokeLinejoin='round'
+                                        />
+                                        <line
+                                            x1='21'
+                                            y1='12'
+                                            x2='9'
+                                            y2='12'
+                                            stroke='currentColor'
+                                            strokeWidth='2'
+                                            strokeLinecap='round'
+                                            strokeLinejoin='round'
+                                        />
+                                    </svg>
+                                    <span>{logoutBusy ? 'Logging out…' : 'Log out'}</span>
+                                </button>
+                            </div>
+                        </div>
+                    </>,
+                    document.body
+                )}
         </div>
     );
 });
