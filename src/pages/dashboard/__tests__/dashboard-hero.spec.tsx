@@ -39,16 +39,6 @@ jest.mock('@deriv-com/ui', () => ({
     useDevice: () => ({ isDesktop: true, isTablet: false }),
 }));
 
-jest.mock('../announcements', () => ({
-    __esModule: true,
-    default: () => null,
-}));
-
-jest.mock('../bot-list/dashboard-bot-list', () => ({
-    __esModule: true,
-    default: () => null,
-}));
-
 jest.mock('@/components/load-modal/google-drive', () => ({
     __esModule: true,
     default: () => null,
@@ -74,7 +64,9 @@ describe('DashboardComponent Hello Trader Hero', () => {
 
         expect(container.querySelector('.tab__dashboard__info-panel')).toBeNull();
         expect(container.querySelector('.db-info-panel')).toBeNull();
+        expect(container.querySelector('.bot-list__container')).toBeNull();
         expect(screen.queryByText(/Welcome to Deriv Bot/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Your bots:/i)).not.toBeInTheDocument();
 
         expect(screen.getByRole('heading', { name: 'Hello Trader!' })).toBeInTheDocument();
         expect(screen.getByText('WHAT TRADERS ARE SAYING')).toBeInTheDocument();

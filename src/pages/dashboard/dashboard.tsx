@@ -8,11 +8,9 @@ import { DBOT_TABS } from '@/constants/bot-contents';
 import { useStore } from '@/hooks/useStore';
 import { localize } from '@deriv-com/translations';
 import { useDevice } from '@deriv-com/ui';
-import Announcements from './announcements';
-import DashboardBotList from './bot-list/dashboard-bot-list';
 
 type TMobileIconGuide = {
-    handleTabChange: (active_number: number) => void;
+    handleTabChange?: (active_number: number) => void;
 };
 
 type TActionCard = {
@@ -77,14 +75,14 @@ const TESTIMONIALS: TTestimonial[] = [
     },
 ];
 
-const DashboardComponent = observer(({ handleTabChange }: TMobileIconGuide) => {
-    const { load_modal, dashboard, client, quick_strategy, google_drive } = useStore();
+const DashboardComponent = observer((_props: TMobileIconGuide) => {
+    const { load_modal, dashboard, quick_strategy, google_drive } = useStore();
     const { toggleLoadModal, setActiveTabIndex } = load_modal;
     const { is_google_drive_configured } = google_drive;
     const { active_tour, setActiveTab, onCloseDialog, dialog_options, is_dialog_open, setPreviewOnPopup } =
         dashboard;
     const { setFormVisibility } = quick_strategy;
-    const { isDesktop, isTablet } = useDevice();
+    const { isDesktop } = useDevice();
     const [isDisclaimerOpen, setIsDisclaimerOpen] = useState(false);
 
     const openFileLoader = () => {
@@ -268,14 +266,6 @@ const DashboardComponent = observer(({ handleTabChange }: TMobileIconGuide) => {
             >
                 <div className='tab__dashboard__content tp-dash__scroll'>
                     <div className='tp-dash__inner'>
-                        {client.is_logged_in && (
-                            <Announcements
-                                is_mobile={!isDesktop}
-                                is_tablet={isTablet}
-                                handleTabChange={handleTabChange}
-                            />
-                        )}
-
                         {/* Simple Centered Hero */}
                         <section className='tp-dash__hero'>
                             <h1 className='tp-dash__hero-title'>{localize('Hello Trader!')}</h1>
@@ -312,11 +302,6 @@ const DashboardComponent = observer(({ handleTabChange }: TMobileIconGuide) => {
                                 ))}
                             </div>
                         </section>
-
-                        {/* Saved / Recent Strategies (shown automatically when user has saved bots) */}
-                        <div className='tp-dash__recent'>
-                            <DashboardBotList />
-                        </div>
 
                         {/* Testimonials Section */}
                         <section className='tp-dash__reviews' aria-label='What Traders Are Saying'>
