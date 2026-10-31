@@ -8,10 +8,8 @@ import { DBOT_TABS } from '@/constants/bot-contents';
 import { useStore } from '@/hooks/useStore';
 import { localize } from '@deriv-com/translations';
 import { useDevice } from '@deriv-com/ui';
-import OnboardTourHandler from '../tutorials/dbot-tours/onboarding-tour';
 import Announcements from './announcements';
 import DashboardBotList from './bot-list/dashboard-bot-list';
-import InfoPanel from './info-panel';
 
 type TMobileIconGuide = {
     handleTabChange: (active_number: number) => void;
@@ -83,7 +81,7 @@ const DashboardComponent = observer(({ handleTabChange }: TMobileIconGuide) => {
     const { load_modal, dashboard, client, quick_strategy, google_drive } = useStore();
     const { toggleLoadModal, setActiveTabIndex } = load_modal;
     const { is_google_drive_configured } = google_drive;
-    const { active_tab, active_tour, setActiveTab, onCloseDialog, dialog_options, is_dialog_open, setPreviewOnPopup } =
+    const { active_tour, setActiveTab, onCloseDialog, dialog_options, is_dialog_open, setPreviewOnPopup } =
         dashboard;
     const { setFormVisibility } = quick_strategy;
     const { isDesktop, isTablet } = useDevice();
@@ -454,8 +452,6 @@ const DashboardComponent = observer(({ handleTabChange }: TMobileIconGuide) => {
                     </div>
                 )}
             </div>
-            <InfoPanel />
-            {active_tab === 0 && <OnboardTourHandler is_mobile={!isDesktop} />}
         </React.Fragment>
     );
 });
