@@ -1,5 +1,5 @@
 import { applyBrandFont, applyPrimaryColor } from './apply-branding';
-import { getAppName, LOGO_CANDIDATES } from './branding';
+import { getAppName, getTradersPulseLogoSrc, LOGO_CANDIDATES } from './branding';
 import { isPreviewMode } from './is-preview-mode';
 import brandConfig from '../../brand.config.json';
 
@@ -56,23 +56,19 @@ export function buildLetterFaviconUri(appName: string = getAppName()): string {
 }
 
 /**
- * Uses the partner logo (public/logo.<png|jpg|jpeg|webp>, written by the BFF at deploy
- * time) as the favicon when present. Loads each candidate first so the favicon is only
- * swapped if a file actually exists; if none load, falls back to a letter-badge SVG built
- * from the app name (matching the header LogoMark) rather than leaving the deriv default.
+ * Uses the provided TradersPulse logo (/traderpulse-logo.jpg) or partner logo
+ * (public/logo.<png|jpg|jpeg|webp>) as the favicon, without generating a custom SVG badge.
  */
 export function applyFaviconFromLogo(): void {
-    // The static preview build ships no public/logo.*, so there's nothing to probe — set
-    // the letter badge directly (avoiding pointless 404s). A later PREVIEW_BRANDING message
-    // overrides it with the App Builder logo, or clears back to the badge (use-preview-branding).
+    const defaultLogoSrc = getTradersPulseLogoSrc();
     if (isPreviewMode()) {
-        setFaviconHref(buildLetterFaviconUri(), 'image/svg+xml');
+        setFaviconHref(defaultLogoSrc, 'image/png');
         return;
     }
 
     const tryCandidate = (index: number): void => {
         if (index >= LOGO_CANDIDATES.length) {
-            setFaviconHref(buildLetterFaviconUri(), 'image/svg+xml');
+            setFaviconHref(defaultLogoSrc, 'image/png');
             return;
         }
         const src = LOGO_CANDIDATES[index];

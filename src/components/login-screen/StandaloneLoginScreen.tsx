@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import ApiTokenModal from '@/components/api-token-modal/api-token-modal';
 import { generateOAuthURL } from '@/components/shared';
 import { DERIV_CREATE_ACCOUNT_URL, SOCIAL_LINKS, TSocialPlatformId } from '@/constants/social-links';
+import { getTradersPulseLogoSrc } from '@/utils/branding';
 import './LoginScreen.scss';
 
 const PARTICLES = 36;
@@ -39,21 +40,6 @@ const isOAuthCallbackInProgress = () => {
     const params = new URLSearchParams(window.location.search);
     return params.has('code') || params.has('state') || params.has('error');
 };
-
-const PulseBarsEmblem: React.FC<{ size?: number }> = ({ size = 38 }) => (
-    <svg width={size} height={size} viewBox='0 0 40 40' fill='none' aria-hidden='true'>
-        <defs>
-            <linearGradient id='tpPulseGrad' x1='0' y1='0' x2='0' y2='1'>
-                <stop offset='0%' stopColor='#38bdf8' />
-                <stop offset='100%' stopColor='#1d68ff' />
-            </linearGradient>
-        </defs>
-        <rect x='5' y='24' width='5.2' height='11' rx='2.6' fill='url(#tpPulseGrad)' />
-        <rect x='13.2' y='18' width='5.2' height='17' rx='2.6' fill='url(#tpPulseGrad)' />
-        <rect x='21.4' y='11.5' width='5.2' height='23.5' rx='2.6' fill='url(#tpPulseGrad)' />
-        <rect x='29.6' y='5' width='5.2' height='30' rx='2.6' fill='url(#tpPulseGrad)' />
-    </svg>
-);
 
 const SocialBrandIcon: React.FC<{ id: TSocialPlatformId }> = ({ id }) => {
     switch (id) {
@@ -230,6 +216,8 @@ const StandaloneLoginScreen: React.FC = () => {
 
     if (!show) return null;
 
+    const logoSrc = getTradersPulseLogoSrc();
+
     return (
         <div className={`login-screen${visible ? ' login-screen--visible' : ''}`}>
             <div className='login-screen__bg-glow' aria-hidden='true' />
@@ -257,7 +245,7 @@ const StandaloneLoginScreen: React.FC = () => {
             {/* Top Header Bar */}
             <header className='login-screen__top-bar'>
                 <div className='login-screen__top-bar-left'>
-                    <PulseBarsEmblem size={24} />
+                    <img src={logoSrc} alt='TradersPulse' className='login-screen__top-logo' />
                     <span className='login-screen__wordmark'>
                         TRADERS<b>PULSE</b>
                     </span>
@@ -277,11 +265,8 @@ const StandaloneLoginScreen: React.FC = () => {
             <main className='login-screen__center'>
                 <div className='login-screen__auth-card'>
                     <div className='login-screen__auth-header'>
-                        <div className='login-screen__emblem-wrap'>
-                            <PulseBarsEmblem size={42} />
-                            <span className='login-screen__card-wordmark'>
-                                TRADERS<b>PULSE</b>
-                            </span>
+                        <div className='login-screen__card-logo-wrap'>
+                            <img src={logoSrc} alt='TradersPulse logo' className='login-screen__card-logo' />
                         </div>
                         <h1 className='login-screen__auth-title'>Welcome to TradersPulse</h1>
                         <p className='login-screen__auth-sub'>

@@ -64,28 +64,23 @@ describe('applyFaviconFromLogo', () => {
         });
     });
 
-    it('sets the letter-badge favicon without probing in the preview build', () => {
+    it('sets the TradersPulse logo favicon directly in the preview build without probing', () => {
         jest.isolateModules(() => {
-            jest.doMock('../is-preview-mode', () => ({ isPreviewMode: () => true }));
-            jest.doMock('../../../brand.config.json', () => ({
-                platform: { name: 'Quokka' },
-                colors: { primary: '#abcdef' },
+            jest.doMock('../is-preview-mode', () => ({
+                isPreviewMode: () => true,
+                PREVIEW_BASE_PATH: '/bot/preview',
             }));
             const { applyFaviconFromLogo } = require('../document-branding');
 
             applyFaviconFromLogo();
 
-            // The preview build ships no public/logo.*, so it must not probe files…
             expect(imageProbeCount).toBe(0);
-            // …but it must still show the letter badge rather than the deriv default.
             const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
-            expect(link?.href).toMatch(/^data:image\/svg\+xml;base64,/);
-            expect(atob(link!.href.replace('data:image/svg+xml;base64,', ''))).toContain('>Q</text>');
+            expect(link?.href).toContain('/bot/preview/traderpulse-logo.jpg');
         });
     });
 
-    it('falls back to a letter-badge SVG favicon when no logo candidate loads', () => {
-        // Stub Image so every probed candidate fails — drives the chain to exhaustion.
+    it('falls back to the provided /traderpulse-logo.jpg favicon when candidate probes fail', () => {
         // @ts-expect-error - partial stub is enough for the failing-probe path under test.
         global.Image = class {
             onload: (() => void) | null = null;
@@ -96,20 +91,16 @@ describe('applyFaviconFromLogo', () => {
         };
 
         jest.isolateModules(() => {
-            jest.doMock('../is-preview-mode', () => ({ isPreviewMode: () => false }));
-            jest.doMock('../../../brand.config.json', () => ({
-                platform: { name: 'Zephyr' },
-                colors: { primary: '#3b82f6' },
+            jest.doMock('../is-preview-mode', () => ({
+                isPreviewMode: () => false,
+                PREVIEW_BASE_PATH: '/bot/preview',
             }));
             const { applyFaviconFromLogo } = require('../document-branding');
 
             applyFaviconFromLogo();
 
             const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
-            expect(link?.href).toMatch(/^data:image\/svg\+xml;base64,/);
-            const svg = atob(link!.href.replace('data:image/svg+xml;base64,', ''));
-            expect(svg).toContain('>Z</text>');
-            expect(svg).toContain('#3b82f6');
+            expect(link?.href).toContain('/traderpulse-logo.jpg');
         });
     });
 });

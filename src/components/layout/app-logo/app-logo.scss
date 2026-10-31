@@ -16,26 +16,14 @@
     }
 
     &__logo-img {
-        width: auto;
-        max-width: 160px;
-        object-fit: contain;
-        border-radius: 50%;
-    }
-
-    &__logo-badge {
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        width: 3.4rem;
+        height: 3.4rem;
         flex: none;
-        border-radius: 50%;
-        background: radial-gradient(circle at 30% 30%, #1a75ff 0%, #051329 75%);
-        border: 2px solid #0066ff;
-        box-shadow: 0 0 12px rgba(0, 102, 255, 0.5);
-        color: #ffffff;
-        font-weight: 900;
-        font-size: 1.2rem;
-        letter-spacing: 0.04em;
-        line-height: 1;
+        object-fit: cover;
+        border-radius: 0.75rem;
+        background: #020817;
+        border: 1px solid rgba(56, 189, 248, 0.36);
+        box-shadow: 0 0 12px rgba(0, 102, 255, 0.28);
     }
 
     &__logo-stack {

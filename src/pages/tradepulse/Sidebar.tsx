@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState } from 'react';
+import { getTradersPulseLogoSrc } from '@/utils/branding';
 import { useTradePulse } from './TradePulseContext';
 
 const Sidebar = () => {
@@ -37,9 +38,11 @@ const Sidebar = () => {
             <aside className={`tradepulse__sidebar ${isOpen ? 'tradepulse__sidebar--open' : ''}`}>
                 <div className='tradepulse__sidebar-header'>
                     <div className='tradepulse__sidebar-logo'>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-                        </svg>
+                        <img
+                            src={getTradersPulseLogoSrc()}
+                            alt='TradersPulse'
+                            style={{ width: '32px', height: '32px', borderRadius: '8px', objectFit: 'cover' }}
+                        />
                     </div>
                     <div className='tradepulse__sidebar-brand'>
                         <div className='tradepulse__sidebar-brand-name'>TradersPulse</div>

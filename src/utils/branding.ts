@@ -1,9 +1,17 @@
 import brandConfig from '../../brand.config.json';
+import { isPreviewMode, PREVIEW_BASE_PATH } from './is-preview-mode';
 
-// Candidate logo paths, in priority order. The BFF writes exactly one of these to
-// public/ at deploy time; the header mark and favicon probe them in turn (matches the
-// Next.js templates' lib/get-logo-src.ts and lib/build-favicon-uri.ts behaviour).
+// Candidate logo paths, in priority order. The BFF writes one of these to public/ at
+// deploy time; /traderpulse-logo.jpg is the built-in official TradersPulse brand logo.
 export const LOGO_CANDIDATES = ['/traderpulse-logo.jpg', '/logo.png', '/logo.jpg', '/logo.jpeg', '/logo.webp'];
+
+/**
+ * Resolves the built-in official TradersPulse logo URL for both standalone ('/') and
+ * static preview ('/bot/preview') builds.
+ */
+export function getTradersPulseLogoSrc(): string {
+    return isPreviewMode() ? `${PREVIEW_BASE_PATH}/traderpulse-logo.jpg` : '/traderpulse-logo.jpg';
+}
 
 /**
  * Resolves the partner app name. The BFF injects NEXT_PUBLIC_DERIV_APP_NAME into

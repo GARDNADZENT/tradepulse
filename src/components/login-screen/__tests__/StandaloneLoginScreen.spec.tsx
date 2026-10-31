@@ -22,6 +22,11 @@ describe('StandaloneLoginScreen', () => {
         render(<StandaloneLoginScreen />);
 
         expect(screen.getByRole('heading', { name: 'Welcome to TradersPulse' })).toBeInTheDocument();
+        const logos = screen.getAllByRole('img');
+        expect(logos).toHaveLength(2);
+        logos.forEach(img => {
+            expect(img).toHaveAttribute('src', '/traderpulse-logo.jpg');
+        });
         expect(screen.getByRole('button', { name: /Login with Deriv/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /PAT Login \(Personal Access Token\)/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /Create Free Account/i })).toBeInTheDocument();
