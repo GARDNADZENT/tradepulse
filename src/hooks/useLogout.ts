@@ -12,9 +12,12 @@ import { statusService } from '@/services/supabase/status.service';
 
 const purgeAllAuthStorage = () => {
     clearAuthInfo();
+    sessionStorage.removeItem('deriv_accounts');
     localStorage.removeItem('active_loginid');
     localStorage.removeItem('authToken');
     localStorage.removeItem('deriv_api_token');
+    localStorage.removeItem('deriv_pat_mode');
+    localStorage.removeItem('deriv_v3_ws_url');
     localStorage.removeItem('accountsList');
     localStorage.removeItem('clientAccounts');
     localStorage.removeItem('client.accounts');

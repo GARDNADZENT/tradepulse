@@ -1,8 +1,10 @@
 function convertToNewFormat(data) {
     if (!data || typeof data !== 'object') return data
+    const isLegacyV3Socket =
+        typeof window !== 'undefined' && Boolean(window._newSystemWS?.url?.includes('/websockets/v3'))
     const out = Array.isArray(data) ? data.map(convertToNewFormat) : { ...data }
 
-    if (out.proposal === 1 && out.symbol) {
+    if (!isLegacyV3Socket && out.proposal === 1 && out.symbol) {
         out.underlying_symbol = out.symbol
         delete out.symbol
     }
@@ -11,7 +13,7 @@ function convertToNewFormat(data) {
         out.buy = String(out.buy)
     }
 
-    if (out.parameters && typeof out.parameters === 'object') {
+    if (!isLegacyV3Socket && out.parameters && typeof out.parameters === 'object') {
         out.parameters = { ...out.parameters }
         if ('symbol' in out.parameters) {
             out.parameters.underlying_symbol = out.parameters.symbol

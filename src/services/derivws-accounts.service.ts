@@ -1,4 +1,4 @@
-import { isProduction } from '@/components/shared';
+import { getAppId, isProduction } from '@/components/shared';
 import brandConfig from '../../brand.config.json';
 
 /**
@@ -251,7 +251,7 @@ export class DerivWSAccountsService {
         const headers: Record<string, string> = {
             Authorization: `Bearer ${accessToken}`,
         };
-        const appId = process.env.NEXT_PUBLIC_DERIV_APP_ID;
+        const appId = getAppId();
         if (appId) headers['Deriv-App-ID'] = appId;
 
         const response = await fetch(endpoint, {

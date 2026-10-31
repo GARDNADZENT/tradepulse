@@ -75,6 +75,39 @@ export const generateDerivApiInstance = async (forceNew = false) => {
 
             console.log('[DerivAPI] Creating new WebSocket connection to:', wsURL);
             const deriv_socket = new WebSocket(wsURL);
+            if (wsURL.includes('/websockets/v3')) {
+                const rawSend = deriv_socket.send.bind(deriv_socket);
+                deriv_socket.send = data => {
+                    if (typeof data === 'string') {
+                        try {
+                            const parsed = JSON.parse(data);
+                            if (parsed && typeof parsed === 'object') {
+                                if (
+                                    ('proposal' in parsed || 'contracts_for' in parsed) &&
+                                    parsed.underlying_symbol &&
+                                    !parsed.symbol
+                                ) {
+                                    parsed.symbol = parsed.underlying_symbol;
+                                    delete parsed.underlying_symbol;
+                                }
+                                if (
+                                    parsed.parameters &&
+                                    typeof parsed.parameters === 'object' &&
+                                    parsed.parameters.underlying_symbol &&
+                                    !parsed.parameters.symbol
+                                ) {
+                                    parsed.parameters.symbol = parsed.parameters.underlying_symbol;
+                                    delete parsed.parameters.underlying_symbol;
+                                }
+                                return rawSend(JSON.stringify(parsed));
+                            }
+                        } catch {
+                            // fall through to rawSend
+                        }
+                    }
+                    return rawSend(data);
+                };
+            }
             window._newSystemWS = deriv_socket;
             const deriv_api = new DerivAPIBasic({
                 connection: deriv_socket,

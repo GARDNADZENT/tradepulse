@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getAppId } from '@/components/shared';
 import { handleOAuthCallback, cleanupUrl } from '@/external/deriv-core';
 import { setAuthData, setAccountList } from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
 import { statusService } from '@/services/supabase/status.service';
@@ -10,8 +11,10 @@ const OAuthCallback = () => {
 
     useEffect(() => {
         const handleCallback = async () => {
-            const redirectUri = process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI;
-            const clientId = process.env.NEXT_PUBLIC_DERIV_APP_ID;
+            const rawRedirect = process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI;
+            const redirectUri =
+                rawRedirect && rawRedirect.trim() !== '🔒' ? rawRedirect.trim() : window.location.origin;
+            const clientId = getAppId();
 
             try {
                 const authInfo = await handleOAuthCallback(window.location.href, {

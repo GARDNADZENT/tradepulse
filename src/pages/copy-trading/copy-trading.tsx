@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { getAppId } from '@/components/shared';
+import { getPreferredV3SocketURL } from '@/components/shared';
 import './copy-trading.scss';
 
 interface SyncedClientAccount {
@@ -40,8 +40,7 @@ const getMasterToken = (): string => {
 
 const verifyTokenOnce = (token: string): Promise<Omit<SyncedClientAccount, 'enabled'>> =>
     new Promise((resolve, reject) => {
-        const appId = getAppId() || 1089;
-        const ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${appId}`);
+        const ws = new WebSocket(getPreferredV3SocketURL());
         const timer = setTimeout(() => {
             try {
                 ws.close();
@@ -176,8 +175,7 @@ export const CopyTrading: React.FC = () => {
             const symbol = String(contract.underlying || 'R_100');
             const contractType = String(contract.contract_type || 'CALL');
 
-            const appId = getAppId() || 1089;
-            const ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${appId}`);
+            const ws = new WebSocket(getPreferredV3SocketURL());
 
             ws.onopen = () => ws.send(JSON.stringify({ authorize: follower.token }));
             ws.onmessage = evt => {
@@ -243,8 +241,7 @@ export const CopyTrading: React.FC = () => {
             return;
         }
 
-        const appId = getAppId() || 1089;
-        const ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${appId}`);
+        const ws = new WebSocket(getPreferredV3SocketURL());
         masterWsRef.current = ws;
         setMasterStatus('Connecting to Master Account…');
         let initializedSnapshot = false;
@@ -302,8 +299,7 @@ export const CopyTrading: React.FC = () => {
             return;
         }
 
-        const appId = getAppId() || 1089;
-        const ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${appId}`);
+        const ws = new WebSocket(getPreferredV3SocketURL());
         ws.onopen = () => ws.send(JSON.stringify({ authorize: masterToken }));
         ws.onmessage = evt => {
             try {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import clsx from 'clsx';
 import { observer } from 'mobx-react-lite';
 import ApiTokenModal from '@/components/api-token-modal/api-token-modal';
-import { generateOAuthURL } from '@/components/shared';
+import { generateOAuthURL, getAppId } from '@/components/shared';
 import Button from '@/components/shared_ui/button';
 import { DBOT_TABS } from '@/constants/bot-contents';
 import { DERIV_CREATE_ACCOUNT_URL } from '@/constants/social-links';
@@ -142,7 +142,7 @@ const AppHeader = observer(() => {
             !isOAuthPending &&
             ((!is_account_regenerating && !isAuthorizing && !activeLoginid) || authTimeout)
         ) {
-            const isAuthConfigured = Boolean(process.env.NEXT_PUBLIC_DERIV_APP_ID);
+            const isAuthConfigured = Boolean(getAppId());
             return (
                 <div className='auth-actions'>
                     <button

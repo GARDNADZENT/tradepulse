@@ -259,6 +259,26 @@ class APIBase {
         setIsAuthorizing(true);
 
         try {
+            let v3AuthorizedAccounts: any[] | null = null;
+            if (typeof window !== 'undefined' && localStorage.getItem('deriv_pat_mode') === 'v3') {
+                const v3Token =
+                    localStorage.getItem('deriv_api_token') || localStorage.getItem('authToken') || '';
+                if (v3Token && typeof this.api.authorize === 'function') {
+                    const authRes: any = await this.api.authorize(v3Token);
+                    if (authRes?.error) {
+                        const errorMessage = isBackendError(authRes.error)
+                            ? handleBackendError(authRes.error)
+                            : authRes.error.message || 'Authorization failed';
+                        console.error('V3 Authorization error:', errorMessage);
+                        setIsAuthorizing(false);
+                        return { ...authRes.error, localizedMessage: errorMessage };
+                    }
+                    if (Array.isArray(authRes?.authorize?.account_list)) {
+                        v3AuthorizedAccounts = authRes.authorize.account_list;
+                    }
+                }
+            }
+
             const { balance, error } = await this.api.balance();
 
             if (error) {
@@ -290,8 +310,8 @@ class APIBase {
                   }
                 : null;
 
-            // Build full account list from sessionStorage (populated during OAuth flow)
-            // Falls back to just the current account if sessionStorage has no data
+            // Build full account list from sessionStorage (populated during OAuth / V2 PAT flow)
+            // Falls back to V3 authorize account_list or current account
             const storedAccounts = DerivWSAccountsService.getStoredAccounts();
             const accountList =
                 storedAccounts && storedAccounts.length > 0
@@ -303,9 +323,16 @@ class APIBase {
                               is_virtual: a.account_type === 'demo' ? 1 : 0,
                               loginid: a.account_id,
                           }))
-                    : currentAccount
-                      ? [currentAccount]
-                      : [];
+                    : v3AuthorizedAccounts && v3AuthorizedAccounts.length > 0
+                      ? v3AuthorizedAccounts.map((a: any) => ({
+                            balance: a.loginid === balance?.loginid ? balance?.balance : Number(a.balance) || 0,
+                            currency: a.currency || balance?.currency || 'USD',
+                            is_virtual: a.is_virtual ? 1 : 0,
+                            loginid: a.loginid,
+                        }))
+                      : currentAccount
+                        ? [currentAccount]
+                        : [];
 
             setAccountList(accountList); // Observable stream
             setAuthData({

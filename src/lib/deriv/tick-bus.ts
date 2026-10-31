@@ -1,4 +1,4 @@
-import { getAppId } from '@/components/shared';
+import { DERIV_V3_WS_ENDPOINTS, getLegacyWsAppId } from '@/components/shared';
 import { api_base } from '@/external/bot-skeleton';
 import {
     CONNECTION_STATUS,
@@ -205,6 +205,8 @@ class DerivTickBus {
         this.retryTimers.set(s, t);
     }
 
+    private fallbackHostIndex = 0;
+
     private seedFallbackSocket(s: string) {
         if (typeof window === 'undefined' || !this.refs.has(s)) return;
         const existing = this.fallbackWs.get(s);
@@ -212,8 +214,9 @@ class DerivTickBus {
             return;
         }
         try {
-            const appId = getAppId() || 1089;
-            const ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${appId}`);
+            const appId = getLegacyWsAppId();
+            const host = DERIV_V3_WS_ENDPOINTS[this.fallbackHostIndex % DERIV_V3_WS_ENDPOINTS.length];
+            const ws = new WebSocket(`${host}?app_id=${appId}`);
             this.fallbackWs.set(s, ws);
             ws.onopen = () => {
                 if (!this.refs.has(s)) {
@@ -262,6 +265,7 @@ class DerivTickBus {
                 } catch {}
             };
             ws.onerror = () => {
+                this.fallbackHostIndex = (this.fallbackHostIndex + 1) % DERIV_V3_WS_ENDPOINTS.length;
                 this.fallbackWs.delete(s);
             };
             ws.onclose = () => {

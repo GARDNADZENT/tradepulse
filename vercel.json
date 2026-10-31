@@ -1,15 +1,6 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "env": {
-    "NEXT_PUBLIC_DERIV_APP_ID": "🔒",
-    "NEXT_PUBLIC_DERIV_ENV": "🔒",
-    "NEXT_PUBLIC_DERIV_REFERRAL_LINK": "🔒",
-    "NEXT_PUBLIC_DERIV_APP_NAME": "🔒",
-    "GD_CLIENT_ID": "🔒",
-    "GD_APP_ID": "🔒",
-    "GD_API_KEY": "🔒"
-  },
   "rewrites": [
     {
       "source": "/(.*)",

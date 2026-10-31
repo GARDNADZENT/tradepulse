@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { getAppId } from '@/components/shared';
+import { getPreferredV3SocketURL } from '@/components/shared';
 import './floating-tools.scss';
 
 type ActiveOverlay = 'digits' | 'risk' | null;
@@ -32,8 +32,7 @@ export const FloatingTools: React.FC = () => {
         let closed = false;
         setDigits([]);
 
-        const appId = getAppId() || 1089;
-        const ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${appId}`);
+        const ws = new WebSocket(getPreferredV3SocketURL());
         ws.onopen = () => {
             if (!closed) {
                 ws.send(

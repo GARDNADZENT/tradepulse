@@ -8,6 +8,7 @@ import { pluginSass } from '@rsbuild/plugin-sass';
 loadEnv({ mode: 'production' });
 
 const isStaticBuild = process.env.NEXT_PUBLIC_APP_BUILD === 'true';
+const cleanEnv = (val?: string) => (!val || val.trim() === '🔒' ? '' : val.trim());
 
 // Resolve smartcharts from wherever the package actually lives so the asset
 // copy works both standalone and inside the monorepo (npm workspaces hoist the
@@ -32,26 +33,26 @@ export default defineConfig({
         // Deriv app id — drives OAuth login/sign-up and WebSocket connections. The
         // preview pipeline sets this from BOT_APP_ID (see scripts/build-previews.js);
         // sibling templates use the same name.
-        NEXT_PUBLIC_DERIV_APP_ID: JSON.stringify(process.env.NEXT_PUBLIC_DERIV_APP_ID ?? ''),
+        NEXT_PUBLIC_DERIV_APP_ID: JSON.stringify(cleanEnv(process.env.NEXT_PUBLIC_DERIV_APP_ID)),
         // Authoritative environment signal. The bot's URL resolver (config.ts) and
         // the vendored deriv-core OAuth resolver both read this so endpoints stay consistent
         // on a deployed partner domain (where hostname detection can't match Deriv).
-        NEXT_PUBLIC_DERIV_ENV: JSON.stringify(process.env.NEXT_PUBLIC_DERIV_ENV ?? ''),
+        NEXT_PUBLIC_DERIV_ENV: JSON.stringify(cleanEnv(process.env.NEXT_PUBLIC_DERIV_ENV)),
         // Partner referral link for affiliate attribution on OAuth login/sign-up.
-        NEXT_PUBLIC_DERIV_REFERRAL_LINK: JSON.stringify(process.env.NEXT_PUBLIC_DERIV_REFERRAL_LINK ?? ''),
+        NEXT_PUBLIC_DERIV_REFERRAL_LINK: JSON.stringify(cleanEnv(process.env.NEXT_PUBLIC_DERIV_REFERRAL_LINK)),
         // Partner app name. The BFF writes this into .env at deploy time; the header
         // logo+name mark and the document title read it (with brand.config / default fallback).
-        NEXT_PUBLIC_DERIV_APP_NAME: JSON.stringify(process.env.NEXT_PUBLIC_DERIV_APP_NAME ?? ''),
+        NEXT_PUBLIC_DERIV_APP_NAME: JSON.stringify(cleanEnv(process.env.NEXT_PUBLIC_DERIV_APP_NAME)),
         // OAuth redirect URI. Falls back to window.location.origin when unset.
-        NEXT_PUBLIC_DERIV_REDIRECT_URI: JSON.stringify(process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI ?? ''),
+        NEXT_PUBLIC_DERIV_REDIRECT_URI: JSON.stringify(cleanEnv(process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI)),
         // Marks the static preview build (served under /bot/preview); drives the
         // router basename so React Router resolves under that path prefix.
-        NEXT_PUBLIC_APP_BUILD: JSON.stringify(process.env.NEXT_PUBLIC_APP_BUILD ?? ''),
-        GD_CLIENT_ID: JSON.stringify(process.env.GD_CLIENT_ID),
-        GD_APP_ID: JSON.stringify(process.env.GD_APP_ID),
-        GD_API_KEY: JSON.stringify(process.env.GD_API_KEY),
-        SUPABASE_URL: JSON.stringify(process.env.SUPABASE_URL),
-        SUPABASE_PUBLISHABLE_KEY: JSON.stringify(process.env.SUPABASE_PUBLISHABLE_KEY),
+        NEXT_PUBLIC_APP_BUILD: JSON.stringify(cleanEnv(process.env.NEXT_PUBLIC_APP_BUILD)),
+        GD_CLIENT_ID: JSON.stringify(cleanEnv(process.env.GD_CLIENT_ID)),
+        GD_APP_ID: JSON.stringify(cleanEnv(process.env.GD_APP_ID)),
+        GD_API_KEY: JSON.stringify(cleanEnv(process.env.GD_API_KEY)),
+        SUPABASE_URL: JSON.stringify(cleanEnv(process.env.SUPABASE_URL)),
+        SUPABASE_PUBLISHABLE_KEY: JSON.stringify(cleanEnv(process.env.SUPABASE_PUBLISHABLE_KEY)),
       },
     },
     alias: {

@@ -20,5 +20,7 @@ export function getTradersPulseLogoSrc(): string {
  * preview name (PREVIEW_BRANDING) is handled separately via the preview-app-name store.
  */
 export function getAppName(): string {
-    return process.env.NEXT_PUBLIC_DERIV_APP_NAME || brandConfig?.platform?.name || 'Deriv Bot';
+    const raw = process.env.NEXT_PUBLIC_DERIV_APP_NAME;
+    const cleaned = raw && raw.trim() !== '🔒' ? raw.trim() : '';
+    return cleaned || brandConfig?.platform?.name || 'TradersPulse';
 }
