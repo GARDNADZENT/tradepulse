@@ -452,7 +452,7 @@ const AppWrapper = observer(() => {
                                 label={
                                     <>
                                         <svg width='15' height='15' viewBox='0 0 24 24' fill='none'>
-                                            <path d='M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 3h2v-3h2v3h2v2h-2v3h-2v-3h-2v-2z' />
+                                            <path d='M12 2a1.75 1.75 0 1 1 0 3.5V7h4.5A3.5 3.5 0 0 1 20 10.5V12h1.5v3H20v2.5A3.5 3.5 0 0 1 16.5 21h-9A3.5 3.5 0 0 1 4 17.5V15H2.5v-3H4v-1.5A3.5 3.5 0 0 1 7.5 7H11V5.5A1.75 1.75 0 0 1 12 2zm-3 9.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm6 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM8.5 17h7v1.5h-7V17z' />
                                         </svg>
                                         <Localize i18n_default_text='AI Bots' />
                                     </>

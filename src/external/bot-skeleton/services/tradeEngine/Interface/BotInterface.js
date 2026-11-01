@@ -14,7 +14,12 @@ const getBotInterface = tradeEngine => {
         init: (...args) => tradeEngine.init(...args),
         start: (...args) => tradeEngine.start(...args),
         stop: (...args) => tradeEngine.stop(...args),
-        purchase: contract_type => tradeEngine.purchase(contract_type),
+        purchase: (contract_type, custom_prediction) => tradeEngine.purchase(contract_type, custom_prediction),
+        setPrediction: value => {
+            if (tradeEngine && value !== undefined && value !== null && Number.isFinite(Number(value))) {
+                tradeEngine._overridePrediction = Number(value);
+            }
+        },
         getAskPrice: contract_type => Number(getProposal(contract_type, tradeEngine).ask_price),
         getPayout: contract_type => Number(getProposal(contract_type, tradeEngine).payout),
         getPurchaseReference: () => tradeEngine.getPurchaseReference(),

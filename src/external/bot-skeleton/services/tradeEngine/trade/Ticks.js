@@ -27,7 +27,7 @@ const inspectWorkspaceJournalDigitWindow = explicitWindow => {
             const b = blocks[i];
             if (!b || (typeof b.isEnabled === 'function' && !b.isEnabled()) || b.disabled) continue;
 
-            if (b.type === 'last_digits_condition') {
+            if (b.type === 'last_digits_condition' || b.type === 'ai_digits_threshold') {
                 const nInput = b.getInputTargetBlock?.('N');
                 const nVal = Number(nInput?.getFieldValue?.('NUM') ?? b.getFieldValue?.('N'));
                 if (Number.isFinite(nVal) && nVal >= 2 && nVal <= 10) {
@@ -238,6 +238,60 @@ export default Engine =>
             const last_n = digits.slice(-safeCount);
             const result = last_n.length > 0 && last_n.every(d => d % 2 !== 0);
             this.logLastDigitsAnalysis('ALL_ODD', last_n, result);
+            return result;
+        }
+
+        async areLastDigitsThreshold(count, op = 'LT', barrier = 4) {
+            const safeCount = Math.max(1, Number(count) || 1);
+            if (safeCount > 1) this.journal_digit_window = safeCount;
+            const numBarrier = Number(barrier);
+            const digits = await this.getLastDigitList();
+            const last_n = digits.slice(-safeCount);
+            const result =
+                last_n.length >= safeCount &&
+                last_n.every(d => {
+                    const v = Number(d);
+                    if (op === 'LT') return v < numBarrier;
+                    if (op === 'GT') return v > numBarrier;
+                    if (op === 'LTE') return v <= numBarrier;
+                    if (op === 'GTE') return v >= numBarrier;
+                    return v === numBarrier;
+                });
+            const opLabel =
+                op === 'LT'
+                    ? `< ${numBarrier}`
+                    : op === 'GT'
+                      ? `> ${numBarrier}`
+                      : op === 'LTE'
+                        ? `<= ${numBarrier}`
+                        : op === 'GTE'
+                          ? `>= ${numBarrier}`
+                          : `== ${numBarrier}`;
+            this.logLastDigitsAnalysis(`all ${opLabel}`, last_n, result);
+            return result;
+        }
+
+        async isTickRunDirection(count, dir = 'RISE') {
+            const safeCount = Math.max(1, Number(count) || 2);
+            const ticks = await this.getTicks();
+            const slice = Array.isArray(ticks) ? ticks.slice(-(safeCount + 1)) : [];
+            let result = slice.length >= safeCount + 1;
+            if (result) {
+                for (let i = 1; i < slice.length; i++) {
+                    if (dir === 'FALL') {
+                        if (!(slice[i] < slice[i - 1])) {
+                            result = false;
+                            break;
+                        }
+                    } else if (!(slice[i] > slice[i - 1])) {
+                        result = false;
+                        break;
+                    }
+                }
+            }
+            const lastDigits = this.getLastDigitsFromList(slice).slice(-Math.min(safeCount, 10));
+            const label = dir === 'FALL' ? `Falling run (${safeCount} ticks): ` : `Rising run (${safeCount} ticks): `;
+            this.logLastDigitsAnalysis(`${dir}_${safeCount}`, lastDigits, result, label);
             return result;
         }
 

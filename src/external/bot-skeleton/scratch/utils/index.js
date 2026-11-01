@@ -402,7 +402,7 @@ export const addDomAsBlock = (el_block, parent_block = null) => {
     return block;
 };
 
-const PURCHASE_BLOCK_ALIASES = ['purchase', 'mon_purchase', 'apollo_purchase', 'apollo_purchase2'];
+const PURCHASE_BLOCK_ALIASES = ['purchase', 'mon_purchase', 'apollo_purchase', 'apollo_purchase2', 'ai_purchase_barrier'];
 const normalizePurchaseType = type => (PURCHASE_BLOCK_ALIASES.includes(type) ? 'purchase' : type);
 
 const getAllRequiredBlocks = (workspace, required_block_types) => {

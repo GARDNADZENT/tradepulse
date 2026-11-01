@@ -1,6 +1,6 @@
 import { config } from '../constants/config';
 
-const PURCHASE_BLOCK_ALIASES = ['purchase', 'mon_purchase', 'apollo_purchase', 'apollo_purchase2'];
+const PURCHASE_BLOCK_ALIASES = ['purchase', 'mon_purchase', 'apollo_purchase', 'apollo_purchase2', 'ai_purchase_barrier'];
 
 export const hasAllRequiredBlocks = () => {
     const blocks_in_workspace = window.Blockly.derivWorkspace.getAllBlocks();

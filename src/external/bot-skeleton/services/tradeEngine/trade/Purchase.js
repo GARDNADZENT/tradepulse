@@ -125,16 +125,101 @@ const getStakeVariableCandidates = () => {
     return candidates;
 };
 
+const getPredictionVariableName = () => {
+    try {
+        const workspace = window?.Blockly?.derivWorkspace || window?.Blockly?.getMainWorkspace?.();
+        if (!workspace) return null;
+        const blocks = workspace.getAllBlocks?.(false) || [];
+        const trade_options_block = blocks.find(block =>
+            ['trade_definition_tradeoptions', 'trade_definition_tradeoptions_payout'].includes(block.type)
+        );
+        if (!trade_options_block) return null;
+        const pred_input = trade_options_block.getInput?.('PREDICTION');
+        const target_block = pred_input?.connection?.targetBlock?.();
+        if (!target_block || target_block.type !== 'variables_get') return null;
+        const var_name = target_block.getFieldValue?.('VAR');
+        if (!var_name) return null;
+        const generated_name = window.Blockly?.JavaScript?.variableDB_?.getName?.(
+            var_name,
+            window.Blockly.Variables?.CATEGORY_NAME
+        );
+        return generated_name || var_name;
+    } catch (e) {
+        return null;
+    }
+};
+
 export default Engine =>
     class Purchase extends Engine {
-        async purchase(contract_type) {
-            if (this.vh_state.enabled && this.vh_state.is_virtual) {
-                return this.virtualPurchase(contract_type);
+        resolveLivePrediction(custom_prediction) {
+            if (
+                custom_prediction !== undefined &&
+                custom_prediction !== null &&
+                custom_prediction !== '' &&
+                Number.isFinite(Number(custom_prediction))
+            ) {
+                return Number(custom_prediction);
             }
-            return this.realPurchase(contract_type);
+            if (this._overridePrediction !== undefined && Number.isFinite(Number(this._overridePrediction))) {
+                const val = Number(this._overridePrediction);
+                this._overridePrediction = undefined;
+                return val;
+            }
+            if (typeof window !== 'undefined' && window.BinaryBotCustomPrediction !== undefined) {
+                const val = Number(window.BinaryBotCustomPrediction);
+                window.BinaryBotCustomPrediction = undefined;
+                if (Number.isFinite(val)) return val;
+            }
+            const predVarName = getPredictionVariableName();
+            if (predVarName) {
+                const liveVal = this.getInterpreterVariable(predVarName);
+                if (liveVal !== undefined && liveVal !== null && Number.isFinite(Number(liveVal))) {
+                    return Number(liveVal);
+                }
+            }
+            return this.tradeOptions?.prediction;
         }
 
-        async virtualPurchase(contract_type) {
+        getInterpreterVariable(name) {
+            try {
+                const dbot = window?.DBot;
+                if (!dbot?.interpreter?.bot?.tradeEngine) return undefined;
+                const interpreter = dbot.interpreter.getInterpreter?.();
+                if (!interpreter || typeof interpreter.getProperty !== 'function') return undefined;
+                const scopeCandidates = [
+                    interpreter.stateStack &&
+                        interpreter.stateStack[interpreter.stateStack.length - 1] &&
+                        interpreter.stateStack[interpreter.stateStack.length - 1].scope &&
+                        interpreter.stateStack[interpreter.stateStack.length - 1].scope.object,
+                    interpreter.globalObject,
+                    interpreter.globalScope && interpreter.globalScope.object,
+                    interpreter.global,
+                ];
+                for (const candidate of scopeCandidates) {
+                    if (!candidate || typeof candidate !== 'object') continue;
+                    try {
+                        const raw = interpreter.getProperty(candidate, name);
+                        if (raw === undefined) continue;
+                        const unwrapped = interpreter.pseudoToNative ? interpreter.pseudoToNative(raw) : raw;
+                        if (unwrapped !== undefined) return unwrapped;
+                    } catch (e) {
+                        // continue checking scopes
+                    }
+                }
+            } catch (e) {
+                // noop
+            }
+            return undefined;
+        }
+
+        async purchase(contract_type, custom_prediction) {
+            if (this.vh_state.enabled && this.vh_state.is_virtual) {
+                return this.virtualPurchase(contract_type, custom_prediction);
+            }
+            return this.realPurchase(contract_type, custom_prediction);
+        }
+
+        async virtualPurchase(contract_type, custom_prediction) {
             this.applyAlternateMarketsToCurrentTradeOptions();
 
             const { duration, duration_unit, symbol } = this.tradeOptions;
@@ -147,11 +232,7 @@ export default Engine =>
                 target_ticks = Math.ceil(duration_seconds);
             }
 
-            let resolved_prediction = this.tradeOptions.prediction;
-            if (typeof window !== 'undefined' && window.BinaryBotCustomPrediction !== undefined) {
-                resolved_prediction = Number(window.BinaryBotCustomPrediction);
-                window.BinaryBotCustomPrediction = undefined;
-            }
+            const resolved_prediction = this.resolveLivePrediction(custom_prediction);
 
             const configured_stake = Number(this.tradeOptions.amount) || 1;
             if (!this.vh_state.initial_stake || this.vh_state.initial_stake === 0) {
@@ -548,12 +629,18 @@ export default Engine =>
             return this.tradeOptions;
         }
 
-        async realPurchase(contract_type) {
+        async realPurchase(contract_type, custom_prediction) {
             this.setInterpreterVariable('BinaryBotPrivateLastTradeVirtual', false);
 
             if (this.store.getState().scope !== BEFORE_PURCHASE) {
                 return Promise.resolve();
             }
+
+            const resolvedPrediction = this.resolveLivePrediction(custom_prediction);
+            const effectiveTradeOptions =
+                resolvedPrediction !== undefined
+                    ? { ...this.tradeOptions, prediction: resolvedPrediction }
+                    : this.tradeOptions;
 
             const onSuccess = response => {
                 const { buy } = response;
@@ -572,7 +659,7 @@ export default Engine =>
                 }
 
                 delayIndex = 0;
-                const resolvedLongcode = buy.longcode || buildPurchaseLongcode(contract_type, this.tradeOptions);
+                const resolvedLongcode = buy.longcode || buildPurchaseLongcode(contract_type, effectiveTradeOptions);
                 log(LogTypes.PURCHASE, {
                     longcode: resolvedLongcode,
                     transaction_id: buy.transaction_id,
@@ -641,7 +728,11 @@ export default Engine =>
                 this.tradeOptions.amount = this.vh_state.initial_stake || this.tradeOptions.amount || 1;
             }
 
-            const trade_option = tradeOptionToBuy(contract_type, this.tradeOptions);
+            const finalTradeOptions =
+                resolvedPrediction !== undefined
+                    ? { ...this.tradeOptions, prediction: resolvedPrediction }
+                    : this.tradeOptions;
+            const trade_option = tradeOptionToBuy(contract_type, finalTradeOptions);
             const action = () => api_base.api.send(trade_option);
 
             this.isSold = false;

@@ -102,6 +102,23 @@ export const ToolboxItems = () =>
                     </Value>
                     <Field name='CONDITION'>ALL_EVEN</Field>
                 </Block>
+                <Block type='ai_digits_threshold'>
+                    <Value name='N'>
+                        <Shadow type='math_number'>
+                            <Field name='NUM'>2</Field>
+                        </Shadow>
+                    </Value>
+                    <Field name='OP'>LT</Field>
+                    <Field name='BARRIER'>4</Field>
+                </Block>
+                <Block type='ai_tick_run_direction'>
+                    <Value name='N'>
+                        <Shadow type='math_number'>
+                            <Field name='NUM'>3</Field>
+                        </Shadow>
+                    </Value>
+                    <Field name='DIR'>RISE</Field>
+                </Block>
                 <Block type='al_parity_majority' />
                 <Block type='al_over_under_majority' />
                 <Block type='al_extreme_digit' />

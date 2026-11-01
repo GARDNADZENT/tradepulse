@@ -765,4 +765,140 @@ getGenerator().forBlock.journal_digit_window = block => {
     return 'Bot.setJournalDigitWindow(' + win + ');\n';
 };
 
+// 13. AI Bots: Consecutive Digit Threshold Condition (below/above barrier)
+window.Blockly.Blocks.ai_digits_threshold = {
+    init() {
+        this.jsonInit({
+            message0: localize('Last %1 digits are %2 %3'),
+            args0: [
+                {
+                    type: 'input_value',
+                    name: 'N',
+                    check: 'Number',
+                },
+                {
+                    type: 'field_dropdown',
+                    name: 'OP',
+                    options: [
+                        [localize('below (<)'), 'LT'],
+                        [localize('above (>)'), 'GT'],
+                        [localize('at most (<=)'), 'LTE'],
+                        [localize('at least (>=)'), 'GTE'],
+                    ],
+                },
+                {
+                    type: 'field_number',
+                    name: 'BARRIER',
+                    value: 4,
+                    min: 0,
+                    max: 9,
+                    precision: 1,
+                },
+            ],
+            output: 'Boolean',
+            outputShape: window.Blockly.OUTPUT_SHAPE_HEXAGONAL,
+            colour: window.Blockly.Colours.Base.colour,
+            colourSecondary: window.Blockly.Colours.Base.colourSecondary,
+            colourTertiary: window.Blockly.Colours.Base.colourTertiary,
+            tooltip: localize('Checks if the last N digits are all below or above the target digit'),
+            category: window.Blockly.Categories.Before_Purchase,
+        });
+    },
+    customContextMenu(menu) {
+        modifyContextMenu(menu);
+    },
+};
+
+getGenerator().forBlock.ai_digits_threshold = block => {
+    const nExpr = getGenerator().valueToCode(block, 'N', getGenerator().ORDER_ATOMIC) || '2';
+    const op = block.getFieldValue('OP') || 'LT';
+    const barrier = Number(block.getFieldValue('BARRIER') ?? 4);
+    const code = `Bot.areLastDigitsThreshold(${nExpr}, '${op}', ${barrier})`;
+    return [code, getGenerator().ORDER_ATOMIC];
+};
+
+// 14. AI Bots: Consecutive Rising / Falling Tick Run Condition
+window.Blockly.Blocks.ai_tick_run_direction = {
+    init() {
+        this.jsonInit({
+            message0: localize('Last %1 ticks are %2'),
+            args0: [
+                {
+                    type: 'input_value',
+                    name: 'N',
+                    check: 'Number',
+                },
+                {
+                    type: 'field_dropdown',
+                    name: 'DIR',
+                    options: [
+                        [localize('rising'), 'RISE'],
+                        [localize('falling'), 'FALL'],
+                    ],
+                },
+            ],
+            output: 'Boolean',
+            outputShape: window.Blockly.OUTPUT_SHAPE_HEXAGONAL,
+            colour: window.Blockly.Colours.Base.colour,
+            colourSecondary: window.Blockly.Colours.Base.colourSecondary,
+            colourTertiary: window.Blockly.Colours.Base.colourTertiary,
+            tooltip: localize('Checks if the market moved in a consecutive rising or falling run over N ticks'),
+            category: window.Blockly.Categories.Before_Purchase,
+        });
+    },
+    customContextMenu(menu) {
+        modifyContextMenu(menu);
+    },
+};
+
+getGenerator().forBlock.ai_tick_run_direction = block => {
+    const nExpr = getGenerator().valueToCode(block, 'N', getGenerator().ORDER_ATOMIC) || '3';
+    const dir = block.getFieldValue('DIR') || 'RISE';
+    const code = `Bot.isTickRunDirection(${nExpr}, '${dir}')`;
+    return [code, getGenerator().ORDER_ATOMIC];
+};
+
+// 15. AI Bots: Dynamic Digit Barrier Purchase Block (Over/Under/Matches/Differs with explicit barrier)
+window.Blockly.Blocks.ai_purchase_barrier = {
+    init() {
+        this.jsonInit({
+            message0: localize('Purchase %1 %2'),
+            args0: [
+                {
+                    type: 'field_dropdown',
+                    name: 'PURCHASE_LIST',
+                    options: [
+                        [localize('Over'), 'DIGITOVER'],
+                        [localize('Under'), 'DIGITUNDER'],
+                        [localize('Matches'), 'DIGITMATCH'],
+                        [localize('Differs'), 'DIGITDIFF'],
+                    ],
+                },
+                {
+                    type: 'input_value',
+                    name: 'PREDICTION',
+                    check: 'Number',
+                },
+            ],
+            previousStatement: null,
+            nextStatement: null,
+            colour: window.Blockly.Colours.Special1.colour,
+            colourSecondary: window.Blockly.Colours.Special1.colourSecondary,
+            colourTertiary: window.Blockly.Colours.Special1.colourTertiary,
+            tooltip: localize('Purchases a digit contract with a specific dynamic barrier prediction'),
+            category: window.Blockly.Categories.Before_Purchase,
+        });
+    },
+    customContextMenu(menu) {
+        modifyContextMenu(menu);
+    },
+    restricted_parents: ['before_purchase'],
+};
+
+getGenerator().forBlock.ai_purchase_barrier = block => {
+    const contractType = block.getFieldValue('PURCHASE_LIST') || 'DIGITOVER';
+    const predExpr = getGenerator().valueToCode(block, 'PREDICTION', getGenerator().ORDER_ATOMIC) || '4';
+    return `Bot.purchase('${contractType}', ${predExpr});\n`;
+};
+
 
