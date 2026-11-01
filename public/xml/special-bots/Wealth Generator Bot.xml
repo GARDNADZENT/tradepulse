@@ -434,7 +434,7 @@
                     <field name="VAR" id="+L:nET.PS2OXV5VNGInM" variabletype="">Analysis</field>
                     <value name="VALUE">
                       <block type="text" id="/U]vn-l$[/eR^sx2f@H5">
-                        <field name="TEXT">duke</field>
+                        <field name="TEXT">traderspulse</field>
                       </block>
                     </value>
                     <next>
@@ -687,7 +687,7 @@
                 </value>
                 <value name="B">
                   <block type="text" id="}_#oKJ4,?b`kFm]uz;w5">
-                    <field name="TEXT">duke</field>
+                    <field name="TEXT">traderspulse</field>
                   </block>
                 </value>
               </block>
@@ -763,7 +763,7 @@
                 <field name="NOTIFICATION_SOUND">silent</field>
                 <value name="MESSAGE">
                   <shadow type="text" id=".B/0!)rDyyGk!g~rEKMu">
-                    <field name="TEXT">MrDuke</field>
+                    <field name="TEXT">TradersPulse</field>
                   </shadow>
                   <block type="variables_get" id="(VZ#B0*xwXMs_K/h]cMZ">
                     <field name="VAR" id="icmJXVK=|*WSXkYEU*E;" variabletype="">text</field>

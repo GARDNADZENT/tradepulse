@@ -4,7 +4,7 @@
     <variable id=":Z8WvPXWG?qCe|8=iii1">Expected Profit</variable>
     <variable id="npjk]$ok2mHXaLX3H9c!">text1</variable>
     <variable id="L.cN$B-UUzkS|eDQm2xZ">Stop Loss</variable>
-    <variable id="Z#O[6rW6Py~-[w0JMa2(">Duke</variable>
+    <variable id="Z#O[6rW6Py~-[w0JMa2(">TradersPulse</variable>
     <variable id="S10~wx4EJ/w3gZZ;v77Y">Total Lost</variable>
     <variable id="7Q4y$nr_sr!x2NkOu%)2">Stake</variable>
     <variable id="Op-Cim@t?DJN?i;G)w)C">Count Loss</variable>
@@ -19,6 +19,7 @@
         <field name="SUBMARKET_LIST">random_index</field>
         <field name="SYMBOL_LIST">R_100</field>
         <field name="ALTERNATE_MARKETS">FALSE</field>
+        <field name="ALTERNATE_MODE">EVERY_X_RUNS</field>
         <field name="ALTERNATE_EVERY">1</field>
         <next>
           <block type="trade_definition_tradetype" id="GTH``Rm4mrSMZ/NcWSSE" deletable="false" movable="false">
@@ -33,6 +34,7 @@
                     <next>
                       <block type="trade_definition_restartbuysell" id="9W6:lHSAcS4c/~NwK}75" collapsed="true" deletable="false" movable="false">
                         <field name="TIME_MACHINE_ENABLED">FALSE</field>
+                        <field name="VH_ENABLED">FALSE</field>
                         <next>
                           <block type="trade_definition_restartonerror" id="G8JIXqf1w5li{Ie_/7Lw" collapsed="true" deletable="false" movable="false">
                             <field name="RESTARTONERROR">TRUE</field>
@@ -74,10 +76,10 @@
                 </value>
                 <next>
                   <block type="variables_set" id="(L7uerF;lB@GRwrmYJs:" collapsed="true">
-                    <field name="VAR" id="Z#O[6rW6Py~-[w0JMa2(">Duke</field>
+                    <field name="VAR" id="Z#O[6rW6Py~-[w0JMa2(">TradersPulse</field>
                     <value name="VALUE">
                       <block type="text" id="f/o*lQ5UVDQ:qj)L$B0H" collapsed="true">
-                        <field name="TEXT">mrduke</field>
+                        <field name="TEXT">TradersPulse</field>
                       </block>
                     </value>
                   </block>
@@ -111,7 +113,7 @@
       </block>
     </statement>
   </block>
-  <block type="after_purchase" id="@r.svH6!H{L[Qfdax*%v" collapsed="true" x="967" y="60">
+  <block type="after_purchase" id="@r.svH6!H{L[Qfdax*%v" collapsed="true" x="926" y="60">
     <statement name="AFTERPURCHASE_STACK">
       <block type="controls_if" id="a[#2:P?a*P2pf$U};LJa">
         <mutation xmlns="http://www.w3.org/1999/xhtml" elseif="1" else="1"></mutation>
@@ -207,10 +209,10 @@
             </value>
             <statement name="DO0">
               <block type="variables_set" id="59NDFK@I+AAt`Kzw#~-)" collapsed="true">
-                <field name="VAR" id="Z#O[6rW6Py~-[w0JMa2(">Duke</field>
+                <field name="VAR" id="Z#O[6rW6Py~-[w0JMa2(">TradersPulse</field>
                 <value name="VALUE">
                   <block type="text" id="0JGIdVY4%fk(cGryrp(I" collapsed="true">
-                    <field name="TEXT">MRduke</field>
+                    <field name="TEXT">TradersPulse</field>
                   </block>
                 </value>
                 <next>
@@ -259,10 +261,10 @@
             </statement>
             <statement name="ELSE">
               <block type="variables_set" id="%R]rN{@L|5?sSYtmO;w9" collapsed="true">
-                <field name="VAR" id="Z#O[6rW6Py~-[w0JMa2(">Duke</field>
+                <field name="VAR" id="Z#O[6rW6Py~-[w0JMa2(">TradersPulse</field>
                 <value name="VALUE">
                   <block type="text" id="v=)^:38ajjd0uSP]`Iez" collapsed="true">
-                    <field name="TEXT">MRduke</field>
+                    <field name="TEXT">TradersPulse</field>
                   </block>
                 </value>
                 <next>
@@ -337,10 +339,10 @@
                 </value>
                 <statement name="DO0">
                   <block type="variables_set" id="j!:K:p.QKyxcr1M,IV_," collapsed="true">
-                    <field name="VAR" id="Z#O[6rW6Py~-[w0JMa2(">Duke</field>
+                    <field name="VAR" id="Z#O[6rW6Py~-[w0JMa2(">TradersPulse</field>
                     <value name="VALUE">
                       <block type="text" id="XZZ:bmvHq/5+Ot2[fUo)" collapsed="true">
-                        <field name="TEXT">MRduke</field>
+                        <field name="TEXT">TradersPulse</field>
                       </block>
                     </value>
                     <next>
@@ -431,10 +433,10 @@
                 </statement>
                 <statement name="ELSE">
                   <block type="variables_set" id="[0~~!AT}x=5fqh?g76X1" collapsed="true">
-                    <field name="VAR" id="Z#O[6rW6Py~-[w0JMa2(">Duke</field>
+                    <field name="VAR" id="Z#O[6rW6Py~-[w0JMa2(">TradersPulse</field>
                     <value name="VALUE">
                       <block type="text" id="$r_$t)WahP9YPcV50o*M" collapsed="true">
-                        <field name="TEXT">MRduke</field>
+                        <field name="TEXT">TradersPulse</field>
                       </block>
                     </value>
                     <next>
@@ -478,10 +480,10 @@
                     </value>
                     <statement name="DO0">
                       <block type="variables_set" id="2t*v`~ZTuz[OP:!wBLsy" collapsed="true">
-                        <field name="VAR" id="Z#O[6rW6Py~-[w0JMa2(">Duke</field>
+                        <field name="VAR" id="Z#O[6rW6Py~-[w0JMa2(">TradersPulse</field>
                         <value name="VALUE">
                           <block type="text" id="YWy,X|1_x}=CUH2$::~s" collapsed="true">
-                            <field name="TEXT">MRduke</field>
+                            <field name="TEXT">TradersPulse</field>
                           </block>
                         </value>
                         <next>
@@ -508,58 +510,27 @@
       </block>
     </statement>
   </block>
-  <block type="before_purchase" id="VZi-;]$kB7FiS(]O9-EX" collapsed="true" deletable="false" x="0" y="964">
+  <block type="before_purchase" id="VZi-;]$kB7FiS(]O9-EX" deletable="false" x="0" y="902">
     <statement name="BEFOREPURCHASE_STACK">
-      <block type="controls_if" id="=9sn7$!4_I=K5QV+6FkO">
+      <block type="controls_if" id="He*1_9!eJ~sWP@sVQ;D#">
         <value name="IF0">
-          <block type="logic_compare" id="^0}xvmd[v6n$*SXq4eu*">
+          <block type="logic_compare" id="n{iS(-w#o+#H/?Foe|c:">
             <field name="OP">GTE</field>
             <value name="A">
-              <block type="digit_frequency_analysis" id="p[M!k_|{.Ayzz1W?LR=Z">
-                <field name="ANALYSIS_TYPE">MOST_FREQUENT</field>
-                <value name="N">
-                  <shadow type="math_number" id="?$@GZi,w8[N~3EK(J^n]">
-                    <field name="NUM">1000</field>
-                  </shadow>
-                </value>
-              </block>
+              <block type="last_digit" id="?M(N``W!z#L0.i}e)[Y^"></block>
             </value>
             <value name="B">
-              <block type="variables_get" id="tmfZD}@T_Fc#3WdKQDOq" collapsed="true">
+              <block type="variables_get" id="n5d)P9LPvS@R.41o][|)" collapsed="true">
                 <field name="VAR" id="VLk6R7#x~(2MU_56^V{j">Entrypoint</field>
               </block>
             </value>
           </block>
         </value>
         <statement name="DO0">
-          <block type="controls_if" id="He*1_9!eJ~sWP@sVQ;D#">
-            <value name="IF0">
-              <block type="logic_compare" id="n{iS(-w#o+#H/?Foe|c:">
-                <field name="OP">GTE</field>
-                <value name="A">
-                  <block type="digit_frequency_analysis" id="%={X{97TPLjf)_=B!M8k">
-                    <field name="ANALYSIS_TYPE">SECOND_MOST_FREQUENT</field>
-                    <value name="N">
-                      <shadow type="math_number" id="I/?b?`-bDX|k3yGCL:?D">
-                        <field name="NUM">1000</field>
-                      </shadow>
-                    </value>
-                  </block>
-                </value>
-                <value name="B">
-                  <block type="variables_get" id="n5d)P9LPvS@R.41o][|)" collapsed="true">
-                    <field name="VAR" id="VLk6R7#x~(2MU_56^V{j">Entrypoint</field>
-                  </block>
-                </value>
-              </block>
-            </value>
-            <statement name="DO0">
-              <block type="apollo_purchase" id="gY;7LuZ2AP|N;Yo81S-x">
-                <field name="PURCHASE_LIST">DIGITOVER</field>
-                <field name="MULTIPLE_CONTRACTS">FALSE</field>
-                <field name="CONTRACT_QUANTITY">1</field>
-              </block>
-            </statement>
+          <block type="mon_purchase" id="j#04TLRNy6Pz;KuW{-Gc">
+            <field name="PURCHASE_LIST">DIGITOVER</field>
+            <field name="MULTIPLE_CONTRACTS">FALSE</field>
+            <field name="CONTRACT_QUANTITY">1</field>
           </block>
         </statement>
       </block>

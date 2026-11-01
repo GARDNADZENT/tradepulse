@@ -520,7 +520,7 @@
                                 <field name="TEXT"></field>
                               </shadow>
                               <block type="text" id="!0tMzRM9=~!UGdcF,WIU">
-                                <field name="TEXT">DOLLARS PRINTED BY MR DUKE</field>
+                                <field name="TEXT">DOLLARS PRINTED BY TRADERSPULSE</field>
                               </block>
                             </value>
                             <next>
@@ -565,7 +565,7 @@
         <field name="NOTIFICATION_SOUND">silent</field>
         <value name="MESSAGE">
           <shadow type="text" id="hUpu.nLmMOx_CK^cp_tp">
-            <field name="TEXT">MR.DUKE&gt;&gt;&gt;</field>
+            <field name="TEXT">TRADERSPULSE&gt;&gt;&gt;</field>
           </shadow>
         </value>
         <next>

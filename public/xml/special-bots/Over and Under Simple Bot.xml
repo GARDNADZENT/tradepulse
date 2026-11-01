@@ -51,7 +51,7 @@
       <block type="text_print" id="]Io2llIVE!Zw]2oLCvaX">
         <value name="TEXT">
           <shadow type="text" id="pBWeWFVA_G`$~%2,v12P">
-            <field name="TEXT">MR.DUKE</field>
+            <field name="TEXT">TRADERSPULSE</field>
           </shadow>
         </value>
         <next>
@@ -483,7 +483,7 @@
         <field name="NOTIFICATION_SOUND">silent</field>
         <value name="MESSAGE">
           <shadow type="text" id="OGu:tW}VqV1el7}LlhgE">
-            <field name="TEXT">DUKE...&gt;&gt;&gt;&gt;</field>
+            <field name="TEXT">TRADERSPULSE...&gt;&gt;&gt;&gt;</field>
           </shadow>
         </value>
         <next>

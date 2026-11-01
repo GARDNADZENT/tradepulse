@@ -4,7 +4,7 @@
     <variable id="tlTJ4z_xt:Sz8w1N!wMF">Tick 1</variable>
     <variable id="rL5puODwmVGP1sDiCb3_">Prediction</variable>
     <variable id="d-=QN$@L|S!N,B}sTG(D">Tick 2</variable>
-    <variable id="9t|Z37+SJpUDhQ|6KIbN">duke</variable>
+    <variable id="9t|Z37+SJpUDhQ|6KIbN">traderspulse</variable>
     <variable id="(%#TMH^XDwW!Ai|}It{l">win stake</variable>
     <variable id="B2UC}i;Z?$=@iPS5p[N1">Tick 3</variable>
   </variables>
@@ -60,7 +60,7 @@
             </value>
             <next>
               <block type="variables_set" id="_dJ!GD~9`/Iy$g#((h2i" collapsed="true">
-                <field name="VAR" id="9t|Z37+SJpUDhQ|6KIbN">duke</field>
+                <field name="VAR" id="9t|Z37+SJpUDhQ|6KIbN">traderspulse</field>
                 <value name="VALUE">
                   <block type="math_number" id="[?4QL+8d^vsXUa)_LA{g">
                     <field name="NUM">1</field>

@@ -1414,7 +1414,7 @@
                     <field name="NOTIFICATION_SOUND">silent</field>
                     <value name="MESSAGE">
                       <shadow type="text" id="+@+LUqmz+t;8}KBTfUHW">
-                        <field name="TEXT">MR Duke</field>
+                        <field name="TEXT">TradersPulse</field>
                       </shadow>
                       <block type="last_digit" id="I8:JvM.aYbZm#iw4Tm!t" collapsed="true"></block>
                     </value>
