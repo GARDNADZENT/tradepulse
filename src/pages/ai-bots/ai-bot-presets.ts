@@ -15,6 +15,262 @@ export interface RiskManagerAIBotCard {
     title: string;
     description: string;
     accent: AIBotAccentTheme;
+    defaultEntryCount: number;
+    defaultRecoveryCount: number;
+    hasRecovery: boolean;
+}
+
+export interface AIScannerMarketDef {
+    symbol: string;
+    label: string;
+}
+
+export const AI_SCANNER_MARKETS: AIScannerMarketDef[] = [
+    { symbol: 'R_10', label: 'Volatility 10 Index' },
+    { symbol: 'R_25', label: 'Volatility 25 Index' },
+    { symbol: 'R_50', label: 'Volatility 50 Index' },
+    { symbol: 'R_75', label: 'Volatility 75 Index' },
+    { symbol: 'R_100', label: 'Volatility 100 Index' },
+    { symbol: '1HZ10V', label: 'Volatility 10 (1s) Index' },
+    { symbol: '1HZ25V', label: 'Volatility 25 (1s) Index' },
+    { symbol: '1HZ50V', label: 'Volatility 50 (1s) Index' },
+    { symbol: '1HZ75V', label: 'Volatility 75 (1s) Index' },
+    { symbol: '1HZ100V', label: 'Volatility 100 (1s) Index' },
+];
+
+export type AIScannerContractType =
+    | 'DIGITEVEN'
+    | 'DIGITODD'
+    | 'DIGITOVER'
+    | 'DIGITUNDER'
+    | 'CALL'
+    | 'PUT';
+
+export interface AIScannerRowEvaluation {
+    matched: boolean;
+    contractType?: AIScannerContractType;
+    barrier?: number;
+    actionLabel: string;
+    subLabel: string;
+    recentDigits: number[];
+    checkedCount: number;
+    requiredCount: number;
+}
+
+export function extractLastDigit(price: number, pipSize = 2): number {
+    const fixed = Math.abs(Number(price) || 0).toFixed(Math.max(0, pipSize));
+    return Number(fixed.charAt(fixed.length - 1)) || 0;
+}
+
+export function evaluateAIScannerMarket(params: {
+    botId: RiskManagerAIBotId;
+    rawTicks: { t: number; price: number }[];
+    pipSize: number;
+    entryCount: number;
+    recoveryCount?: number;
+    inRecovery?: boolean;
+}): AIScannerRowEvaluation {
+    const { botId, rawTicks, pipSize } = params;
+    const inRecovery = Boolean(params.inRecovery);
+    const safeEntry = Math.max(1, Math.min(10, Math.round(Number(params.entryCount) || 5)));
+    const safeRecovery = Math.max(1, Math.min(10, Math.round(Number(params.recoveryCount) || 3)));
+
+    const isRecoveryCapable =
+        botId === 'over2-rec-evenodd' ||
+        botId === 'over2-rec-range' ||
+        botId === 'under7-rec-evenodd' ||
+        botId === 'under7-rec-range';
+    const activeStage = isRecoveryCapable && inRecovery ? 'Recovery' : 'Initial';
+    const requiredCount = activeStage === 'Recovery' ? safeRecovery : safeEntry;
+
+    if (botId === 'rise-fall-ai') {
+        const minTicksNeeded = requiredCount + 1;
+        const tail = rawTicks.slice(-minTicksNeeded);
+        const recentDigits = rawTicks
+            .slice(-requiredCount)
+            .map(tk => extractLastDigit(tk.price, pipSize));
+        const checkedMoves = Math.max(0, tail.length - 1);
+
+        if (tail.length >= minTicksNeeded) {
+            let allRising = true;
+            let allFalling = true;
+            for (let i = 1; i < tail.length; i++) {
+                if (!(tail[i].price > tail[i - 1].price)) allRising = false;
+                if (!(tail[i].price < tail[i - 1].price)) allFalling = false;
+            }
+            if (allRising) {
+                return {
+                    matched: true,
+                    contractType: 'PUT',
+                    actionLabel: 'Trade Fall',
+                    subLabel: `Last ${requiredCount} ticks matched`,
+                    recentDigits,
+                    checkedCount: requiredCount,
+                    requiredCount,
+                };
+            }
+            if (allFalling) {
+                return {
+                    matched: true,
+                    contractType: 'CALL',
+                    actionLabel: 'Trade Rise',
+                    subLabel: `Last ${requiredCount} ticks matched`,
+                    recentDigits,
+                    checkedCount: requiredCount,
+                    requiredCount,
+                };
+            }
+        }
+
+        return {
+            matched: false,
+            actionLabel: 'Scanning',
+            subLabel: `${activeStage} · ${Math.min(checkedMoves, requiredCount)}/${requiredCount} checked`,
+            recentDigits,
+            checkedCount: Math.min(checkedMoves, requiredCount),
+            requiredCount,
+        };
+    }
+
+    const recentDigits = rawTicks
+        .slice(-requiredCount)
+        .map(tk => extractLastDigit(tk.price, pipSize));
+    const checkedCount = recentDigits.length;
+
+    const evalEvenOdd = (): AIScannerRowEvaluation | null => {
+        if (checkedCount < requiredCount) return null;
+        if (recentDigits.every(d => d % 2 === 0)) {
+            return {
+                matched: true,
+                contractType: 'DIGITODD',
+                actionLabel: 'Trade Odd',
+                subLabel: `Last ${requiredCount} ticks matched`,
+                recentDigits,
+                checkedCount,
+                requiredCount,
+            };
+        }
+        if (recentDigits.every(d => d % 2 !== 0)) {
+            return {
+                matched: true,
+                contractType: 'DIGITEVEN',
+                actionLabel: 'Trade Even',
+                subLabel: `Last ${requiredCount} ticks matched`,
+                recentDigits,
+                checkedCount,
+                requiredCount,
+            };
+        }
+        return null;
+    };
+
+    const evalRange45 = (): AIScannerRowEvaluation | null => {
+        if (checkedCount < requiredCount) return null;
+        if (recentDigits.every(d => d < 4)) {
+            return {
+                matched: true,
+                contractType: 'DIGITOVER',
+                barrier: 4,
+                actionLabel: 'Trade Over 4',
+                subLabel: `Last ${requiredCount} ticks matched`,
+                recentDigits,
+                checkedCount,
+                requiredCount,
+            };
+        }
+        if (recentDigits.every(d => d > 5)) {
+            return {
+                matched: true,
+                contractType: 'DIGITUNDER',
+                barrier: 5,
+                actionLabel: 'Trade Under 5',
+                subLabel: `Last ${requiredCount} ticks matched`,
+                recentDigits,
+                checkedCount,
+                requiredCount,
+            };
+        }
+        return null;
+    };
+
+    let hit: AIScannerRowEvaluation | null = null;
+
+    if (botId === 'even-odd-ai') {
+        hit = evalEvenOdd();
+    } else if (botId === 'over4-under5-ai') {
+        hit = evalRange45();
+    } else if (botId === 'over2-rec-evenodd') {
+        if (activeStage === 'Recovery') {
+            hit = evalEvenOdd();
+        } else if (checkedCount >= requiredCount && recentDigits.every(d => d < 2)) {
+            hit = {
+                matched: true,
+                contractType: 'DIGITOVER',
+                barrier: 2,
+                actionLabel: 'Trade Over 2',
+                subLabel: `Last ${requiredCount} ticks matched`,
+                recentDigits,
+                checkedCount,
+                requiredCount,
+            };
+        }
+    } else if (botId === 'over2-rec-range') {
+        if (activeStage === 'Recovery') {
+            hit = evalRange45();
+        } else if (checkedCount >= requiredCount && recentDigits.every(d => d < 2)) {
+            hit = {
+                matched: true,
+                contractType: 'DIGITOVER',
+                barrier: 2,
+                actionLabel: 'Trade Over 2',
+                subLabel: `Last ${requiredCount} ticks matched`,
+                recentDigits,
+                checkedCount,
+                requiredCount,
+            };
+        }
+    } else if (botId === 'under7-rec-evenodd') {
+        if (activeStage === 'Recovery') {
+            hit = evalEvenOdd();
+        } else if (checkedCount >= requiredCount && recentDigits.every(d => d > 7)) {
+            hit = {
+                matched: true,
+                contractType: 'DIGITUNDER',
+                barrier: 7,
+                actionLabel: 'Trade Under 7',
+                subLabel: `Last ${requiredCount} ticks matched`,
+                recentDigits,
+                checkedCount,
+                requiredCount,
+            };
+        }
+    } else if (botId === 'under7-rec-range') {
+        if (activeStage === 'Recovery') {
+            hit = evalRange45();
+        } else if (checkedCount >= requiredCount && recentDigits.every(d => d > 7)) {
+            hit = {
+                matched: true,
+                contractType: 'DIGITUNDER',
+                barrier: 7,
+                actionLabel: 'Trade Under 7',
+                subLabel: `Last ${requiredCount} ticks matched`,
+                recentDigits,
+                checkedCount,
+                requiredCount,
+            };
+        }
+    }
+
+    if (hit) return hit;
+
+    return {
+        matched: false,
+        actionLabel: 'Scanning',
+        subLabel: `${activeStage} · ${checkedCount}/${requiredCount} checked`,
+        recentDigits,
+        checkedCount,
+        requiredCount,
+    };
 }
 
 export const RISK_MANAGER_AI_BOTS: RiskManagerAIBotCard[] = [
@@ -24,6 +280,9 @@ export const RISK_MANAGER_AI_BOTS: RiskManagerAIBotCard[] = [
         title: 'Even–Odd AI',
         description: 'All Even digits trigger Odd. All Odd digits trigger Even.',
         accent: 'blue',
+        defaultEntryCount: 5,
+        defaultRecoveryCount: 3,
+        hasRecovery: false,
     },
     {
         id: 'over4-under5-ai',
@@ -31,6 +290,9 @@ export const RISK_MANAGER_AI_BOTS: RiskManagerAIBotCard[] = [
         title: 'Over 4–Under 5 AI',
         description: 'Digits below 4 trigger Over 4. Digits above 5 trigger Under 5.',
         accent: 'teal',
+        defaultEntryCount: 3,
+        defaultRecoveryCount: 2,
+        hasRecovery: false,
     },
     {
         id: 'rise-fall-ai',
@@ -38,6 +300,9 @@ export const RISK_MANAGER_AI_BOTS: RiskManagerAIBotCard[] = [
         title: 'Rise–Fall AI',
         description: 'A rising run triggers Fall. A falling run triggers Rise.',
         accent: 'purple',
+        defaultEntryCount: 4,
+        defaultRecoveryCount: 3,
+        hasRecovery: false,
     },
     {
         id: 'over2-rec-evenodd',
@@ -45,6 +310,9 @@ export const RISK_MANAGER_AI_BOTS: RiskManagerAIBotCard[] = [
         title: 'Over 2 Recovery → Even–Odd',
         description: 'The selected digit count below 2 triggers Over 2, followed by Even–Odd recovery after a loss.',
         accent: 'amber',
+        defaultEntryCount: 2,
+        defaultRecoveryCount: 3,
+        hasRecovery: true,
     },
     {
         id: 'over2-rec-range',
@@ -52,6 +320,9 @@ export const RISK_MANAGER_AI_BOTS: RiskManagerAIBotCard[] = [
         title: 'Over 2 Recovery → Over 4–Under 5',
         description: 'The selected digit count below 2 triggers Over 2, followed by range recovery after a loss.',
         accent: 'amber',
+        defaultEntryCount: 2,
+        defaultRecoveryCount: 2,
+        hasRecovery: true,
     },
     {
         id: 'under7-rec-evenodd',
@@ -59,6 +330,9 @@ export const RISK_MANAGER_AI_BOTS: RiskManagerAIBotCard[] = [
         title: 'Under 7 Recovery → Even–Odd',
         description: 'The selected digit count above 7 triggers Under 7, followed by Even–Odd recovery after a loss.',
         accent: 'pink',
+        defaultEntryCount: 2,
+        defaultRecoveryCount: 3,
+        hasRecovery: true,
     },
     {
         id: 'under7-rec-range',
@@ -66,6 +340,9 @@ export const RISK_MANAGER_AI_BOTS: RiskManagerAIBotCard[] = [
         title: 'Under 7 Recovery → Over 4–Under 5',
         description: 'The selected digit count above 7 triggers Under 7, followed by range recovery after a loss.',
         accent: 'pink',
+        defaultEntryCount: 2,
+        defaultRecoveryCount: 2,
+        hasRecovery: true,
     },
 ];
 
