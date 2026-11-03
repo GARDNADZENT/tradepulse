@@ -180,7 +180,7 @@ const TradingRuleBox: React.FC<{
 };
 
 const AIBots = observer(() => {
-    const { client, transactions } = useStore();
+    const { client, journal, transactions, summary_card, run_panel } = useStore();
     const currency = client?.currency || 'USD';
 
     const [selectedBotId, setSelectedBotId] = useState<RiskManagerAIBotId | null>(null);
@@ -374,8 +374,7 @@ const AIBots = observer(() => {
                     duration: cfg.durationTicks,
                     barrier: evalResult.barrier,
                     currency: cfg.currency,
-                    tabNamespace: 'ai_bots',
-                    stores: { transactions },
+                    stores: { journal, transactions, summary_card, run_panel },
                     onContractUpdate: (poc, isTerminal) => {
                         if (isTerminal) {
                             finalizeSettlement(Number(poc?.profit ?? 0));
@@ -391,7 +390,7 @@ const AIBots = observer(() => {
                 stopScannerInternal(msg);
             }
         },
-        [stopScannerInternal, transactions]
+        [stopScannerInternal, journal, transactions, summary_card, run_panel]
     );
 
     useEffect(() => {

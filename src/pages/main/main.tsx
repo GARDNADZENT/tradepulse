@@ -6,7 +6,6 @@ import { useLocation } from 'react-router-dom';
 import { generateOAuthURL } from '@/components/shared';
 import DesktopWrapper from '@/components/shared_ui/desktop-wrapper';
 import Dialog from '@/components/shared_ui/dialog';
-import MobileWrapper from '@/components/shared_ui/mobile-wrapper';
 import Tabs from '@/components/shared_ui/tabs/tabs';
 import TradeTypeConfirmationModal from '@/components/trade-type-confirmation-modal';
 import TradingViewComponent from '@/components/trading-view-chart/trading-view';
@@ -592,13 +591,12 @@ const AppWrapper = observer(() => {
                 <DesktopWrapper>
                     <div className='main__run-strategy-wrapper'>
                         <RunStrategy />
-                        <RunPanel />
                     </div>
                     <ChartModal />
                     <TradingViewModal />
                 </DesktopWrapper>
             )}
-            {isExecSurface && <MobileWrapper>{!is_open && <RunPanel />}</MobileWrapper>}
+            {(!is_open || isDesktop) && <RunPanel />}
 
             <Dialog
                 cancel_button_text={cancel_button_text || localize('Cancel')}
