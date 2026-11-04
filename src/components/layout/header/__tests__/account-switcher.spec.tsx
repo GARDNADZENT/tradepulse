@@ -115,10 +115,9 @@ describe('AccountSwitcher', () => {
         expect(container).toBeEmptyDOMElement();
     });
 
-    it('renders active account badge, loginid, and balance', () => {
+    it('renders active account type label and balance in compact official Deriv layout', () => {
         render(<AccountSwitcher activeAccount={mockActiveAccount} />);
-        expect(screen.getByText('LIVE')).toBeInTheDocument();
-        expect(screen.getByText(/CR123/)).toBeInTheDocument();
+        expect(screen.getByText('Real account')).toBeInTheDocument();
         expect(screen.getByTestId('dt_balance')).toHaveTextContent('100.00 USD');
     });
 
@@ -147,7 +146,7 @@ describe('AccountSwitcher', () => {
         expect(screen.queryByTestId('dt_acc_dropdown')).not.toBeInTheDocument();
     });
 
-    it('opens account details and Log out action with a single or PAT account', () => {
+    it('opens compact account switcher and Log out action with a single or PAT account', () => {
         const mockOnLogout = jest.fn();
         const { useApiBase } = require('@/hooks/useApiBase');
         useApiBase.mockReturnValue({
@@ -157,8 +156,8 @@ describe('AccountSwitcher', () => {
         render(<AccountSwitcher activeAccount={mockActiveAccount} onLogout={mockOnLogout} />);
         fireEvent.click(screen.getByTestId('dt_acc_info'));
         expect(screen.getByTestId('dt_acc_dropdown')).toBeInTheDocument();
-        expect(screen.getByText('Active Account Details')).toBeInTheDocument();
-        expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+        expect(screen.getByRole('listbox')).toBeInTheDocument();
+        expect(screen.getAllByRole('option')).toHaveLength(1);
         const logoutBtn = screen.getByTestId('dt_account_card_logout');
         expect(logoutBtn).toBeInTheDocument();
         fireEvent.click(logoutBtn);
@@ -222,7 +221,7 @@ describe('AccountSwitcher', () => {
         const trigger = screen.getByTestId('dt_acc_info');
         expect(trigger).toHaveAttribute('role', 'button');
         expect(trigger).toHaveAttribute('aria-expanded', 'false');
-        expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
+        expect(trigger).toHaveAttribute('aria-haspopup', 'listbox');
         fireEvent.click(trigger);
         expect(trigger).toHaveAttribute('aria-expanded', 'true');
     });
