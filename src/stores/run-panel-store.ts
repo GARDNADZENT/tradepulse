@@ -112,7 +112,7 @@ export default class RunPanelStore {
     has_open_contract = false;
     is_running = false;
     is_statistics_info_modal_open = false;
-    is_drawer_open = false;
+    is_drawer_open = true;
     is_dialog_open = false;
     is_sell_requested = false;
     show_bot_stop_message = false;
@@ -228,6 +228,7 @@ export default class RunPanelStore {
         runInAction(() => {
             this.setIsRunning(true);
             ui.setPromptHandler(true);
+            this.toggleDrawer(true);
             this.run_id = `run-${Date.now()}`;
 
             summary_card.clear();

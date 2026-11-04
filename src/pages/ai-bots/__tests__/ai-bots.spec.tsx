@@ -38,10 +38,7 @@ jest.mock('@/hooks/useStore', () => ({
     useStore: () => ({
         client: { is_logged_in: true, currency: 'USD' },
         dashboard: { setActiveTab: mockSetActiveTab },
-        journal: {},
         transactions: {},
-        summary_card: {},
-        run_panel: {},
     }),
 }));
 
@@ -197,12 +194,7 @@ describe('AI Bots (riskmanagers.site 7-card suite & in-page AI Scanner workspace
             barrier: 2,
             stake: 0.5,
             duration: 1,
-            stores: expect.objectContaining({
-                journal: expect.any(Object),
-                transactions: expect.any(Object),
-                summary_card: expect.any(Object),
-                run_panel: expect.any(Object),
-            }),
+            tabNamespace: 'ai_bots',
         });
 
         // Simulate contract loss (-0.50) -> switches to Recovery mode & updates Total P/L

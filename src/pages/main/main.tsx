@@ -6,6 +6,7 @@ import { useLocation } from 'react-router-dom';
 import { generateOAuthURL } from '@/components/shared';
 import DesktopWrapper from '@/components/shared_ui/desktop-wrapper';
 import Dialog from '@/components/shared_ui/dialog';
+import MobileWrapper from '@/components/shared_ui/mobile-wrapper';
 import Tabs from '@/components/shared_ui/tabs/tabs';
 import TradeTypeConfirmationModal from '@/components/trade-type-confirmation-modal';
 import TradingViewComponent from '@/components/trading-view-chart/trading-view';
@@ -339,7 +340,7 @@ const AppWrapper = observer(() => {
                 className={classNames('main', {
                     'main--has-exec-dock': isExecSurface,
                     'main--exec-scroll-tab': isExecScrollTab,
-                    'main--drawer-open': is_drawer_open && isDesktop,
+                    'main--drawer-open': isExecScrollTab && is_drawer_open && isDesktop,
                     'main--full-page-tab': !isExecSurface,
                 })}
             >
@@ -591,12 +592,13 @@ const AppWrapper = observer(() => {
                 <DesktopWrapper>
                     <div className='main__run-strategy-wrapper'>
                         <RunStrategy />
+                        <RunPanel />
                     </div>
                     <ChartModal />
                     <TradingViewModal />
                 </DesktopWrapper>
             )}
-            {(!is_open || isDesktop) && <RunPanel />}
+            {isExecSurface && <MobileWrapper>{!is_open && <RunPanel />}</MobileWrapper>}
 
             <Dialog
                 cancel_button_text={cancel_button_text || localize('Cancel')}

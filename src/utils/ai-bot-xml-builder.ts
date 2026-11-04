@@ -694,6 +694,9 @@ export async function executeLiveDerivTrade(params: {
             if (!run_panel.run_id) {
                 run_panel.run_id = `manual-${Date.now()}`;
             }
+            if (!run_panel.is_drawer_open && typeof window !== 'undefined' && window.innerWidth >= 1024) {
+                run_panel.toggleDrawer?.(true);
+            }
             if (run_panel.active_index === 0) {
                 run_panel.setActiveTabIndex?.(2);
             }

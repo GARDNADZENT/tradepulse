@@ -36,7 +36,6 @@ type TStatisticsSummary = {
     total_profit: number;
     won_contracts: number;
 };
-
 type TDrawerHeader = {
     is_clear_stat_disabled: boolean;
     is_mobile: boolean;
@@ -49,22 +48,18 @@ type TDrawerContent = {
     contract_count?: number;
     is_drawer_open: boolean;
     active_tour: string;
-    is_exec_surface: boolean;
     setActiveTabIndex: () => void;
+};
+
+type TDrawerFooter = {
+    is_clear_stat_disabled: boolean;
+    onClearStatClick: () => void;
 };
 
 type TStatisticsInfoModal = {
     is_mobile: boolean;
     is_statistics_info_modal_open: boolean;
     toggleStatisticsInfoModal: () => void;
-};
-
-const formatCompactMoney = (value: number | undefined | null, signed = false) => {
-    const num = Number(value || 0);
-    if (!Number.isFinite(num) || num === 0) return '0.00';
-    const abs = Math.abs(num).toFixed(2);
-    if (signed) return num > 0 ? `+${abs}` : `-${abs}`;
-    return num.toFixed(2);
 };
 
 const StatisticsTile = ({ content, contentClassName, title }: TStatisticsTile) => (
@@ -122,70 +117,6 @@ export const StatisticsSummary = ({
     </div>
 );
 
-const CompactStatsBar = ({
-    total_stake,
-    total_payout,
-    number_of_runs,
-    won_contracts,
-    lost_contracts,
-    total_profit,
-}: {
-    total_stake: number;
-    total_payout: number;
-    number_of_runs: number;
-    won_contracts: number;
-    lost_contracts: number;
-    total_profit: number;
-}) => (
-    <div className='run-panel__embedded-stats-shell' data-testid='global-run-drawer-stats'>
-        <div className='run-panel__embedded-stats'>
-            <div className='run-panel__embedded-stat-box'>
-                <span className='run-panel__embedded-stat-label'>{localize('Stake')}</span>
-                <span className='run-panel__embedded-stat-val'>{formatCompactMoney(total_stake)}</span>
-            </div>
-            <div className='run-panel__embedded-stat-box'>
-                <span className='run-panel__embedded-stat-label'>{localize('Payout')}</span>
-                <span className='run-panel__embedded-stat-val'>{formatCompactMoney(total_payout)}</span>
-            </div>
-            <div className='run-panel__embedded-stat-box'>
-                <span className='run-panel__embedded-stat-label'>{localize('Runs')}</span>
-                <span className='run-panel__embedded-stat-val'>{number_of_runs}</span>
-            </div>
-            <div className='run-panel__embedded-stat-box'>
-                <span className='run-panel__embedded-stat-label'>{localize('Won')}</span>
-                <span
-                    className={classNames('run-panel__embedded-stat-val', {
-                        'run-panel__embedded-stat-val--pos': won_contracts > 0,
-                    })}
-                >
-                    {won_contracts}
-                </span>
-            </div>
-            <div className='run-panel__embedded-stat-box'>
-                <span className='run-panel__embedded-stat-label'>{localize('Lost')}</span>
-                <span
-                    className={classNames('run-panel__embedded-stat-val', {
-                        'run-panel__embedded-stat-val--neg': lost_contracts > 0,
-                    })}
-                >
-                    {lost_contracts}
-                </span>
-            </div>
-            <div className='run-panel__embedded-stat-box'>
-                <span className='run-panel__embedded-stat-label'>{localize('P/L')}</span>
-                <span
-                    className={classNames('run-panel__embedded-stat-val', {
-                        'run-panel__embedded-stat-val--pos': total_profit > 0,
-                        'run-panel__embedded-stat-val--neg': total_profit < 0,
-                    })}
-                >
-                    {formatCompactMoney(total_profit, true)}
-                </span>
-            </div>
-        </div>
-    </div>
-);
-
 const DrawerHeader = ({ is_clear_stat_disabled, is_mobile, is_drawer_open, onClearStatClick }: TDrawerHeader) =>
     is_mobile &&
     is_drawer_open && (
@@ -204,11 +135,11 @@ const DrawerContent = ({
     contract_count = 0,
     is_drawer_open,
     active_tour,
-    is_exec_surface,
     setActiveTabIndex,
     ...props
 }: TDrawerContent) => {
     const { isDesktop } = useDevice();
+    // Use the useBlockScroll hook to prevent body scrolling when drawer is open on mobile
 
     React.useEffect(() => {
         if (!isDesktop && is_drawer_open) {
@@ -239,12 +170,29 @@ const DrawerContent = ({
                     <Journal />
                 </div>
             </Tabs>
-            {!isDesktop && is_exec_surface && ((is_drawer_open && active_index !== 2) || active_tour) && (
+            {!isDesktop && ((is_drawer_open && active_index !== 2) || active_tour) && (
                 <StatisticsSummary {...props} />
             )}
         </>
     );
 };
+
+const DrawerFooter = ({ is_clear_stat_disabled, onClearStatClick }: TDrawerFooter) => (
+    <div className='run-panel__footer'>
+        <Button
+            id='db-run-panel__clear-button'
+            className='run-panel__footer-button'
+            disabled={is_clear_stat_disabled}
+            onClick={onClearStatClick}
+            has_effect
+            secondary
+        >
+            <span>
+                <Localize i18n_default_text='Reset' />
+            </span>
+        </Button>
+    </div>
+);
 
 const MobileDrawerFooter = () => {
     return (
@@ -314,7 +262,8 @@ const StatisticsInfoModal = ({
 };
 
 const RunPanel = observer(() => {
-    const { run_panel, dashboard, transactions, quick_strategy, client } = useStore();
+    const { run_panel, dashboard, transactions } = useStore();
+    const { client } = useStore();
     const { isDesktop } = useDevice();
     const { currency } = client;
     const {
@@ -324,6 +273,7 @@ const RunPanel = observer(() => {
         is_clear_stat_disabled,
         onClearStatClick,
         onMount,
+        onRunButtonClick, // eslint-disable-line @typescript-eslint/no-unused-vars
         onUnmount,
         setActiveTabIndex,
         toggleDrawer,
@@ -332,9 +282,7 @@ const RunPanel = observer(() => {
     const { statistics, transactions: transaction_list } = transactions;
     const { active_tour, active_tab } = dashboard;
     const { total_payout, total_profit, total_stake, won_contracts, lost_contracts, number_of_runs } = statistics;
-    const { BOT_BUILDER, FREE_BOTS } = DBOT_TABS;
-    const isExecSurface = [BOT_BUILDER, FREE_BOTS].includes(active_tab);
-
+    const { DASHBOARD, BOT_BUILDER, FREE_BOTS } = DBOT_TABS;
     const contract_count = Array.isArray(transaction_list)
         ? transaction_list.filter(item => item?.type === 'contract').length
         : 0;
@@ -351,8 +299,6 @@ const RunPanel = observer(() => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    if (active_tour === 'bot_builder') return null;
-
     const content = (
         <DrawerContent
             active_index={active_index}
@@ -360,7 +306,6 @@ const RunPanel = observer(() => {
             currency={currency}
             is_drawer_open={is_drawer_open}
             is_mobile={!isDesktop}
-            is_exec_surface={isExecSurface}
             lost_contracts={lost_contracts}
             number_of_runs={number_of_runs}
             setActiveTabIndex={setActiveTabIndex}
@@ -373,6 +318,8 @@ const RunPanel = observer(() => {
         />
     );
 
+    const footer = <DrawerFooter is_clear_stat_disabled={is_clear_stat_disabled} onClearStatClick={onClearStatClick} />;
+
     const header = (
         <DrawerHeader
             is_clear_stat_disabled={is_clear_stat_disabled}
@@ -382,37 +329,24 @@ const RunPanel = observer(() => {
         />
     );
 
-    const showEmbeddedStatsFooter = !isExecSurface;
+    const show_run_panel =
+        [BOT_BUILDER, FREE_BOTS].includes(active_tab) ||
+        (active_tab === DASHBOARD && !dashboard.is_info_panel_visible) ||
+        active_tour;
+    if ((!show_run_panel && isDesktop) || active_tour === 'bot_builder') return null;
 
     return (
         <>
-            <div
-                className={classNames(
-                    !isDesktop && is_drawer_open && isExecSurface ? 'run-panel__container--mobile' : 'run-panel'
-                )}
-            >
+            <div className={!isDesktop && is_drawer_open ? 'run-panel__container--mobile' : 'run-panel'}>
                 <Drawer
                     anchor='right'
                     className={classNames('run-panel', {
                         'run-panel__container': isDesktop,
-                        'run-panel__container--full-height': isDesktop && !isExecSurface,
-                        'run-panel__container--mobile-side': !isDesktop && !isExecSurface,
                         'run-panel__container--tour-active': isDesktop && active_tour,
                     })}
                     contentClassName='run-panel__content'
                     header={header}
-                    footer={
-                        showEmbeddedStatsFooter ? (
-                            <CompactStatsBar
-                                total_stake={total_stake}
-                                total_payout={total_payout}
-                                number_of_runs={number_of_runs}
-                                won_contracts={won_contracts}
-                                lost_contracts={lost_contracts}
-                                total_profit={total_profit}
-                            />
-                        ) : undefined
-                    }
+                    footer={undefined}
                     is_open={is_drawer_open}
                     toggleDrawer={toggleDrawer}
                     width={366}
@@ -420,7 +354,7 @@ const RunPanel = observer(() => {
                 >
                     {content}
                 </Drawer>
-                {!isDesktop && isExecSurface && !quick_strategy?.is_open && <MobileDrawerFooter />}
+                {!isDesktop && <MobileDrawerFooter />}
             </div>
 
             <StatisticsInfoModal
