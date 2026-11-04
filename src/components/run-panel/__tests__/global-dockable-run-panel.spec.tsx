@@ -2,13 +2,14 @@ import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { observable, runInAction } from 'mobx';
 import { DBOT_TABS } from '@/constants/bot-contents';
+import { popover_zindex } from '@/constants/z-indexes';
 import RunPanelStore from '@/stores/run-panel-store';
 import RunPanel from '../run-panel';
 
 let mockIsDesktop = true;
 
 const mockDashboard = observable({
-    active_tab: DBOT_TABS.AI_BOTS,
+    active_tab: DBOT_TABS.AUTO_TRADES,
     active_tour: '',
 });
 
@@ -24,7 +25,11 @@ const mockToggleDrawer = jest.fn((next: boolean) => {
         mockRunPanelState.is_drawer_open = next;
     });
 });
-const mockSetActiveTabIndex = jest.fn();
+const mockSetActiveTabIndex = jest.fn((idx: number) => {
+    runInAction(() => {
+        mockRunPanelState.active_index = idx;
+    });
+});
 const mockOnClearStatClick = jest.fn();
 
 jest.mock('@deriv-com/ui', () => ({
@@ -105,17 +110,18 @@ jest.mock('@/hooks/useStore', () => ({
     }),
 }));
 
-describe('Global Dockable RunPanel (Summary / Transactions / Journal + Stats)', () => {
+describe('Global Bot-Builder-Exact RunPanel Drawer', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         mockIsDesktop = true;
         runInAction(() => {
-            mockDashboard.active_tab = DBOT_TABS.AI_BOTS;
+            mockDashboard.active_tab = DBOT_TABS.AUTO_TRADES;
+            mockRunPanelState.active_index = 1;
             mockRunPanelState.is_drawer_open = false;
         });
     });
 
-    it('defaults RunPanelStore.is_drawer_open to false so the drawer starts docked/hidden everywhere', () => {
+    it('defaults RunPanelStore.is_drawer_open to false and elevates RUN_PANEL z-index above page sticky bars', () => {
         const mockRoot: any = {
             dbot: { getStrategySounds: () => [] },
             journal: { unfiltered_messages: [] },
@@ -130,31 +136,38 @@ describe('Global Dockable RunPanel (Summary / Transactions / Journal + Stats)', 
 
         const store = new RunPanelStore(mockRoot, mockCore);
         expect(store.is_drawer_open).toBe(false);
+        expect(popover_zindex.RUN_PANEL).toBeGreaterThan(30);
         store.disposeReactionsFn?.();
     });
 
-    it('renders docked by default on non-builder tabs (AI Bots, TradePulse, Dashboard) and toggles open/closed on demand', () => {
+    it('renders the exact Bot Builder dc-drawer across Auto Trades, AI Bots, Dashboard, and TradePulse with tab switching and stats footer', () => {
         for (const tab of [DBOT_TABS.DASHBOARD, DBOT_TABS.AI_BOTS, DBOT_TABS.AUTO_TRADES, DBOT_TABS.TRADEPULSE]) {
             runInAction(() => {
                 mockDashboard.active_tab = tab;
+                mockRunPanelState.active_index = 1;
                 mockRunPanelState.is_drawer_open = false;
             });
 
-            const { unmount } = render(<RunPanel />);
+            const { container, unmount } = render(<RunPanel />);
 
             const drawer = screen.getByTestId('drawer');
-            expect(drawer).not.toHaveClass('tp-global-run-drawer--open');
+            expect(drawer).toHaveClass('dc-drawer', 'dc-drawer--right', 'run-panel__container', 'run-panel__container--full-height');
+            expect(drawer).not.toHaveClass('dc-drawer--open');
 
-            // Dock handle shows live contract badge count (221) while hidden
-            const handleBtn = screen.getByTestId('global-run-drawer-toggle');
-            expect(handleBtn).toHaveTextContent('221');
-
-            // Click dock handle -> opens drawer via MobX observable update
-            fireEvent.click(handleBtn);
+            // Click exact Bot Builder dc-drawer__toggle bar -> opens drawer
+            const toggleBar = container.querySelector('.dc-drawer__toggle') as HTMLElement;
+            expect(toggleBar).toBeTruthy();
+            fireEvent.click(toggleBar);
             expect(mockToggleDrawer).toHaveBeenCalledWith(true);
-            expect(screen.getByTestId('drawer')).toHaveClass('tp-global-run-drawer--open');
+            expect(screen.getByTestId('drawer')).toHaveClass('dc-drawer--open');
 
-            // Shows embedded 6-column Stake / Payout / Runs / Won / Lost / P/L strip matching image-11.png
+            // Can freely switch between Summary, Transactions (221), and Journal tabs inside the panel
+            expect(screen.getByTestId('mock-transactions-tab')).toBeInTheDocument();
+            fireEvent.click(screen.getByText('Journal'));
+            expect(mockSetActiveTabIndex).toHaveBeenCalledWith(2);
+            expect(screen.getByTestId('mock-journal-tab')).toBeInTheDocument();
+
+            // Shows embedded 6-column Stake / Payout / Runs / Won / Lost / P/L strip matching Bot Builder
             const statsBar = screen.getByTestId('global-run-drawer-stats');
             expect(statsBar).toHaveTextContent('131.60');
             expect(statsBar).toHaveTextContent('136.35');
@@ -163,10 +176,10 @@ describe('Global Dockable RunPanel (Summary / Transactions / Journal + Stats)', 
             expect(statsBar).toHaveTextContent('69');
             expect(statsBar).toHaveTextContent('+4.75');
 
-            // Click Hide (×) button -> docks/hides drawer back
-            fireEvent.click(screen.getByRole('button', { name: 'Hide panel' }));
+            // Click dc-drawer__toggle again -> docks/hides drawer back
+            fireEvent.click(toggleBar);
             expect(mockToggleDrawer).toHaveBeenCalledWith(false);
-            expect(screen.getByTestId('drawer')).not.toHaveClass('tp-global-run-drawer--open');
+            expect(screen.getByTestId('drawer')).not.toHaveClass('dc-drawer--open');
 
             unmount();
         }
@@ -175,7 +188,7 @@ describe('Global Dockable RunPanel (Summary / Transactions / Journal + Stats)', 
     it('keeps the mobile horizontal bottom control bar scoped only to Bot Builder and Free Bots', () => {
         mockIsDesktop = false;
         runInAction(() => {
-            mockDashboard.active_tab = DBOT_TABS.AI_BOTS;
+            mockDashboard.active_tab = DBOT_TABS.AUTO_TRADES;
         });
 
         render(<RunPanel />);

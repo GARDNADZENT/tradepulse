@@ -339,7 +339,7 @@ const AppWrapper = observer(() => {
                 className={classNames('main', {
                     'main--has-exec-dock': isExecSurface,
                     'main--exec-scroll-tab': isExecScrollTab,
-                    'main--drawer-open': isExecScrollTab && is_drawer_open && isDesktop,
+                    'main--drawer-open': is_drawer_open && isDesktop,
                     'main--full-page-tab': !isExecSurface,
                 })}
             >

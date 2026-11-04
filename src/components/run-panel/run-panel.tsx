@@ -4,6 +4,7 @@ import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
 import Journal from '@/components/journal';
 import Button from '@/components/shared_ui/button';
+import Drawer from '@/components/shared_ui/drawer';
 import Modal from '@/components/shared_ui/modal';
 import Money from '@/components/shared_ui/money';
 import Tabs from '@/components/shared_ui/tabs';
@@ -14,7 +15,6 @@ import Transactions from '@/components/transactions';
 import { DBOT_TABS } from '@/constants/bot-contents';
 import { popover_zindex } from '@/constants/z-indexes';
 import { useStore } from '@/hooks/useStore';
-import { LabelPairedChevronsRightCaptionRegularIcon } from '@deriv/quill-icons';
 import { Localize, localize } from '@deriv-com/translations';
 import { useDevice } from '@deriv-com/ui';
 import ThemedScrollbars from '../shared_ui/themed-scrollbars';
@@ -37,10 +37,19 @@ type TStatisticsSummary = {
     won_contracts: number;
 };
 
+type TDrawerHeader = {
+    is_clear_stat_disabled: boolean;
+    is_mobile: boolean;
+    is_drawer_open: boolean;
+    onClearStatClick: () => void;
+};
+
 type TDrawerContent = {
     active_index: number;
     contract_count?: number;
     is_drawer_open: boolean;
+    active_tour: string;
+    is_exec_surface: boolean;
     setActiveTabIndex: () => void;
 };
 
@@ -128,46 +137,46 @@ const CompactStatsBar = ({
     lost_contracts: number;
     total_profit: number;
 }) => (
-    <div className='tp-global-run-drawer__stats-shell' data-testid='global-run-drawer-stats'>
-        <div className='tp-global-run-drawer__stats'>
-            <div className='tp-global-run-drawer__stat-box'>
-                <span className='tp-global-run-drawer__stat-label'>{localize('Stake')}</span>
-                <span className='tp-global-run-drawer__stat-val'>{formatCompactMoney(total_stake)}</span>
+    <div className='run-panel__embedded-stats-shell' data-testid='global-run-drawer-stats'>
+        <div className='run-panel__embedded-stats'>
+            <div className='run-panel__embedded-stat-box'>
+                <span className='run-panel__embedded-stat-label'>{localize('Stake')}</span>
+                <span className='run-panel__embedded-stat-val'>{formatCompactMoney(total_stake)}</span>
             </div>
-            <div className='tp-global-run-drawer__stat-box'>
-                <span className='tp-global-run-drawer__stat-label'>{localize('Payout')}</span>
-                <span className='tp-global-run-drawer__stat-val'>{formatCompactMoney(total_payout)}</span>
+            <div className='run-panel__embedded-stat-box'>
+                <span className='run-panel__embedded-stat-label'>{localize('Payout')}</span>
+                <span className='run-panel__embedded-stat-val'>{formatCompactMoney(total_payout)}</span>
             </div>
-            <div className='tp-global-run-drawer__stat-box'>
-                <span className='tp-global-run-drawer__stat-label'>{localize('Runs')}</span>
-                <span className='tp-global-run-drawer__stat-val'>{number_of_runs}</span>
+            <div className='run-panel__embedded-stat-box'>
+                <span className='run-panel__embedded-stat-label'>{localize('Runs')}</span>
+                <span className='run-panel__embedded-stat-val'>{number_of_runs}</span>
             </div>
-            <div className='tp-global-run-drawer__stat-box'>
-                <span className='tp-global-run-drawer__stat-label'>{localize('Won')}</span>
+            <div className='run-panel__embedded-stat-box'>
+                <span className='run-panel__embedded-stat-label'>{localize('Won')}</span>
                 <span
-                    className={classNames('tp-global-run-drawer__stat-val', {
-                        'tp-global-run-drawer__stat-val--pos': won_contracts > 0,
+                    className={classNames('run-panel__embedded-stat-val', {
+                        'run-panel__embedded-stat-val--pos': won_contracts > 0,
                     })}
                 >
                     {won_contracts}
                 </span>
             </div>
-            <div className='tp-global-run-drawer__stat-box'>
-                <span className='tp-global-run-drawer__stat-label'>{localize('Lost')}</span>
+            <div className='run-panel__embedded-stat-box'>
+                <span className='run-panel__embedded-stat-label'>{localize('Lost')}</span>
                 <span
-                    className={classNames('tp-global-run-drawer__stat-val', {
-                        'tp-global-run-drawer__stat-val--neg': lost_contracts > 0,
+                    className={classNames('run-panel__embedded-stat-val', {
+                        'run-panel__embedded-stat-val--neg': lost_contracts > 0,
                     })}
                 >
                     {lost_contracts}
                 </span>
             </div>
-            <div className='tp-global-run-drawer__stat-box'>
-                <span className='tp-global-run-drawer__stat-label'>{localize('P/L')}</span>
+            <div className='run-panel__embedded-stat-box'>
+                <span className='run-panel__embedded-stat-label'>{localize('P/L')}</span>
                 <span
-                    className={classNames('tp-global-run-drawer__stat-val', {
-                        'tp-global-run-drawer__stat-val--pos': total_profit > 0,
-                        'tp-global-run-drawer__stat-val--neg': total_profit < 0,
+                    className={classNames('run-panel__embedded-stat-val', {
+                        'run-panel__embedded-stat-val--pos': total_profit > 0,
+                        'run-panel__embedded-stat-val--neg': total_profit < 0,
                     })}
                 >
                     {formatCompactMoney(total_profit, true)}
@@ -177,11 +186,27 @@ const CompactStatsBar = ({
     </div>
 );
 
+const DrawerHeader = ({ is_clear_stat_disabled, is_mobile, is_drawer_open, onClearStatClick }: TDrawerHeader) =>
+    is_mobile &&
+    is_drawer_open && (
+        <Button
+            id='db-run-panel__clear-button'
+            className='run-panel__clear-button'
+            disabled={is_clear_stat_disabled}
+            text={localize('Reset')}
+            onClick={onClearStatClick}
+            secondary
+        />
+    );
+
 const DrawerContent = ({
     active_index,
     contract_count = 0,
     is_drawer_open,
+    active_tour,
+    is_exec_surface,
     setActiveTabIndex,
+    ...props
 }: TDrawerContent) => {
     const { isDesktop } = useDevice();
 
@@ -198,21 +223,26 @@ const DrawerContent = ({
     }, [is_drawer_open, isDesktop]);
 
     return (
-        <Tabs active_index={active_index} onTabItemClick={setActiveTabIndex} top>
-            <div id='db-run-panel-tab__summary' label={<Localize i18n_default_text='Summary' />}>
-                <Summary is_drawer_open={is_drawer_open} />
-            </div>
-            <div
-                id='db-run-panel-tab__transactions'
-                label={<Localize i18n_default_text='Transactions' />}
-                data-count={contract_count > 0 ? contract_count : undefined}
-            >
-                <Transactions is_drawer_open={is_drawer_open} />
-            </div>
-            <div id='db-run-panel-tab__journal' label={<Localize i18n_default_text='Journal' />}>
-                <Journal />
-            </div>
-        </Tabs>
+        <>
+            <Tabs active_index={active_index} onTabItemClick={setActiveTabIndex} top>
+                <div id='db-run-panel-tab__summary' label={<Localize i18n_default_text='Summary' />}>
+                    <Summary is_drawer_open={is_drawer_open} />
+                </div>
+                <div
+                    id='db-run-panel-tab__transactions'
+                    label={<Localize i18n_default_text='Transactions' />}
+                    data-count={contract_count > 0 ? contract_count : undefined}
+                >
+                    <Transactions is_drawer_open={is_drawer_open} />
+                </div>
+                <div id='db-run-panel-tab__journal' label={<Localize i18n_default_text='Journal' />}>
+                    <Journal />
+                </div>
+            </Tabs>
+            {!isDesktop && is_exec_surface && ((is_drawer_open && active_index !== 2) || active_tour) && (
+                <StatisticsSummary {...props} />
+            )}
+        </>
     );
 };
 
@@ -284,8 +314,9 @@ const StatisticsInfoModal = ({
 };
 
 const RunPanel = observer(() => {
-    const { run_panel, dashboard, transactions, quick_strategy } = useStore();
+    const { run_panel, dashboard, transactions, quick_strategy, client } = useStore();
     const { isDesktop } = useDevice();
+    const { currency } = client;
     const {
         active_index,
         is_drawer_open,
@@ -313,102 +344,84 @@ const RunPanel = observer(() => {
         return () => onUnmount();
     }, [onMount, onUnmount]);
 
+    React.useEffect(() => {
+        if (!isDesktop) {
+            toggleDrawer(false);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     if (active_tour === 'bot_builder') return null;
 
-    const showEmbeddedStatsFooter = !isDesktop || !isExecSurface;
+    const content = (
+        <DrawerContent
+            active_index={active_index}
+            contract_count={contract_count}
+            currency={currency}
+            is_drawer_open={is_drawer_open}
+            is_mobile={!isDesktop}
+            is_exec_surface={isExecSurface}
+            lost_contracts={lost_contracts}
+            number_of_runs={number_of_runs}
+            setActiveTabIndex={setActiveTabIndex}
+            toggleStatisticsInfoModal={toggleStatisticsInfoModal}
+            total_payout={total_payout}
+            total_profit={total_profit}
+            total_stake={total_stake}
+            won_contracts={won_contracts}
+            active_tour={active_tour}
+        />
+    );
+
+    const header = (
+        <DrawerHeader
+            is_clear_stat_disabled={is_clear_stat_disabled}
+            is_mobile={!isDesktop}
+            is_drawer_open={is_drawer_open}
+            onClearStatClick={onClearStatClick}
+        />
+    );
+
+    const showEmbeddedStatsFooter = !isExecSurface;
 
     return (
         <>
-            <aside
-                data-testid='drawer'
-                className={classNames('tp-global-run-drawer', {
-                    'tp-global-run-drawer--open': is_drawer_open,
-                    'tp-global-run-drawer--exec-surface': isExecSurface && isDesktop,
-                    'tp-global-run-drawer--mobile-exec': isExecSurface && !isDesktop,
-                    'run-panel__container--tour-active': isDesktop && active_tour,
-                })}
-                style={{ zIndex: popover_zindex.RUN_PANEL }}
-                aria-label={localize('Transactions and trade records')}
+            <div
+                className={classNames(
+                    !isDesktop && is_drawer_open && isExecSurface ? 'run-panel__container--mobile' : 'run-panel'
+                )}
             >
-                <button
-                    type='button'
-                    className={classNames('tp-global-run-drawer__handle', {
-                        'tp-global-run-drawer__handle--open': is_drawer_open,
+                <Drawer
+                    anchor='right'
+                    className={classNames('run-panel', {
+                        'run-panel__container': isDesktop,
+                        'run-panel__container--full-height': isDesktop && !isExecSurface,
+                        'run-panel__container--mobile-side': !isDesktop && !isExecSurface,
+                        'run-panel__container--tour-active': isDesktop && active_tour,
                     })}
-                    onClick={() => toggleDrawer(!is_drawer_open)}
-                    title={
-                        is_drawer_open
-                            ? localize('Dock / Hide panel')
-                            : localize('Open Summary, Transactions & Journal')
+                    contentClassName='run-panel__content'
+                    header={header}
+                    footer={
+                        showEmbeddedStatsFooter ? (
+                            <CompactStatsBar
+                                total_stake={total_stake}
+                                total_payout={total_payout}
+                                number_of_runs={number_of_runs}
+                                won_contracts={won_contracts}
+                                lost_contracts={lost_contracts}
+                                total_profit={total_profit}
+                            />
+                        ) : undefined
                     }
-                    aria-expanded={is_drawer_open}
-                    data-testid='global-run-drawer-toggle'
+                    is_open={is_drawer_open}
+                    toggleDrawer={toggleDrawer}
+                    width={366}
+                    zIndex={popover_zindex.RUN_PANEL}
                 >
-                    <LabelPairedChevronsRightCaptionRegularIcon
-                        className={classNames('tp-global-run-drawer__handle-icon', {
-                            'tp-global-run-drawer__handle-icon--open': is_drawer_open,
-                        })}
-                    />
-                    {!is_drawer_open && contract_count > 0 && (
-                        <span className='tp-global-run-drawer__handle-badge'>{contract_count}</span>
-                    )}
-                </button>
-
-                <div className='tp-global-run-drawer__panel'>
-                    <div className='tp-global-run-drawer__topbar'>
-                        <span className='tp-global-run-drawer__topbar-title'>
-                            {active_index === 0
-                                ? localize('Summary')
-                                : active_index === 1
-                                  ? localize('Transactions')
-                                  : localize('Journal')}
-                        </span>
-                        <div className='tp-global-run-drawer__topbar-actions'>
-                            {(!isDesktop || !isExecSurface) && (
-                                <Button
-                                    id='db-run-panel__clear-button'
-                                    className='tp-global-run-drawer__reset-btn'
-                                    disabled={is_clear_stat_disabled}
-                                    text={localize('Reset')}
-                                    onClick={onClearStatClick}
-                                    secondary
-                                />
-                            )}
-                            <button
-                                type='button'
-                                className='tp-global-run-drawer__close-btn'
-                                onClick={() => toggleDrawer(false)}
-                                title={localize('Hide panel')}
-                                aria-label={localize('Hide panel')}
-                            >
-                                ×
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className='tp-global-run-drawer__body run-panel__content'>
-                        <DrawerContent
-                            active_index={active_index}
-                            contract_count={contract_count}
-                            is_drawer_open={is_drawer_open}
-                            setActiveTabIndex={setActiveTabIndex}
-                        />
-                    </div>
-
-                    {showEmbeddedStatsFooter && (
-                        <CompactStatsBar
-                            total_stake={total_stake}
-                            total_payout={total_payout}
-                            number_of_runs={number_of_runs}
-                            won_contracts={won_contracts}
-                            lost_contracts={lost_contracts}
-                            total_profit={total_profit}
-                        />
-                    )}
-                </div>
-            </aside>
-
-            {!isDesktop && isExecSurface && !quick_strategy?.is_open && <MobileDrawerFooter />}
+                    {content}
+                </Drawer>
+                {!isDesktop && isExecSurface && !quick_strategy?.is_open && <MobileDrawerFooter />}
+            </div>
 
             <StatisticsInfoModal
                 is_mobile={!isDesktop}
