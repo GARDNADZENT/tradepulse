@@ -333,7 +333,7 @@ export async function loadManagedSites(user: StudioUser): Promise<ManagedSite[]>
 
   let query = studioSupabase
     .from('managed_sites')
-    .select('*, studio_profiles(email)')
+    .select('*')
     .order('created_at', { ascending: false });
 
   if (user.role !== 'super_admin') {
@@ -358,7 +358,7 @@ export async function loadManagedSites(user: StudioUser): Promise<ManagedSite[]>
   return (rows || []).map((r: any) => ({
     id: String(r.id),
     owner_id: String(r.owner_id),
-    owner_email: r.studio_profiles?.email || '',
+    owner_email: String(r.owner_email || ''),
     slug: String(r.slug),
     custom_domain: String(r.custom_domain || ''),
     domain_status: r.domain_status || 'verify_dns',
@@ -430,7 +430,7 @@ export async function persistManagedSite(site: ManagedSite): Promise<ManagedSite
   if (site.id.startsWith('new-')) {
     const { data, error } = await studioSupabase
       .from('managed_sites')
-      .insert({ ...payload, owner_id: site.owner_id })
+      .insert({ ...payload, owner_id: site.owner_id, owner_email: site.owner_email || '' })
       .select('*')
       .single();
     if (error) throw error;

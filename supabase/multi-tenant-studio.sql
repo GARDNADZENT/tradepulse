@@ -1,16 +1,13 @@
 -- =============================================================================
 -- TradersPulse Site Studio — Multi-Tenant SaaS Control Plane Schema (Supabase)
--- Supports:
---   1. Public SaaS Operator Sign-Up (Email/Password + Google OAuth)
---   2. Row-Level Security (Operators manage only their own sites; Super-Admin manages all)
---   3. Zero-rebuild runtime tenant resolution by custom_domain or slug
---   4. Per-site XML Bot Library + Storage bucket (`studio-assets`)
+-- Paste this ENTIRE script into the Supabase SQL Editor and click "Run".
 -- =============================================================================
 
 -- 1. Operator & Super-Admin Profiles
 create table if not exists public.studio_profiles (
     id uuid primary key references auth.users(id) on delete cascade,
     email text not null,
+    display_name text,
     full_name text,
     role text not null default 'operator' check (role in ('operator', 'super_admin')),
     created_at timestamptz not null default now(),
@@ -56,12 +53,19 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+    resolved_name text;
 begin
-    insert into public.studio_profiles (id, email, full_name, role)
+    resolved_name := coalesce(
+        new.raw_user_meta_data->>'full_name',
+        split_part(coalesce(new.email, 'operator'), '@', 1)
+    );
+    insert into public.studio_profiles (id, email, display_name, full_name, role)
     values (
         new.id,
         coalesce(new.email, ''),
-        coalesce(new.raw_user_meta_data->>'full_name', split_part(coalesce(new.email, 'operator'), '@', 1)),
+        resolved_name,
+        resolved_name,
         -- First registered user automatically becomes super_admin if none exists yet
         case
             when not exists (select 1 from public.studio_profiles where role = 'super_admin')
@@ -79,12 +83,28 @@ create trigger on_auth_studio_user_created
     after insert on auth.users
     for each row execute function public.handle_new_studio_user();
 
+-- Backfill any existing users already in auth.users (earliest user gets super_admin if none exists)
+insert into public.studio_profiles (id, email, display_name, full_name, role)
+select
+    u.id,
+    coalesce(u.email, ''),
+    coalesce(u.raw_user_meta_data->>'full_name', split_part(coalesce(u.email, 'operator'), '@', 1)),
+    coalesce(u.raw_user_meta_data->>'full_name', split_part(coalesce(u.email, 'operator'), '@', 1)),
+    case
+        when row_number() over (order by u.created_at asc) = 1
+             and not exists (select 1 from public.studio_profiles where role = 'super_admin')
+            then 'super_admin'
+        else 'operator'
+    end
+from auth.users u
+on conflict (id) do nothing;
+
 -- 2. Managed Trading Sites (Multi-Tenant Configuration)
 create table if not exists public.managed_sites (
     id uuid primary key default gen_random_uuid(),
     owner_id uuid not null references auth.users(id) on delete cascade,
     owner_email text,
-    slug text not null unique check (slug ~ '^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$'),
+    slug text not null unique check (slug ~ '^[a-z0-9][a-z0-9-]{0,48}[a-z0-9]$'),
     custom_domain text unique,
     domain_status text not null default 'verify_dns' check (domain_status in ('live', 'verify_dns', 'ssl_pending')),
     status text not null default 'active' check (status in ('active', 'maintenance', 'suspended')),
@@ -94,7 +114,7 @@ create table if not exists public.managed_sites (
     primary_color text not null default '#0066FF',
     secondary_color text not null default '#050914',
     deriv_app_id text not null default '',
-    use_pooled_oauth boolean not null default false,
+    use_pooled_oauth boolean not null default true,
     deriv_referral_link text not null default '',
     announcement_text text not null default '',
     enabled_tabs text[] not null default array[
@@ -127,13 +147,11 @@ create index if not exists idx_managed_sites_slug on public.managed_sites(lower(
 
 alter table public.managed_sites enable row level security;
 
--- Public tenant runtime can read site configuration by domain/slug (no private secrets stored here)
 drop policy if exists "managed_sites_public_read" on public.managed_sites;
 create policy "managed_sites_public_read"
     on public.managed_sites for select
     using (true);
 
--- Authenticated operators can create sites under their own owner_id
 drop policy if exists "managed_sites_operator_insert" on public.managed_sites;
 create policy "managed_sites_operator_insert"
     on public.managed_sites for insert
@@ -145,7 +163,6 @@ create policy "managed_sites_operator_insert"
         )
     );
 
--- Operators can update their own non-suspended sites; Super-Admin can update/suspend any site
 drop policy if exists "managed_sites_operator_or_admin_update" on public.managed_sites;
 create policy "managed_sites_operator_or_admin_update"
     on public.managed_sites for update
@@ -158,7 +175,6 @@ create policy "managed_sites_operator_or_admin_update"
         or (auth.uid() = owner_id and status in ('active', 'maintenance'))
     );
 
--- Operators can delete their own sites; Super-Admin can delete any site
 drop policy if exists "managed_sites_operator_or_admin_delete" on public.managed_sites;
 create policy "managed_sites_operator_or_admin_delete"
     on public.managed_sites for delete
@@ -207,7 +223,7 @@ create policy "managed_site_bots_owner_or_admin_write"
         )
     );
 
--- 4. Platform-Wide Super-Admin Settings (Pooled Deriv OAuth App IDs & Default Commission)
+-- 4. Platform-Wide Super-Admin Settings
 create table if not exists public.studio_platform_settings (
     id integer primary key default 1 check (id = 1),
     pooled_deriv_app_id text not null default '',
@@ -235,7 +251,37 @@ insert into public.studio_platform_settings (id, pooled_deriv_app_id, default_co
 values (1, '', 20, 'traderspulse.site', true)
 on conflict (id) do nothing;
 
--- 5. Supabase Storage Bucket for Tenant Logos & Bot XML Assets
+-- 5. Supabase Storage Bucket & Policies for Tenant Logos (`studio-assets`)
 insert into storage.buckets (id, name, public)
 values ('studio-assets', 'studio-assets', true)
 on conflict (id) do nothing;
+
+do $$
+begin
+    drop policy if exists "studio_assets_public_read" on storage.objects;
+    create policy "studio_assets_public_read"
+        on storage.objects for select
+        using (bucket_id = 'studio-assets');
+
+    drop policy if exists "studio_assets_operator_upload" on storage.objects;
+    create policy "studio_assets_operator_upload"
+        on storage.objects for insert
+        to authenticated
+        with check (
+            bucket_id = 'studio-assets'
+            and (storage.foldername(name))[1] = auth.uid()::text
+        );
+
+    drop policy if exists "studio_assets_operator_update" on storage.objects;
+    create policy "studio_assets_operator_update"
+        on storage.objects for update
+        to authenticated
+        using (
+            bucket_id = 'studio-assets'
+            and (storage.foldername(name))[1] = auth.uid()::text
+        );
+exception
+    when others then
+        raise notice 'Skipped storage.objects policies: %', sqlerrm;
+end;
+$$;
