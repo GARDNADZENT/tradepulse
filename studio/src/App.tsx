@@ -2,24 +2,32 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ALL_13_TABS,
   COLOR_SWATCHES,
+  CommissionRecord,
   ManagedBotItem,
   ManagedSite,
+  PAYOUT_METHODS,
+  PayoutRecord,
   PlatformSettings,
   SOCIAL_FIELDS,
+  SocialPlatformKey,
   StudioUser,
 } from './types';
 import {
   buildLiveTenantUrl,
   buildPreviewTenantUrl,
+  checkVercelSubdomainAvailability,
   connectedSupabaseHost,
-  createBlankManagedSite,
+  createConfiguredManagedSite,
   DEFAULT_PLATFORM_SETTINGS,
   deleteManagedSite,
   fetchPlatformSettings,
   getInitialStudioSession,
   isSupabaseConfigured,
+  loadCommissionLedger,
   loadManagedSites,
+  markSiteCommissionsPaid,
   persistManagedSite,
+  provisionVercelSubdomain,
   resendConfirmationEmail,
   savePlatformSettings,
   signInWithEmail,
@@ -29,7 +37,7 @@ import {
   uploadLogoAsset,
 } from './services/studio-data';
 
-type ConfigTab = 'branding' | 'tabs' | 'oauth' | 'bots' | 'domain';
+type ConfigTab = 'branding' | 'tabs' | 'bots' | 'domain' | 'commissions';
 type SidebarSection = 'sites' | ConfigTab | 'superadmin';
 
 interface DnsRecordRow {
@@ -38,6 +46,12 @@ interface DnsRecordRow {
   value: string;
   ttl: string;
 }
+
+const formatUsd = (val: number): string =>
+  `$${Number(val || 0).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 
 export const App: React.FC = () => {
   const [user, setUser] = useState<StudioUser | null>(null);
@@ -58,6 +72,9 @@ export const App: React.FC = () => {
   const [activeSidebar, setActiveSidebar] = useState<SidebarSection>('sites');
   const [activeTab, setActiveTab] = useState<ConfigTab>('branding');
   const [platformSettings, setPlatformSettings] = useState<PlatformSettings>(DEFAULT_PLATFORM_SETTINGS);
+  const [commissions, setCommissions] = useState<CommissionRecord[]>([]);
+  const [payouts, setPayouts] = useState<PayoutRecord[]>([]);
+  const [markingPaidSiteId, setMarkingPaidSiteId] = useState<string>('');
 
   // Preview & save status
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop');
@@ -66,6 +83,8 @@ export const App: React.FC = () => {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const logoInputRef = useRef<HTMLInputElement | null>(null);
   const botXmlInputRef = useRef<HTMLInputElement | null>(null);
+  const wizardLogoInputRef = useRef<HTMLInputElement | null>(null);
+  const wizardBotXmlInputRef = useRef<HTMLInputElement | null>(null);
 
   // Domain verification state
   const [dnsRecords, setDnsRecords] = useState<DnsRecordRow[]>([
@@ -75,30 +94,54 @@ export const App: React.FC = () => {
   const [domainBusy, setDomainBusy] = useState(false);
   const [domainFeedback, setDomainFeedback] = useState('');
 
-  // Create New Site modal state
+  // 3-Step Create Site Wizard state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
   const [newBrandName, setNewBrandName] = useState('');
+  const [newTagline, setNewTagline] = useState('SMART DERIV TOOLS');
   const [newSlug, setNewSlug] = useState('');
-  const [newDomain, setNewDomain] = useState('');
+  const [slugEditedManually, setSlugEditedManually] = useState(false);
+  const [slugCheck, setSlugCheck] = useState<{
+    checking: boolean;
+    available: boolean;
+    vercelDomain: string;
+    message: string;
+  }>({
+    checking: false,
+    available: true,
+    vercelDomain: '',
+    message: '',
+  });
+  const [newLogoUrl, setNewLogoUrl] = useState('/traderpulse-logo.jpg');
   const [newColor, setNewColor] = useState('#0066FF');
+  const [newEnabledTabs, setNewEnabledTabs] = useState<string[]>(() => ALL_13_TABS.map(t => t.id));
+  const [newIncludeDefaultBots, setNewIncludeDefaultBots] = useState(true);
+  const [newCustomBots, setNewCustomBots] = useState<ManagedBotItem[]>([]);
+  const [newPayoutMethod, setNewPayoutMethod] = useState<string>('M-Pesa');
+  const [newPayoutWallet, setNewPayoutWallet] = useState<string>('');
   const [newReferral, setNewReferral] = useState('');
-  const [newPreset, setNewPreset] = useState<'full' | 'bots_only' | 'pro_desk'>('full');
+  const [newDomain, setNewDomain] = useState('');
+  const [newSocialLinks, setNewSocialLinks] = useState<Partial<Record<SocialPlatformKey, string>>>({});
+  const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState('');
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
     setTimeout(() => {
       setToast(prev => (prev === msg ? '' : prev));
-    }, 3600);
+    }, 4200);
   }, []);
 
   const hydrateWorkspace = useCallback(async (sessionUser: StudioUser) => {
-    const [loadedSites, loadedPlatform] = await Promise.all([
+    const [loadedSites, loadedPlatform, ledger] = await Promise.all([
       loadManagedSites(sessionUser),
       fetchPlatformSettings(),
+      loadCommissionLedger(sessionUser).catch(() => ({ commissions: [], payouts: [] })),
     ]);
     setPlatformSettings(loadedPlatform);
     setSites(loadedSites);
+    setCommissions(ledger.commissions);
+    setPayouts(ledger.payouts);
     if (loadedSites.length > 0) {
       setSelectedSiteId(prev =>
         prev && loadedSites.some(s => s.id === prev) ? prev : loadedSites[0].id
@@ -111,7 +154,6 @@ export const App: React.FC = () => {
   useEffect(() => {
     let mounted = true;
 
-    // Surface any Supabase OAuth / email-link redirect error from URL hash
     if (typeof window !== 'undefined' && window.location.hash.includes('error_description=')) {
       const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
       const desc = hashParams.get('error_description');
@@ -123,9 +165,7 @@ export const App: React.FC = () => {
 
     (async () => {
       try {
-        if (!isSupabaseConfigured) {
-          return;
-        }
+        if (!isSupabaseConfigured) return;
         const sessionUser = await getInitialStudioSession();
         if (mounted && sessionUser) {
           setUser(sessionUser);
@@ -143,6 +183,8 @@ export const App: React.FC = () => {
       if (!session?.user) {
         setUser(null);
         setSites([]);
+        setCommissions([]);
+        setPayouts([]);
         setSelectedSiteId('');
         return;
       }
@@ -163,10 +205,106 @@ export const App: React.FC = () => {
     };
   }, [hydrateWorkspace]);
 
+  // Live debounced .vercel.app slug availability check in Create Site Wizard
+  useEffect(() => {
+    if (!isCreateOpen) return;
+    const clean = newSlug
+      .trim()
+      .toLowerCase()
+      .replace(/\.vercel\.app$/i, '')
+      .replace(/[^a-z0-9-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+    if (!clean || clean.length < 2) {
+      setSlugCheck({
+        checking: false,
+        available: false,
+        vercelDomain: clean ? `${clean}.vercel.app` : 'your-brand.vercel.app',
+        message: 'Enter at least 2 characters',
+      });
+      return;
+    }
+
+    setSlugCheck(prev => ({
+      ...prev,
+      checking: true,
+      vercelDomain: `${clean}.vercel.app`,
+    }));
+
+    const timer = setTimeout(async () => {
+      const res = await checkVercelSubdomainAvailability(clean);
+      setSlugCheck({
+        checking: false,
+        available: res.available,
+        vercelDomain: res.vercel_domain,
+        message: res.available
+          ? `https://${res.vercel_domain}/`
+          : res.error || `${res.vercel_domain} unavailable`,
+      });
+    }, 320);
+
+    return () => clearTimeout(timer);
+  }, [newSlug, isCreateOpen]);
+
   const selectedSite = useMemo(
     () => sites.find(s => s.id === selectedSiteId) || sites[0] || null,
     [sites, selectedSiteId]
   );
+
+  // Per-site commission stats map (computed strictly from real Supabase commission records)
+  const siteStatsMap = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        tradesCount: number;
+        totalStake: number;
+        grossMarkup: number;
+        unpaidOperator: number;
+        paidOperator: number;
+        adminNet: number;
+      }
+    >();
+
+    for (const c of commissions) {
+      const curr = map.get(c.site_id) || {
+        tradesCount: 0,
+        totalStake: 0,
+        grossMarkup: 0,
+        unpaidOperator: 0,
+        paidOperator: 0,
+        adminNet: 0,
+      };
+      curr.tradesCount += 1;
+      curr.totalStake += c.stake_amount;
+      curr.grossMarkup += c.gross_markup_usd;
+      curr.adminNet += c.admin_net_usd;
+      if (c.payout_status === 'paid') {
+        curr.paidOperator += c.operator_commission_usd;
+      } else {
+        curr.unpaidOperator += c.operator_commission_usd;
+      }
+      map.set(c.site_id, curr);
+    }
+
+    return map;
+  }, [commissions]);
+
+  const globalCommissionTotals = useMemo(() => {
+    let totalStake = 0;
+    let grossMarkup = 0;
+    let unpaidOperator = 0;
+    let adminNet = 0;
+
+    for (const c of commissions) {
+      totalStake += c.stake_amount;
+      grossMarkup += c.gross_markup_usd;
+      adminNet += c.admin_net_usd;
+      if (c.payout_status !== 'paid') {
+        unpaidOperator += c.operator_commission_usd;
+      }
+    }
+    return { totalStake, grossMarkup, unpaidOperator, adminNet };
+  }, [commissions]);
 
   const pushLivePreviewToIframe = useCallback((site: ManagedSite | null) => {
     if (!site || !iframeRef.current?.contentWindow) return;
@@ -205,12 +343,32 @@ export const App: React.FC = () => {
     if (
       section === 'branding' ||
       section === 'tabs' ||
-      section === 'oauth' ||
       section === 'bots' ||
-      section === 'domain'
+      section === 'domain' ||
+      section === 'commissions'
     ) {
       setActiveTab(section);
     }
+  };
+
+  const openCreateWizard = () => {
+    setWizardStep(1);
+    setNewBrandName('');
+    setNewTagline('SMART DERIV TOOLS');
+    setNewSlug('');
+    setSlugEditedManually(false);
+    setNewLogoUrl('/traderpulse-logo.jpg');
+    setNewColor('#0066FF');
+    setNewEnabledTabs(ALL_13_TABS.map(t => t.id));
+    setNewIncludeDefaultBots(true);
+    setNewCustomBots([]);
+    setNewPayoutMethod('M-Pesa');
+    setNewPayoutWallet('');
+    setNewReferral('');
+    setNewDomain('');
+    setNewSocialLinks({});
+    setCreateError('');
+    setIsCreateOpen(true);
   };
 
   const handlePublishChanges = async () => {
@@ -221,7 +379,7 @@ export const App: React.FC = () => {
       setSites(prev => prev.map(s => (s.id === selectedSite.id ? saved : s)));
       setSelectedSiteId(saved.id);
       pushLivePreviewToIframe(saved);
-      showToast(`Published "${saved.brand_name}" live to ${saved.custom_domain || `?site=${saved.slug}`}`);
+      showToast(`Published "${saved.brand_name}" live to ${buildLiveTenantUrl(saved)}`);
     } catch (err: any) {
       showToast(`Save error: ${err?.message || 'Unable to publish changes'}`);
     } finally {
@@ -232,7 +390,7 @@ export const App: React.FC = () => {
   const handleDeleteCurrentSite = async () => {
     if (!selectedSite) return;
     const confirmed = window.confirm(
-      `Delete "${selectedSite.brand_name}" (${selectedSite.custom_domain || selectedSite.slug}) permanently?`
+      `Delete "${selectedSite.brand_name}" (${buildLiveTenantUrl(selectedSite)}) permanently?`
     );
     if (!confirmed) return;
 
@@ -255,35 +413,62 @@ export const App: React.FC = () => {
     const cleanName = newBrandName.trim();
     const cleanSlug = (newSlug.trim() || cleanName)
       .toLowerCase()
+      .replace(/\.vercel\.app$/i, '')
       .replace(/[^a-z0-9-]+/g, '-')
       .replace(/^-+|-+$/g, '');
 
     if (!cleanName || cleanSlug.length < 2) {
-      setCreateError('Enter a valid brand name and URL slug (at least 2 characters).');
+      setCreateError('Enter a valid brand name and .vercel.app URL slug (at least 2 characters).');
+      setWizardStep(1);
+      return;
+    }
+
+    if (cleanSlug.includes('deriv') || cleanSlug.includes('binary')) {
+      setCreateError('URL names containing "deriv" or "binary" are prohibited.');
+      setWizardStep(1);
       return;
     }
 
     const lowerDom = newDomain.trim().toLowerCase();
     if (lowerDom && (lowerDom.includes('deriv') || lowerDom.includes('binary'))) {
-      setCreateError('Domain names containing "deriv" or "binary" are prohibited.');
+      setCreateError('Custom domains containing "deriv" or "binary" are prohibited.');
       return;
     }
 
     if (sites.some(s => s.slug.toLowerCase() === cleanSlug)) {
-      setCreateError(`Slug "${cleanSlug}" is already in your workspace. Choose another slug.`);
+      setCreateError(`"${cleanSlug}.vercel.app" is already in your workspace. Pick another URL slug.`);
+      setWizardStep(1);
       return;
     }
 
+    setCreateBusy(true);
     try {
-      const draft = createBlankManagedSite(
+      // 1. Auto-provision <slug>.vercel.app via Vercel Domains API
+      const vercelProv = await provisionVercelSubdomain(cleanSlug);
+      if (vercelProv.error && vercelProv.error.toLowerCase().includes('already taken')) {
+        setCreateError(vercelProv.error);
+        setWizardStep(1);
+        return;
+      }
+
+      // 2. Persist full configured site + XML bots + payout wallet to Supabase
+      const draft = createConfiguredManagedSite(
         user,
         {
           brand_name: cleanName,
+          tagline: newTagline,
           slug: cleanSlug,
+          logo_url: newLogoUrl,
           custom_domain: lowerDom,
           primary_color: newColor,
           deriv_referral_link: newReferral,
-          preset: newPreset,
+          enabled_tabs: newEnabledTabs,
+          include_default_bots: newIncludeDefaultBots,
+          custom_bots: newCustomBots,
+          social_links: newSocialLinks,
+          payout_method: newPayoutMethod,
+          payout_wallet: newPayoutWallet,
+          vercel_domain_status: vercelProv.ok ? 'live' : 'pending',
         },
         platformSettings
       );
@@ -291,37 +476,63 @@ export const App: React.FC = () => {
       setSites(prev => [created, ...prev]);
       setSelectedSiteId(created.id);
       setIsCreateOpen(false);
-      setNewBrandName('');
-      setNewSlug('');
-      setNewDomain('');
-      setNewReferral('');
       setActiveSidebar('branding');
       setActiveTab('branding');
-      showToast(`Created "${created.brand_name}" in Supabase!`);
+      showToast(
+        vercelProv.ok
+          ? `Launched https://${created.vercel_domain}/ live with SSL!`
+          : `Created ${created.brand_name} (${created.vercel_domain})!`
+      );
     } catch (err: any) {
-      setCreateError(err?.message || 'Failed to create site.');
+      setCreateError(err?.message || 'Failed to launch site.');
+    } finally {
+      setCreateBusy(false);
     }
   };
 
-  const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleActivateVercelSubdomain = async () => {
+    if (!selectedSite) return;
+    setDomainBusy(true);
+    setDomainFeedback('');
+    try {
+      const res = await provisionVercelSubdomain(selectedSite.slug);
+      if (res.ok) {
+        const saved = await persistManagedSite({
+          ...selectedSite,
+          vercel_domain: res.vercel_domain,
+          vercel_domain_status: 'live',
+        });
+        setSites(prev => prev.map(s => (s.id === saved.id ? saved : s)));
+        setDomainFeedback(`https://${res.vercel_domain}/ is LIVE on Vercel with automatic HTTPS SSL!`);
+        showToast(`https://${res.vercel_domain}/ is LIVE!`);
+      } else {
+        setDomainFeedback(res.error || 'Unable to provision .vercel.app subdomain.');
+      }
+    } finally {
+      setDomainBusy(false);
+    }
+  };
+
+  const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>, forWizard = false) => {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file || !user || !selectedSite) return;
+    if (!file || !user) return;
     try {
       const url = await uploadLogoAsset(file, user.id);
-      updateSelectedSite(s => ({ ...s, logo_url: url }));
-      showToast('Uploaded logo to studio-assets — click "Publish Changes Live" to save.');
+      if (forWizard) {
+        setNewLogoUrl(url);
+        showToast('Uploaded brand logo for your new site.');
+      } else if (selectedSite) {
+        updateSelectedSite(s => ({ ...s, logo_url: url }));
+        showToast('Uploaded logo — click "Publish Changes Live" to save.');
+      }
     } catch (err: any) {
       showToast(err?.message || 'Logo upload failed');
     }
   };
 
-  const handleBotXmlUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    e.target.value = '';
-    if (files.length === 0 || !selectedSite) return;
-
-    const addedBots: ManagedBotItem[] = [];
+  const parseUploadedXmlFiles = async (files: File[]): Promise<ManagedBotItem[]> => {
+    const parsed: ManagedBotItem[] = [];
     for (const file of files) {
       const xmlText = await file.text();
       if (!xmlText.includes('<xml') && !xmlText.includes('<block')) {
@@ -329,19 +540,31 @@ export const App: React.FC = () => {
         continue;
       }
       const baseName = file.name.replace(/\.xml$/i, '');
-      addedBots.push({
+      parsed.push({
         id: `bot-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         name: baseName,
         strategy: 'Operator Custom Strategy',
         description: `Uploaded XML trading bot (${Math.round(file.size / 1024) || 1} KB).`,
         categories: ['special'],
         xml_content: xmlText,
-        sort_order: selectedSite.custom_bots.length + addedBots.length + 1,
+        sort_order: parsed.length + 1,
         is_active: true,
       });
     }
+    return parsed;
+  };
 
-    if (addedBots.length > 0) {
+  const handleBotXmlUpload = async (e: React.ChangeEvent<HTMLInputElement>, forWizard = false) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (files.length === 0) return;
+
+    const addedBots = await parseUploadedXmlFiles(files);
+    if (addedBots.length === 0) return;
+
+    if (forWizard) {
+      setNewCustomBots(prev => [...addedBots, ...prev]);
+    } else if (selectedSite) {
       updateSelectedSite(s => ({
         ...s,
         custom_bots: [...addedBots, ...s.custom_bots],
@@ -374,7 +597,7 @@ export const App: React.FC = () => {
       const contentType = resp.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) {
         setDomainFeedback(
-          'The /api/domains Vercel serverless endpoint is only active on your deployed Vercel Studio project.'
+          'The /api/domains Vercel serverless endpoint runs on your deployed Vercel Studio project.'
         );
         return;
       }
@@ -426,6 +649,43 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleMarkOperatorPaid = async (site: ManagedSite) => {
+    const stats = siteStatsMap.get(site.id);
+    if (!stats || stats.unpaidOperator <= 0) return;
+
+    const note = window.prompt(
+      `Confirm payout of ${formatUsd(stats.unpaidOperator)} to ${site.owner_email || site.brand_name} (${
+        site.payout_method ? `${site.payout_method}: ${site.payout_wallet}` : 'No wallet set'
+      }).\n\nOptional payment reference (M-Pesa code / TXID):`,
+      ''
+    );
+    if (note === null) return;
+
+    setMarkingPaidSiteId(site.id);
+    try {
+      const receipt = await markSiteCommissionsPaid({
+        site,
+        unpaidAmountUsd: stats.unpaidOperator,
+        tradesCount: commissions.filter(c => c.site_id === site.id && c.payout_status === 'unpaid')
+          .length,
+        referenceNote: note,
+      });
+      setPayouts(prev => [receipt, ...prev]);
+      setCommissions(prev =>
+        prev.map(c =>
+          c.site_id === site.id && c.payout_status === 'unpaid'
+            ? { ...c, payout_status: 'paid', payout_id: receipt.id }
+            : c
+        )
+      );
+      showToast(`Marked ${formatUsd(receipt.amount_usd)} paid to ${site.brand_name}!`);
+    } catch (err: any) {
+      showToast(`Payout update failed: ${err?.message || 'Error'}`);
+    } finally {
+      setMarkingPaidSiteId('');
+    }
+  };
+
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
@@ -462,9 +722,6 @@ export const App: React.FC = () => {
     );
   }
 
-  // =========================================================================
-  // REQUIRED CLOUD CONFIGURATION GATE (NO MOCK FALLBACK)
-  // =========================================================================
   if (!isSupabaseConfigured) {
     return (
       <div className="studio-auth">
@@ -477,7 +734,7 @@ export const App: React.FC = () => {
             </div>
           </div>
 
-          <h1 className="studio-auth__title">Connect Supabase Environment</h1>
+          <h1 className="studio-auth__title">Connect Supabase &amp; Vercel Environment</h1>
           <p className="studio-auth__sub">
             Add these environment variables in your Vercel Studio project (
             <strong>Settings → Environment Variables</strong>) and trigger a <strong>Redeploy</strong>:
@@ -486,16 +743,14 @@ export const App: React.FC = () => {
           <div className="studio-callout">
             <code>SUPABASE_URL</code>
             <code>SUPABASE_PUBLISHABLE_KEY</code>
-            <code>STUDIO_TENANT_RUNTIME_URL</code>
+            <code>VERCEL_API_TOKEN</code>
+            <code>VERCEL_TENANT_PROJECT_ID</code>
           </div>
         </div>
       </div>
     );
   }
 
-  // =========================================================================
-  // PUBLIC SAAS OPERATOR SIGN-IN / SIGN-UP SCREEN
-  // =========================================================================
   if (!user) {
     return (
       <div className="studio-auth">
@@ -512,7 +767,8 @@ export const App: React.FC = () => {
             {authMode === 'signin' ? 'Operator Sign In' : 'Create Operator Account'}
           </h1>
           <p className="studio-auth__sub">
-            Launch white-label Deriv trading platforms on your own custom domain in 60 seconds.
+            Launch your own branded <code>.vercel.app</code> Deriv trading platform and earn
+            commission on every real trade.
           </p>
 
           <button
@@ -560,7 +816,7 @@ export const App: React.FC = () => {
                   type="text"
                   value={authName}
                   onChange={e => setAuthName(e.target.value)}
-                  placeholder="e.g. Apex Trading Desk"
+                  placeholder="e.g. Apex Quant Desk"
                   required
                 />
               </label>
@@ -650,16 +906,19 @@ export const App: React.FC = () => {
     );
   }
 
-  const previewIframeUrl = selectedSite
-    ? buildPreviewTenantUrl(selectedSite, platformSettings)
-    : '';
-  const openExternalTenantUrl = selectedSite
-    ? buildLiveTenantUrl(selectedSite, platformSettings)
-    : '#';
+  const previewIframeUrl = selectedSite ? buildPreviewTenantUrl(selectedSite) : '';
+  const openExternalTenantUrl = selectedSite ? buildLiveTenantUrl(selectedSite) : '#';
+  const selectedSiteStats = selectedSite
+    ? siteStatsMap.get(selectedSite.id) || {
+        tradesCount: 0,
+        totalStake: 0,
+        grossMarkup: 0,
+        unpaidOperator: 0,
+        paidOperator: 0,
+        adminNet: 0,
+      }
+    : null;
 
-  // =========================================================================
-  // AUTHENTICATED SITE STUDIO CONTROL PLANE
-  // =========================================================================
   return (
     <div className="studio-shell">
       {/* LEFT SIDEBAR */}
@@ -715,11 +974,11 @@ export const App: React.FC = () => {
           </button>
           <button
             type="button"
-            className={`studio-nav-item ${activeSidebar === 'oauth' ? 'is-active' : ''}`}
-            onClick={() => handleSidebarNav('oauth')}
+            className={`studio-nav-item ${activeSidebar === 'commissions' ? 'is-active' : ''}`}
+            onClick={() => handleSidebarNav('commissions')}
           >
             <span className="studio-nav-item__dot" />
-            <span>Deriv OAuth &amp; Affiliate</span>
+            <span>Commissions &amp; Payouts</span>
           </button>
 
           {user.role === 'super_admin' && (
@@ -731,7 +990,7 @@ export const App: React.FC = () => {
               onClick={() => handleSidebarNav('superadmin')}
             >
               <span className="studio-nav-item__dot" />
-              <span>Super-Admin Governance</span>
+              <span>Super-Admin Payouts</span>
             </button>
           )}
         </nav>
@@ -767,15 +1026,23 @@ export const App: React.FC = () => {
           <div>
             <h1 className="studio-topbar__heading">Multi-Site Control Plane</h1>
             <p className="studio-topbar__sub">
-              Connected to Supabase ({connectedSupabaseHost}) · Row-Level Security Active
+              Supabase ({connectedSupabaseHost}) · Automatic <code>.vercel.app</code> Provisioning +
+              Commission Engine
             </p>
           </div>
 
           <div className="studio-topbar__actions">
             <button
               type="button"
+              className="studio-btn studio-btn--ghost studio-btn--sm"
+              onClick={() => user && void hydrateWorkspace(user)}
+            >
+              Refresh Ledger
+            </button>
+            <button
+              type="button"
               className="studio-btn studio-btn--primary"
-              onClick={() => setIsCreateOpen(true)}
+              onClick={openCreateWizard}
             >
               + Create New Site
             </button>
@@ -784,7 +1051,7 @@ export const App: React.FC = () => {
 
         {toast && <div className="studio-toast">{toast}</div>}
 
-        {/* MANAGED SITES HORIZONTAL CARDS */}
+        {/* MANAGED SITES STRIP */}
         <section className="studio-sites-strip" aria-label="Managed Sites">
           <div className="studio-section-head">
             <h2>
@@ -792,20 +1059,20 @@ export const App: React.FC = () => {
                 ? `All Platform Sites (${sites.length})`
                 : `Your Managed Sites (${sites.length})`}
             </h2>
-            {sites.length > 0 && <span>Click any site card to edit &amp; live-preview</span>}
+            {sites.length > 0 && <span>Each site gets its own dedicated .vercel.app URL</span>}
           </div>
 
           {sites.length === 0 ? (
             <div className="studio-empty-state">
               <h3>No trading sites created yet</h3>
               <p>
-                Click <strong>+ Create New Site</strong> to launch your first white-label Deriv
-                trading platform with your own brand, 13 feature tabs, custom XML bots, and domain.
+                Click <strong>+ Create New Site</strong> to choose your <code>.vercel.app</code> URL,
+                logo, colors, 13 feature tabs, XML bots, and commission payout wallet.
               </p>
               <button
                 type="button"
                 className="studio-btn studio-btn--primary"
-                onClick={() => setIsCreateOpen(true)}
+                onClick={openCreateWizard}
               >
                 + Create Your First Site
               </button>
@@ -814,18 +1081,26 @@ export const App: React.FC = () => {
             <div className="studio-sites-grid">
               {sites.map(site => {
                 const isSelected = selectedSite?.id === site.id;
+                const stats = siteStatsMap.get(site.id);
+                const publicHost =
+                  site.custom_domain && site.domain_status === 'live'
+                    ? site.custom_domain
+                    : site.vercel_domain || `${site.slug}.vercel.app`;
+                const isUrlLive =
+                  (site.custom_domain && site.domain_status === 'live') ||
+                  site.vercel_domain_status === 'live';
                 const badgeLabel =
                   site.status === 'suspended'
                     ? 'SUSPENDED'
                     : site.status === 'maintenance'
                     ? 'MAINTENANCE'
-                    : site.domain_status === 'live'
+                    : isUrlLive
                     ? 'LIVE SSL'
-                    : 'VERIFY DNS';
+                    : 'PENDING URL';
                 const badgeClass =
                   site.status === 'suspended'
                     ? 'is-danger'
-                    : site.status === 'maintenance' || site.domain_status !== 'live'
+                    : site.status === 'maintenance' || !isUrlLive
                     ? 'is-warn'
                     : 'is-live';
 
@@ -844,9 +1119,7 @@ export const App: React.FC = () => {
                           className="studio-site-card__logo"
                         />
                         <div>
-                          <strong>
-                            {site.custom_domain || `${site.slug}.${platformSettings.base_domain}`}
-                          </strong>
+                          <strong>{publicHost}</strong>
                           <span>{site.brand_name}</span>
                         </div>
                       </div>
@@ -859,12 +1132,12 @@ export const App: React.FC = () => {
                           className="studio-color-dot"
                           style={{ backgroundColor: site.primary_color }}
                         />
-                        {site.primary_color}
+                        {site.enabled_tabs.length}/13 Tabs
                       </span>
-                      <span>{site.enabled_tabs.length}/13 Tabs</span>
                       <span>
                         {site.custom_bots.length + (site.include_default_bots ? 18 : 0)} Bots
                       </span>
+                      <span>{formatUsd(stats?.unpaidOperator || 0)} Unpaid</span>
                     </div>
                   </button>
                 );
@@ -873,172 +1146,220 @@ export const App: React.FC = () => {
           )}
         </section>
 
-        {/* SUPER-ADMIN GOVERNANCE PANEL OR SITE CONFIGURATOR */}
+        {/* =================================================================
+            SUPER-ADMIN COMMISSIONS & OPERATOR PAYOUTS DASHBOARD
+            ================================================================= */}
         {activeSidebar === 'superadmin' && user.role === 'super_admin' ? (
           <section className="studio-panel">
             <div className="studio-panel__header">
               <div>
-                <h2>Super-Admin Platform Governance</h2>
+                <h2>Super-Admin Commissions &amp; Operator Payouts</h2>
                 <p>
-                  Manage global pooled Deriv OAuth credentials, operator commission share, and
-                  instant site suspension across all tenants.
+                  Every created site trades through your Main Deriv App ID via the Central OAuth
+                  Callback Relay and logs real-account commissions automatically.
                 </p>
+              </div>
+            </div>
+
+            <div className="studio-engine-bar">
+              <span className="studio-engine-bar__pill">
+                <i /> Main Deriv App ID Pooled Engine Active
+              </span>
+
+              <div className="studio-engine-bar__rates">
+                <label className="studio-rate-chip">
+                  <span>Your Deriv App Markup (%):</span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min={0.1}
+                    max={10}
+                    value={platformSettings.platform_markup_pct}
+                    onChange={e =>
+                      setPlatformSettings(p => ({
+                        ...p,
+                        platform_markup_pct: Number(e.target.value || 0),
+                      }))
+                    }
+                  />
+                </label>
+
+                <label className="studio-rate-chip">
+                  <span>Operator Commission Share (%):</span>
+                  <input
+                    type="number"
+                    step="1"
+                    min={0}
+                    max={95}
+                    value={platformSettings.default_commission_pct}
+                    onChange={e =>
+                      setPlatformSettings(p => ({
+                        ...p,
+                        default_commission_pct: Number(e.target.value || 0),
+                      }))
+                    }
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  className="studio-btn studio-btn--primary studio-btn--sm"
+                  onClick={async () => {
+                    try {
+                      await savePlatformSettings(platformSettings);
+                      showToast('Saved global Deriv markup & operator commission share rates!');
+                    } catch (err: any) {
+                      showToast(`Save failed: ${err?.message || 'Error'}`);
+                    }
+                  }}
+                >
+                  Save Rates
+                </button>
               </div>
             </div>
 
             <div className="studio-kpi-row">
               <div className="studio-kpi">
-                <span>Total Managed Sites</span>
-                <strong>{sites.length}</strong>
+                <span>Total Real Trade Stake Volume</span>
+                <strong>{formatUsd(globalCommissionTotals.totalStake)}</strong>
               </div>
               <div className="studio-kpi">
-                <span>Active Live SSL</span>
-                <strong>
-                  {sites.filter(s => s.status === 'active' && s.domain_status === 'live').length}
-                </strong>
+                <span>Your Gross Deriv Markup ({platformSettings.platform_markup_pct}%)</span>
+                <strong>{formatUsd(globalCommissionTotals.grossMarkup)}</strong>
               </div>
               <div className="studio-kpi">
-                <span>Default Rev-Share</span>
-                <strong>{platformSettings.default_commission_pct}%</strong>
+                <span>Commission Owed to Operators</span>
+                <strong>{formatUsd(globalCommissionTotals.unpaidOperator)}</strong>
               </div>
               <div className="studio-kpi">
-                <span>Pooled Deriv App ID</span>
-                <strong>{platformSettings.pooled_deriv_app_id || 'Inherited (Env)'}</strong>
+                <span>Your Net Platform Profit</span>
+                <strong>{formatUsd(globalCommissionTotals.adminNet)}</strong>
               </div>
             </div>
 
+            <div className="studio-subhead">Operator Commission Payout Ledger</div>
+            {sites.length === 0 ? (
+              <div className="studio-empty-bots">No operator sites registered yet.</div>
+            ) : (
+              <div className="studio-admin-table-wrap">
+                <table className="studio-admin-table">
+                  <thead>
+                    <tr>
+                      <th>Site URL</th>
+                      <th>Operator Email</th>
+                      <th>Payout Wallet</th>
+                      <th>Real Trades</th>
+                      <th>Unpaid Commission To Pay</th>
+                      <th>Status</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sites.map(s => {
+                      const st = siteStatsMap.get(s.id) || {
+                        tradesCount: 0,
+                        totalStake: 0,
+                        grossMarkup: 0,
+                        unpaidOperator: 0,
+                        paidOperator: 0,
+                        adminNet: 0,
+                      };
+                      const siteUrl = buildLiveTenantUrl(s);
+                      const hasUnpaid = st.unpaidOperator > 0;
+                      const walletDisplay = s.payout_wallet
+                        ? `${s.payout_method ? `${s.payout_method}: ` : ''}${s.payout_wallet}`
+                        : 'Not set yet';
+
+                      return (
+                        <tr key={s.id}>
+                          <td>
+                            <a
+                              href={siteUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ color: '#60a5fa', fontWeight: 700, textDecoration: 'none' }}
+                            >
+                              {siteUrl}
+                            </a>
+                            <div className="studio-muted">{s.brand_name}</div>
+                          </td>
+                          <td>{s.owner_email || s.owner_id}</td>
+                          <td>{walletDisplay}</td>
+                          <td>{st.tradesCount}</td>
+                          <td>
+                            <strong>{formatUsd(st.unpaidOperator)}</strong>
+                            {st.paidOperator > 0 && (
+                              <div className="studio-muted">Paid: {formatUsd(st.paidOperator)}</div>
+                            )}
+                          </td>
+                          <td>
+                            <span
+                              className={`studio-status-pill ${hasUnpaid ? 'is-warn' : 'is-live'}`}
+                            >
+                              {hasUnpaid ? 'UNPAID' : 'PAID'}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="studio-table-btns">
+                              {hasUnpaid && (
+                                <button
+                                  type="button"
+                                  className="studio-btn studio-btn--primary studio-btn--xs"
+                                  disabled={markingPaidSiteId === s.id}
+                                  onClick={() => void handleMarkOperatorPaid(s)}
+                                >
+                                  {markingPaidSiteId === s.id ? 'Saving…' : 'Mark Paid'}
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="studio-btn studio-btn--ghost studio-btn--xs"
+                                onClick={() =>
+                                  void handleAdminStatusChange(
+                                    s,
+                                    s.status === 'suspended' ? 'active' : 'suspended'
+                                  )
+                                }
+                              >
+                                {s.status === 'suspended' ? 'Activate' : 'Suspend'}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="studio-subhead" style={{ marginTop: 18 }}>
+              Advanced OAuth Relay &amp; Pooled App ID Overrides (Optional)
+            </div>
             <div className="studio-form-grid">
               <label className="studio-field">
-                <span>Tenant Template Runtime URL (Cloned Base App)</span>
-                <input
-                  type="url"
-                  value={platformSettings.tenant_template_base_url}
-                  onChange={e =>
-                    setPlatformSettings(p => ({ ...p, tenant_template_base_url: e.target.value }))
-                  }
-                  placeholder="https://tradepulse-lovat.vercel.app"
-                />
-              </label>
-              <label className="studio-field">
-                <span>Pooled Instant Deriv OAuth App ID</span>
+                <span>Main Deriv OAuth App ID Override (Blank = NEXT_PUBLIC_DERIV_APP_ID)</span>
                 <input
                   type="text"
                   value={platformSettings.pooled_deriv_app_id}
                   onChange={e =>
                     setPlatformSettings(p => ({ ...p, pooled_deriv_app_id: e.target.value }))
                   }
-                  placeholder="Leave blank to inherit NEXT_PUBLIC_DERIV_APP_ID"
+                  placeholder="Inherited from your main deployment automatically"
                 />
               </label>
               <label className="studio-field">
-                <span>Default Monthly Commission Share (%)</span>
+                <span>OAuth Callback Hub URL Override (Blank = NEXT_PUBLIC_DERIV_REDIRECT_URI)</span>
                 <input
-                  type="number"
-                  min={0}
-                  max={80}
-                  value={platformSettings.default_commission_pct}
+                  type="url"
+                  value={platformSettings.oauth_callback_hub_url}
                   onChange={e =>
-                    setPlatformSettings(p => ({
-                      ...p,
-                      default_commission_pct: Number(e.target.value || 0),
-                    }))
+                    setPlatformSettings(p => ({ ...p, oauth_callback_hub_url: e.target.value }))
                   }
-                />
-              </label>
-              <label className="studio-field">
-                <span>Platform Wildcard Base Domain</span>
-                <input
-                  type="text"
-                  value={platformSettings.base_domain}
-                  onChange={e => setPlatformSettings(p => ({ ...p, base_domain: e.target.value }))}
+                  placeholder="https://your-callback-origin.com/callback"
                 />
               </label>
             </div>
-
-            <div className="studio-inline-actions">
-              <button
-                type="button"
-                className="studio-btn studio-btn--primary"
-                onClick={async () => {
-                  try {
-                    await savePlatformSettings(platformSettings);
-                    showToast('Saved global platform governance settings.');
-                  } catch (err: any) {
-                    showToast(`Save failed: ${err?.message || 'Error'}`);
-                  }
-                }}
-              >
-                Save Global Platform Settings
-              </button>
-            </div>
-
-            {sites.length > 0 && (
-              <div className="studio-admin-table-wrap">
-                <table className="studio-admin-table">
-                  <thead>
-                    <tr>
-                      <th>Tenant Site</th>
-                      <th>Operator</th>
-                      <th>OAuth Mode</th>
-                      <th>Rev Share</th>
-                      <th>Status</th>
-                      <th>Governance Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sites.map(s => (
-                      <tr key={s.id}>
-                        <td>
-                          <strong>{s.brand_name}</strong>
-                          <div className="studio-muted">{s.custom_domain || `?site=${s.slug}`}</div>
-                        </td>
-                        <td>{s.owner_email || s.owner_id}</td>
-                        <td>{s.deriv_app_id ? `Custom (#${s.deriv_app_id})` : 'Pooled Instant'}</td>
-                        <td>{s.commission_share_pct}%</td>
-                        <td>
-                          <span
-                            className={`studio-status-pill ${
-                              s.status === 'active'
-                                ? 'is-live'
-                                : s.status === 'maintenance'
-                                ? 'is-warn'
-                                : 'is-danger'
-                            }`}
-                          >
-                            {s.status.toUpperCase()}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="studio-table-btns">
-                            <button
-                              type="button"
-                              className="studio-btn studio-btn--ghost studio-btn--xs"
-                              onClick={() => void handleAdminStatusChange(s, 'active')}
-                            >
-                              Activate
-                            </button>
-                            <button
-                              type="button"
-                              className="studio-btn studio-btn--ghost studio-btn--xs"
-                              onClick={() => void handleAdminStatusChange(s, 'maintenance')}
-                            >
-                              Maintenance
-                            </button>
-                            <button
-                              type="button"
-                              className="studio-btn studio-btn--danger studio-btn--xs"
-                              onClick={() => void handleAdminStatusChange(s, 'suspended')}
-                            >
-                              Suspend
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
           </section>
         ) : selectedSite ? (
           <section className="studio-panel">
@@ -1046,13 +1367,7 @@ export const App: React.FC = () => {
               <div>
                 <h2>Configure: {selectedSite.brand_name}</h2>
                 <p>
-                  Slug: <code>?site={selectedSite.slug}</code>
-                  {selectedSite.custom_domain ? (
-                    <>
-                      {' '}
-                      · Domain: <code>{selectedSite.custom_domain}</code>
-                    </>
-                  ) : null}
+                  Live URL: <code>{openExternalTenantUrl}</code>
                 </p>
               </div>
               <div className="studio-panel__header-btns">
@@ -1080,9 +1395,9 @@ export const App: React.FC = () => {
                 [
                   ['branding', 'Branding'],
                   ['tabs', '13 Tabs Toggle'],
-                  ['oauth', 'Deriv OAuth & Referral'],
                   ['bots', `XML Bots (${selectedSite.custom_bots.length})`],
-                  ['domain', 'Custom Domain'],
+                  ['domain', '.vercel.app & Domain'],
+                  ['commissions', 'Commissions & Payouts'],
                 ] as Array<[ConfigTab, string]>
               ).map(([key, label]) => (
                 <button
@@ -1111,7 +1426,7 @@ export const App: React.FC = () => {
                       onChange={e =>
                         updateSelectedSite(s => ({ ...s, brand_name: e.target.value }))
                       }
-                      placeholder="e.g. My Brand Trading"
+                      placeholder="e.g. Apex Quant Trading"
                     />
                   </label>
 
@@ -1144,7 +1459,7 @@ export const App: React.FC = () => {
                         type="file"
                         accept="image/*"
                         hidden
-                        onChange={handleLogoFileChange}
+                        onChange={e => void handleLogoFileChange(e, false)}
                       />
                       <button
                         type="button"
@@ -1160,7 +1475,7 @@ export const App: React.FC = () => {
                           updateSelectedSite(s => ({ ...s, logo_url: '/traderpulse-logo.jpg' }))
                         }
                       >
-                        Reset to TradersPulse Logo
+                        Reset Default Logo
                       </button>
                     </div>
                   </div>
@@ -1217,6 +1532,18 @@ export const App: React.FC = () => {
                     />
                   </label>
                 </div>
+
+                <label className="studio-field">
+                  <span>Deriv Affiliate Signup Link (Used on "Create Deriv Account" CTA)</span>
+                  <input
+                    type="url"
+                    value={selectedSite.deriv_referral_link}
+                    onChange={e =>
+                      updateSelectedSite(s => ({ ...s, deriv_referral_link: e.target.value }))
+                    }
+                    placeholder="https://track.deriv.com/_..."
+                  />
+                </label>
 
                 <div className="studio-subhead">Community &amp; Social Channel Links (Login Screen)</div>
                 <div className="studio-form-grid">
@@ -1336,89 +1663,7 @@ export const App: React.FC = () => {
               </div>
             )}
 
-            {/* TAB 3: DERIV OAUTH & AFFILIATE REFERRAL */}
-            {activeTab === 'oauth' && (
-              <div className="studio-tab-body">
-                <div className="studio-oauth-tiers">
-                  <button
-                    type="button"
-                    className={`studio-tier-card ${
-                      selectedSite.use_pooled_oauth && !selectedSite.deriv_app_id ? 'is-selected' : ''
-                    }`}
-                    onClick={() =>
-                      updateSelectedSite(s => ({ ...s, use_pooled_oauth: true, deriv_app_id: '' }))
-                    }
-                  >
-                    <span className="studio-status-pill is-live">INSTANT ZERO-SETUP</span>
-                    <strong>Tier 1: Pooled Platform OAuth</strong>
-                    <p>
-                      Traders log in immediately using the platform Deriv OAuth App ID + PAT Login
-                      while crediting your Deriv Affiliate referral link.
-                    </p>
-                  </button>
-
-                  <button
-                    type="button"
-                    className={`studio-tier-card ${
-                      !selectedSite.use_pooled_oauth || Boolean(selectedSite.deriv_app_id)
-                        ? 'is-selected'
-                        : ''
-                    }`}
-                    onClick={() => updateSelectedSite(s => ({ ...s, use_pooled_oauth: false }))}
-                  >
-                    <span className="studio-status-pill is-warn">CUSTOM PARTNER APP</span>
-                    <strong>Tier 2: Dedicated Deriv App ID</strong>
-                    <p>
-                      Connect your own Deriv Developer <code>app_id</code> from{' '}
-                      <code>api.deriv.com</code> to earn direct app markup commissions + custom
-                      OAuth consent branding.
-                    </p>
-                  </button>
-                </div>
-
-                <div className="studio-form-grid">
-                  <label className="studio-field">
-                    <span>Custom Deriv App ID (Leave blank to use Pooled Instant OAuth)</span>
-                    <input
-                      type="text"
-                      value={selectedSite.deriv_app_id}
-                      onChange={e =>
-                        updateSelectedSite(s => ({
-                          ...s,
-                          deriv_app_id: e.target.value.trim(),
-                          use_pooled_oauth: !e.target.value.trim(),
-                        }))
-                      }
-                      placeholder="e.g. 62819 (from api.deriv.com)"
-                    />
-                  </label>
-
-                  <label className="studio-field">
-                    <span>Deriv Affiliate / Scaleo Referral Signup URL</span>
-                    <input
-                      type="url"
-                      value={selectedSite.deriv_referral_link}
-                      onChange={e =>
-                        updateSelectedSite(s => ({ ...s, deriv_referral_link: e.target.value }))
-                      }
-                      placeholder="https://track.deriv.com/_..."
-                    />
-                  </label>
-                </div>
-
-                <div className="studio-callout">
-                  <strong>Required OAuth Redirect URI on api.deriv.com (for Tier 2):</strong>
-                  <code>
-                    https://
-                    {selectedSite.custom_domain ||
-                      `${selectedSite.slug}.${platformSettings.base_domain}`}
-                    /callback
-                  </code>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 4: XML BOTS UPLOADER */}
+            {/* TAB 3: XML BOTS UPLOADER */}
             {activeTab === 'bots' && (
               <div className="studio-tab-body">
                 <div className="studio-bots-toolbar">
@@ -1436,7 +1681,7 @@ export const App: React.FC = () => {
                       accept=".xml,text/xml,application/xml"
                       multiple
                       hidden
-                      onChange={handleBotXmlUpload}
+                      onChange={e => void handleBotXmlUpload(e, false)}
                     />
                     <button
                       type="button"
@@ -1457,8 +1702,8 @@ export const App: React.FC = () => {
                     }
                   />
                   <span>
-                    Also include the 18 built-in TradersPulse Special, Virtual-Hook &amp; Turbo AI
-                    bots below my custom bots
+                    Also include the 18 built-in Special, Virtual-Hook &amp; Turbo AI bots below my
+                    custom bots
                   </span>
                 </label>
 
@@ -1518,12 +1763,39 @@ export const App: React.FC = () => {
               </div>
             )}
 
-            {/* TAB 5: CUSTOM DOMAIN & AUTO-SSL */}
+            {/* TAB 4: DEDICATED .VERCEL.APP URL & CUSTOM DOMAIN */}
             {activeTab === 'domain' && (
               <div className="studio-tab-body">
+                <div className="studio-engine-bar">
+                  <div>
+                    <strong>Dedicated .vercel.app Platform URL</strong>
+                    <div className="studio-muted">
+                      <code>https://{selectedSite.vercel_domain || `${selectedSite.slug}.vercel.app`}</code>
+                    </div>
+                  </div>
+                  <div className="studio-engine-bar__rates">
+                    <span
+                      className={`studio-status-pill ${
+                        selectedSite.vercel_domain_status === 'live' ? 'is-live' : 'is-warn'
+                      }`}
+                    >
+                      {selectedSite.vercel_domain_status === 'live' ? 'LIVE SSL' : 'PENDING SYNC'}
+                    </span>
+                    <button
+                      type="button"
+                      className="studio-btn studio-btn--primary studio-btn--sm"
+                      disabled={domainBusy}
+                      onClick={() => void handleActivateVercelSubdomain()}
+                    >
+                      {domainBusy ? 'Syncing…' : 'Activate / Sync .vercel.app URL'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="studio-subhead">Optional Custom Domain (Apex or Subdomain)</div>
                 <div className="studio-form-grid">
                   <label className="studio-field">
-                    <span>Custom Domain (Apex or Subdomain)</span>
+                    <span>Custom Domain</span>
                     <input
                       type="text"
                       value={selectedSite.custom_domain}
@@ -1535,7 +1807,7 @@ export const App: React.FC = () => {
                   </label>
 
                   <label className="studio-field">
-                    <span>Instant Tenant Slug URL (No DNS Needed)</span>
+                    <span>Active Public URL</span>
                     <input type="text" readOnly value={openExternalTenantUrl} />
                   </label>
                 </div>
@@ -1547,7 +1819,7 @@ export const App: React.FC = () => {
                     disabled={domainBusy}
                     onClick={() => void handleDomainAction('attach')}
                   >
-                    1. Attach Domain to Vercel Edge
+                    1. Attach Custom Domain to Vercel
                   </button>
                   <button
                     type="button"
@@ -1563,13 +1835,13 @@ export const App: React.FC = () => {
 
                 <div className="studio-dns-box">
                   <div className="studio-dns-box__head">
-                    <strong>Required Registrar DNS Records</strong>
+                    <strong>Registrar DNS Records (Only if using a Custom Domain)</strong>
                     <span
                       className={`studio-status-pill ${
                         selectedSite.domain_status === 'live' ? 'is-live' : 'is-warn'
                       }`}
                     >
-                      {selectedSite.domain_status === 'live' ? 'SSL ACTIVE' : 'AWAITING DNS'}
+                      {selectedSite.domain_status === 'live' ? 'SSL ACTIVE' : 'OPTIONAL'}
                     </span>
                   </div>
                   <table className="studio-admin-table">
@@ -1601,6 +1873,120 @@ export const App: React.FC = () => {
                 </div>
               </div>
             )}
+
+            {/* TAB 5: OPERATOR COMMISSIONS & PAYOUT WALLET */}
+            {activeTab === 'commissions' && selectedSiteStats && (
+              <div className="studio-tab-body">
+                <div className="studio-engine-bar">
+                  <span className="studio-engine-bar__pill">
+                    <i /> Main Deriv App ID Pooled Engine Active — {selectedSite.commission_share_pct}%
+                    Commission Share
+                  </span>
+                  <span className="studio-muted">
+                    Real-money trades on <code>{openExternalTenantUrl}</code> accrue automatically
+                  </span>
+                </div>
+
+                <div className="studio-kpi-row">
+                  <div className="studio-kpi">
+                    <span>Real Stake Volume</span>
+                    <strong>{formatUsd(selectedSiteStats.totalStake)}</strong>
+                  </div>
+                  <div className="studio-kpi">
+                    <span>Real Trades Executed</span>
+                    <strong>{selectedSiteStats.tradesCount}</strong>
+                  </div>
+                  <div className="studio-kpi">
+                    <span>Unpaid Commission Earned</span>
+                    <strong>{formatUsd(selectedSiteStats.unpaidOperator)}</strong>
+                  </div>
+                  <div className="studio-kpi">
+                    <span>Total Paid Out</span>
+                    <strong>{formatUsd(selectedSiteStats.paidOperator)}</strong>
+                  </div>
+                </div>
+
+                <div className="studio-subhead">Your Commission Payout Wallet</div>
+                <div className="studio-form-grid">
+                  <label className="studio-field">
+                    <span>Payout Method</span>
+                    <select
+                      value={selectedSite.payout_method}
+                      onChange={e =>
+                        updateSelectedSite(s => ({ ...s, payout_method: e.target.value }))
+                      }
+                    >
+                      <option value="">Select payout method…</option>
+                      {PAYOUT_METHODS.filter(Boolean).map(m => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="studio-field">
+                    <span>Wallet / Phone / Account Number</span>
+                    <input
+                      type="text"
+                      value={selectedSite.payout_wallet}
+                      onChange={e =>
+                        updateSelectedSite(s => ({ ...s, payout_wallet: e.target.value }))
+                      }
+                      placeholder="e.g. +2547... or TRC20 Address or CR123456"
+                    />
+                  </label>
+                </div>
+
+                <div className="studio-subhead">Recent Real-Trade Commissions on This Site</div>
+                {commissions.filter(c => c.site_id === selectedSite.id).length === 0 ? (
+                  <div className="studio-empty-bots">
+                    No real-account trades recorded on <code>{openExternalTenantUrl}</code> yet.
+                    Commissions appear here automatically as traders place real trades.
+                  </div>
+                ) : (
+                  <div className="studio-admin-table-wrap">
+                    <table className="studio-admin-table">
+                      <thead>
+                        <tr>
+                          <th>Contract ID</th>
+                          <th>Account</th>
+                          <th>Stake</th>
+                          <th>Your Commission</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {commissions
+                          .filter(c => c.site_id === selectedSite.id)
+                          .slice(0, 25)
+                          .map(c => (
+                            <tr key={c.id}>
+                              <td>
+                                <code>{c.contract_id}</code>
+                              </td>
+                              <td>{c.trader_loginid}</td>
+                              <td>{formatUsd(c.stake_amount)}</td>
+                              <td>
+                                <strong>{formatUsd(c.operator_commission_usd)}</strong>
+                              </td>
+                              <td>
+                                <span
+                                  className={`studio-status-pill ${
+                                    c.payout_status === 'paid' ? 'is-live' : 'is-warn'
+                                  }`}
+                                >
+                                  {c.payout_status.toUpperCase()}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
           </section>
         ) : null}
       </main>
@@ -1610,11 +1996,7 @@ export const App: React.FC = () => {
         <div className="studio-preview__top">
           <div>
             <strong>Live Tenant Preview</strong>
-            <span>
-              {selectedSite
-                ? selectedSite.custom_domain || `?site=${selectedSite.slug}`
-                : 'No site selected'}
-            </span>
+            <span>{selectedSite ? openExternalTenantUrl : 'No site selected'}</span>
           </div>
 
           <div className="studio-preview__controls">
@@ -1658,7 +2040,7 @@ export const App: React.FC = () => {
               rel="noopener noreferrer"
               className="studio-btn studio-btn--ghost studio-btn--full"
             >
-              Open Live Tenant Site ↗
+              Open {openExternalTenantUrl} ↗
             </a>
             <button
               type="button"
@@ -1672,118 +2054,368 @@ export const App: React.FC = () => {
         )}
       </aside>
 
-      {/* + CREATE NEW SITE MODAL */}
+      {/* =====================================================================
+          3-STEP CREATE WHITE-LABEL TRADING SITE WIZARD MODAL
+          ===================================================================== */}
       {isCreateOpen && (
-        <div className="studio-modal-backdrop" onClick={() => setIsCreateOpen(false)}>
+        <div className="studio-modal-backdrop" onClick={() => !createBusy && setIsCreateOpen(false)}>
           <div className="studio-modal" onClick={e => e.stopPropagation()}>
             <div className="studio-modal__head">
-              <h2>Launch New White-Label Trading Site</h2>
+              <h2>TradersPulse Site Studio — Create White-Label Trading Site Wizard</h2>
               <button
                 type="button"
                 className="studio-modal__close"
-                onClick={() => setIsCreateOpen(false)}
+                onClick={() => !createBusy && setIsCreateOpen(false)}
               >
                 ✕
               </button>
             </div>
 
+            <div className="studio-wizard-steps">
+              <button
+                type="button"
+                className={`studio-wizard-step ${wizardStep === 1 ? 'is-active' : ''}`}
+                onClick={() => setWizardStep(1)}
+              >
+                1. Brand &amp; .vercel.app URL
+              </button>
+              <button
+                type="button"
+                className={`studio-wizard-step ${wizardStep === 2 ? 'is-active' : ''}`}
+                onClick={() => setWizardStep(2)}
+              >
+                2. Choose Feature Tabs ({newEnabledTabs.length}/13)
+              </button>
+              <button
+                type="button"
+                className={`studio-wizard-step ${wizardStep === 3 ? 'is-active' : ''}`}
+                onClick={() => setWizardStep(3)}
+              >
+                3. Bots &amp; Commission Payout
+              </button>
+            </div>
+
             <form onSubmit={handleCreateSiteSubmit} className="studio-modal__form">
-              <div className="studio-form-grid">
-                <label className="studio-field">
-                  <span>Brand Name *</span>
-                  <input
-                    type="text"
-                    value={newBrandName}
-                    onChange={e => {
-                      setNewBrandName(e.target.value);
-                      if (!newSlug) {
-                        setNewSlug(
-                          e.target.value
-                            .toLowerCase()
-                            .replace(/[^a-z0-9-]+/g, '-')
-                            .replace(/^-+|-+$/g, '')
-                        );
-                      }
-                    }}
-                    placeholder="e.g. Apex Quant Traders"
-                    required
-                  />
-                </label>
+              {wizardStep === 1 && (
+                <>
+                  <div className="studio-form-grid">
+                    <label className="studio-field">
+                      <span>Brand / Site Name *</span>
+                      <input
+                        type="text"
+                        value={newBrandName}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setNewBrandName(val);
+                          if (!slugEditedManually) {
+                            setNewSlug(
+                              val
+                                .toLowerCase()
+                                .replace(/[^a-z0-9-]+/g, '-')
+                                .replace(/^-+|-+$/g, '')
+                            );
+                          }
+                        }}
+                        placeholder="e.g. Apex Quant"
+                        required
+                      />
+                    </label>
 
-                <label className="studio-field">
-                  <span>Site Slug *</span>
-                  <input
-                    type="text"
-                    value={newSlug}
-                    onChange={e => setNewSlug(e.target.value)}
-                    placeholder="e.g. apexquant"
-                    required
-                  />
-                </label>
-              </div>
+                    <label className="studio-field">
+                      <span>Header Tagline</span>
+                      <input
+                        type="text"
+                        value={newTagline}
+                        onChange={e => setNewTagline(e.target.value)}
+                        placeholder="SMART DERIV TOOLS"
+                      />
+                    </label>
+                  </div>
 
-              <div className="studio-form-grid">
-                <label className="studio-field">
-                  <span>Custom Domain (Optional — can add later)</span>
-                  <input
-                    type="text"
-                    value={newDomain}
-                    onChange={e => setNewDomain(e.target.value)}
-                    placeholder="e.g. apexquant.site"
-                  />
-                </label>
+                  <div className="studio-field">
+                    <span>Dedicated .vercel.app Live URL *</span>
+                    <div className="studio-url-builder">
+                      <input
+                        type="text"
+                        value={newSlug}
+                        onChange={e => {
+                          setSlugEditedManually(true);
+                          setNewSlug(
+                            e.target.value
+                              .toLowerCase()
+                              .replace(/\.vercel\.app$/i, '')
+                              .replace(/[^a-z0-9-]+/g, '-')
+                          );
+                        }}
+                        placeholder="apex-quant"
+                        required
+                      />
+                      <span
+                        className={`studio-url-builder__badge ${
+                          slugCheck.available ? 'is-ok' : 'is-bad'
+                        }`}
+                      >
+                        {slugCheck.checking
+                          ? 'Checking…'
+                          : slugCheck.available
+                          ? `.vercel.app AVAILABLE → https://${slugCheck.vercelDomain}/`
+                          : slugCheck.message}
+                      </span>
+                    </div>
+                  </div>
 
-                <label className="studio-field">
-                  <span>Starter Feature Template</span>
-                  <select
-                    value={newPreset}
-                    onChange={e => setNewPreset(e.target.value as any)}
-                  >
-                    <option value="full">Full 13-Tab Suite (Recommended)</option>
-                    <option value="bots_only">AI &amp; XML Bot Store (5 Tabs)</option>
-                    <option value="pro_desk">Pro DTrader + Copy Trading Desk (8 Tabs)</option>
-                  </select>
-                </label>
-              </div>
+                  <div className="studio-form-grid">
+                    <div className="studio-field">
+                      <span>Platform Logo</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <img
+                          src={newLogoUrl}
+                          alt="Brand Logo"
+                          style={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: 9,
+                            objectFit: 'cover',
+                            border: '1px solid #22314d',
+                          }}
+                        />
+                        <input
+                          ref={wizardLogoInputRef}
+                          type="file"
+                          accept="image/*"
+                          hidden
+                          onChange={e => void handleLogoFileChange(e, true)}
+                        />
+                        <button
+                          type="button"
+                          className="studio-btn studio-btn--ghost studio-btn--sm"
+                          onClick={() => wizardLogoInputRef.current?.click()}
+                        >
+                          Upload Logo
+                        </button>
+                      </div>
+                    </div>
 
-              <label className="studio-field">
-                <span>Deriv Affiliate Referral Link (Optional)</span>
-                <input
-                  type="url"
-                  value={newReferral}
-                  onChange={e => setNewReferral(e.target.value)}
-                  placeholder="https://track.deriv.com/_..."
-                />
-              </label>
+                    <div className="studio-field">
+                      <span>Primary Brand Accent</span>
+                      <div className="studio-swatches">
+                        {COLOR_SWATCHES.map(sw => (
+                          <button
+                            key={sw.hex}
+                            type="button"
+                            title={sw.label}
+                            className={`studio-swatch ${newColor === sw.hex ? 'is-selected' : ''}`}
+                            style={{ backgroundColor: sw.hex }}
+                            onClick={() => setNewColor(sw.hex)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
 
-              <div className="studio-field">
-                <span>Primary Brand Accent</span>
-                <div className="studio-swatches">
-                  {COLOR_SWATCHES.map(sw => (
+              {wizardStep === 2 && (
+                <>
+                  <div className="studio-presets-bar">
+                    <span>Presets:</span>
                     <button
-                      key={sw.hex}
                       type="button"
-                      className={`studio-swatch ${newColor === sw.hex ? 'is-selected' : ''}`}
-                      style={{ backgroundColor: sw.hex }}
-                      onClick={() => setNewColor(sw.hex)}
+                      className="studio-btn studio-btn--ghost studio-btn--xs"
+                      onClick={() => setNewEnabledTabs(ALL_13_TABS.map(t => t.id))}
+                    >
+                      All 13 Tabs
+                    </button>
+                    <button
+                      type="button"
+                      className="studio-btn studio-btn--ghost studio-btn--xs"
+                      onClick={() =>
+                        setNewEnabledTabs([
+                          'id-dbot-dashboard',
+                          'id-bot-builder',
+                          'id-ai-developer',
+                          'id-trading-bots',
+                          'id-ai-bots',
+                        ])
+                      }
+                    >
+                      AI &amp; Bots Only (5)
+                    </button>
+                    <button
+                      type="button"
+                      className="studio-btn studio-btn--ghost studio-btn--xs"
+                      onClick={() =>
+                        setNewEnabledTabs([
+                          'id-dbot-dashboard',
+                          'id-ai-bots',
+                          'id-trading-view',
+                          'id-analysis-tool',
+                          'id-digits-analysis',
+                          'id-dtrader',
+                          'id-copy-trading',
+                          'id-tradepulse',
+                        ])
+                      }
+                    >
+                      Pro Trading + Copy Desk (8)
+                    </button>
+                  </div>
+
+                  <div className="studio-wizard-tabs-grid">
+                    {ALL_13_TABS.map(tab => {
+                      const on = newEnabledTabs.includes(tab.id);
+                      const locked = tab.id === 'id-dbot-dashboard';
+                      return (
+                        <label
+                          key={tab.id}
+                          className={`studio-wizard-tab-pill ${on ? 'is-on' : ''}`}
+                        >
+                          <span>{tab.label}</span>
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            disabled={locked}
+                            onChange={e => {
+                              const checked = e.target.checked;
+                              setNewEnabledTabs(prev =>
+                                checked
+                                  ? Array.from(new Set([...prev, tab.id]))
+                                  : prev.filter(id => id !== tab.id)
+                              );
+                            }}
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              {wizardStep === 3 && (
+                <>
+                  <div className="studio-form-grid">
+                    <div className="studio-field">
+                      <span>XML Bot File Upload ({newCustomBots.length} added)</span>
+                      <input
+                        ref={wizardBotXmlInputRef}
+                        type="file"
+                        accept=".xml,text/xml,application/xml"
+                        multiple
+                        hidden
+                        onChange={e => void handleBotXmlUpload(e, true)}
+                      />
+                      <button
+                        type="button"
+                        className="studio-btn studio-btn--ghost"
+                        onClick={() => wizardBotXmlInputRef.current?.click()}
+                      >
+                        Upload Custom .XML Bot Files
+                      </button>
+                    </div>
+
+                    <label className="studio-field">
+                      <span>Optional Custom Domain (Can also connect later)</span>
+                      <input
+                        type="text"
+                        value={newDomain}
+                        onChange={e => setNewDomain(e.target.value)}
+                        placeholder="e.g. apexquant.site"
+                      />
+                    </label>
+                  </div>
+
+                  <label className="studio-checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={newIncludeDefaultBots}
+                      onChange={e => setNewIncludeDefaultBots(e.target.checked)}
                     />
-                  ))}
-                </div>
-              </div>
+                    <span>Include the 18 built-in TradersPulse bots in Free Bots</span>
+                  </label>
+
+                  <div className="studio-form-grid">
+                    <label className="studio-field">
+                      <span>Commission Payout Method</span>
+                      <select
+                        value={newPayoutMethod}
+                        onChange={e => setNewPayoutMethod(e.target.value)}
+                      >
+                        {PAYOUT_METHODS.filter(Boolean).map(m => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="studio-field">
+                      <span>Operator Commission Payout Wallet (M-Pesa / USDT / Deriv CR)</span>
+                      <input
+                        type="text"
+                        value={newPayoutWallet}
+                        onChange={e => setNewPayoutWallet(e.target.value)}
+                        placeholder="e.g. +2547... or USDT TRC20 Wallet"
+                      />
+                    </label>
+                  </div>
+
+                  <label className="studio-field">
+                    <span>Deriv Affiliate Signup Link (Optional)</span>
+                    <input
+                      type="url"
+                      value={newReferral}
+                      onChange={e => setNewReferral(e.target.value)}
+                      placeholder="https://track.deriv.com/_..."
+                    />
+                  </label>
+                </>
+              )}
 
               {createError && <div className="studio-alert studio-alert--error">{createError}</div>}
 
               <div className="studio-modal__actions">
-                <button
-                  type="button"
-                  className="studio-btn studio-btn--ghost"
-                  onClick={() => setIsCreateOpen(false)}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="studio-btn studio-btn--primary">
-                  Provision Site Now
-                </button>
+                <div>
+                  {wizardStep > 1 && (
+                    <button
+                      type="button"
+                      className="studio-btn studio-btn--ghost"
+                      onClick={() => setWizardStep(s => (s === 3 ? 2 : 1))}
+                    >
+                      ← Back
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    type="button"
+                    className="studio-btn studio-btn--ghost"
+                    onClick={() => setIsCreateOpen(false)}
+                    disabled={createBusy}
+                  >
+                    Cancel
+                  </button>
+
+                  {wizardStep < 3 ? (
+                    <button
+                      type="button"
+                      className="studio-btn studio-btn--primary"
+                      onClick={() => setWizardStep(s => (s === 1 ? 2 : 3))}
+                    >
+                      Next Step →
+                    </button>
+                  ) : (
+                    <button
+                      type="submit"
+                      className="studio-btn studio-btn--primary"
+                      disabled={createBusy}
+                    >
+                      {createBusy
+                        ? 'Provisioning .vercel.app…'
+                        : `Launch https://${slugCheck.vercelDomain || 'your-site.vercel.app'}/ Live`}
+                    </button>
+                  )}
+                </div>
               </div>
             </form>
           </div>

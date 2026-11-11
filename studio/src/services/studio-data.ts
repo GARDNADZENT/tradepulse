@@ -1,8 +1,12 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import {
   ALL_13_TABS,
+  CommissionRecord,
+  ManagedBotItem,
   ManagedSite,
+  PayoutRecord,
   PlatformSettings,
+  SocialPlatformKey,
   StudioRole,
   StudioUser,
 } from '../types';
@@ -25,7 +29,6 @@ export const studioSupabase: SupabaseClient | null = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseKey)
   : null;
 
-// Purge any legacy sandbox keys that may have been stored in earlier browser sessions
 if (typeof window !== 'undefined') {
   try {
     window.localStorage.removeItem('tp_studio_published_sites_v1');
@@ -34,15 +37,13 @@ if (typeof window !== 'undefined') {
   } catch {}
 }
 
-export const DEFAULT_TENANT_TEMPLATE_URL = 'https://tradepulse-lovat.vercel.app';
-
 export const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = {
   pooled_deriv_app_id: process.env.STUDIO_POOLED_DERIV_APP_ID || '',
-  default_commission_pct: 20,
-  base_domain: process.env.STUDIO_BASE_DOMAIN || 'traderspulse.site',
+  platform_markup_pct: 2.0,
+  default_commission_pct: 50,
+  base_domain: 'vercel.app',
   allow_public_signups: true,
-  tenant_template_base_url:
-    (process.env.STUDIO_TENANT_RUNTIME_URL || '').trim() || DEFAULT_TENANT_TEMPLATE_URL,
+  oauth_callback_hub_url: '',
 };
 
 function requireSupabase(): SupabaseClient {
@@ -66,14 +67,13 @@ export async function fetchPlatformSettings(): Promise<PlatformSettings> {
     pooled_deriv_app_id: String(
       data.pooled_deriv_app_id || DEFAULT_PLATFORM_SETTINGS.pooled_deriv_app_id || ''
     ),
+    platform_markup_pct: Number(data.platform_markup_pct ?? 2.0),
     default_commission_pct: Number(
-      data.default_commission_share_pct ?? data.default_commission_pct ?? 20
+      data.default_commission_share_pct ?? data.default_commission_pct ?? 50
     ),
-    base_domain: String(data.base_domain || DEFAULT_PLATFORM_SETTINGS.base_domain),
+    base_domain: String(data.base_domain || 'vercel.app'),
     allow_public_signups: data.allow_public_signups !== false,
-    tenant_template_base_url: String(
-      data.tenant_template_base_url || DEFAULT_PLATFORM_SETTINGS.tenant_template_base_url
-    ).replace(/\/$/, ''),
+    oauth_callback_hub_url: String(data.oauth_callback_hub_url || ''),
   };
 }
 
@@ -81,13 +81,12 @@ export async function savePlatformSettings(next: PlatformSettings): Promise<void
   const client = requireSupabase();
   const { error } = await client.from('studio_platform_settings').upsert({
     id: 1,
-    pooled_deriv_app_id: next.pooled_deriv_app_id,
-    default_commission_share_pct: next.default_commission_pct,
-    base_domain: next.base_domain,
+    pooled_deriv_app_id: next.pooled_deriv_app_id.trim(),
+    platform_markup_pct: Number(next.platform_markup_pct || 2.0),
+    default_commission_share_pct: Number(next.default_commission_pct || 50),
+    base_domain: next.base_domain.trim() || 'vercel.app',
     allow_public_signups: next.allow_public_signups,
-    tenant_template_base_url: (
-      next.tenant_template_base_url || DEFAULT_TENANT_TEMPLATE_URL
-    ).replace(/\/$/, ''),
+    oauth_callback_hub_url: next.oauth_callback_hub_url.trim(),
   });
   if (error) throw error;
 }
@@ -137,10 +136,14 @@ export async function signInWithEmail(
     });
     if (error) throw error;
     if (!data.user) {
-      throw new Error('Account created — check your email inbox to confirm your address, then sign in.');
+      throw new Error(
+        'Account created — check your email inbox to confirm your address, then sign in.'
+      );
     }
     if (!data.session) {
-      throw new Error('Account created — check your email inbox to confirm your address before signing in.');
+      throw new Error(
+        'Account created — check your email inbox to confirm your address before signing in.'
+      );
     }
     const sessionUser = await getInitialStudioSession();
     return (
@@ -186,8 +189,6 @@ export async function resendConfirmationEmail(email: string): Promise<void> {
 export async function signInWithGoogleOAuth(): Promise<void> {
   const client = requireSupabase();
 
-  // Pre-flight check against Supabase Auth settings so clicking Google before
-  // enabling the Google provider in Supabase never navigates to raw 400 JSON.
   try {
     const settingsResp = await fetch(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/settings`, {
       headers: { apikey: supabaseKey },
@@ -247,49 +248,61 @@ export async function loadManagedSites(user: StudioUser): Promise<ManagedSite[]>
 
   const platform = await fetchPlatformSettings();
 
-  return (rows || []).map((r: any) => ({
-    id: String(r.id),
-    owner_id: String(r.owner_id),
-    owner_email: String(r.owner_email || ''),
-    slug: String(r.slug),
-    custom_domain: String(r.custom_domain || ''),
-    domain_status: r.domain_status || 'verify_dns',
-    status: r.status || 'active',
-    brand_name: String(r.brand_name || 'TradersPulse'),
-    tagline: String(r.tagline || 'SMART DERIV TOOLS'),
-    logo_url: String(r.logo_url || '/traderpulse-logo.jpg'),
-    primary_color: String(r.primary_color || '#0066FF'),
-    secondary_color: String(r.secondary_color || '#050914'),
-    deriv_app_id: String(r.deriv_app_id || ''),
-    use_pooled_oauth: r.use_pooled_oauth !== false,
-    pooled_deriv_app_id: platform.pooled_deriv_app_id,
-    deriv_referral_link: String(r.deriv_referral_link || ''),
-    announcement_text: String(r.announcement_text || ''),
-    enabled_tabs: Array.isArray(r.enabled_tabs) ? r.enabled_tabs : ALL_13_TABS.map(t => t.id),
-    social_links: r.social_links || {},
-    include_default_bots: r.include_default_bots !== false,
-    commission_share_pct: Number(r.commission_share_pct ?? 20),
-    custom_bots: (botRows || [])
-      .filter((b: any) => b.site_id === r.id)
-      .map((b: any) => ({
-        id: String(b.id),
-        name: String(b.name),
-        strategy: String(b.strategy || 'Custom Strategy'),
-        description: String(b.description || ''),
-        categories: Array.isArray(b.categories) ? b.categories : ['special'],
-        xml_content: String(b.xml_content || ''),
-        sort_order: Number(b.sort_order || 1),
-        is_active: b.is_active !== false,
-      })),
-    updated_at: r.updated_at,
-  }));
+  return (rows || []).map((r: any) => {
+    const slug = String(r.slug);
+    return {
+      id: String(r.id),
+      owner_id: String(r.owner_id),
+      owner_email: String(r.owner_email || ''),
+      slug,
+      vercel_domain: String(r.vercel_domain || `${slug}.vercel.app`),
+      vercel_domain_status: r.vercel_domain_status || 'pending',
+      custom_domain: String(r.custom_domain || ''),
+      domain_status: r.domain_status || 'verify_dns',
+      status: r.status || 'active',
+      brand_name: String(r.brand_name || 'TradersPulse'),
+      tagline: String(r.tagline || 'SMART DERIV TOOLS'),
+      logo_url: String(r.logo_url || '/traderpulse-logo.jpg'),
+      primary_color: String(r.primary_color || '#0066FF'),
+      secondary_color: String(r.secondary_color || '#050914'),
+      deriv_app_id: String(r.deriv_app_id || ''),
+      use_pooled_oauth: r.use_pooled_oauth !== false,
+      pooled_deriv_app_id: platform.pooled_deriv_app_id,
+      deriv_referral_link: String(r.deriv_referral_link || ''),
+      announcement_text: String(r.announcement_text || ''),
+      enabled_tabs: Array.isArray(r.enabled_tabs) ? r.enabled_tabs : ALL_13_TABS.map(t => t.id),
+      social_links: r.social_links || {},
+      include_default_bots: r.include_default_bots !== false,
+      commission_share_pct: Number(r.commission_share_pct ?? platform.default_commission_pct),
+      payout_method: String(r.payout_method || ''),
+      payout_wallet: String(r.payout_wallet || ''),
+      custom_bots: (botRows || [])
+        .filter((b: any) => b.site_id === r.id)
+        .map((b: any) => ({
+          id: String(b.id),
+          name: String(b.name),
+          strategy: String(b.strategy || 'Custom Strategy'),
+          description: String(b.description || ''),
+          categories: Array.isArray(b.categories) ? b.categories : ['special'],
+          xml_content: String(b.xml_content || ''),
+          sort_order: Number(b.sort_order || 1),
+          is_active: b.is_active !== false,
+        })),
+      updated_at: r.updated_at,
+    };
+  });
 }
 
 export async function persistManagedSite(site: ManagedSite): Promise<ManagedSite> {
   const client = requireSupabase();
 
+  const cleanSlug = site.slug.toLowerCase().trim();
+  const vercelDomain = (site.vercel_domain || `${cleanSlug}.vercel.app`).toLowerCase().trim();
+
   const payload = {
-    slug: site.slug.toLowerCase().trim(),
+    slug: cleanSlug,
+    vercel_domain: vercelDomain,
+    vercel_domain_status: site.vercel_domain_status || 'pending',
     custom_domain: site.custom_domain.trim().toLowerCase() || null,
     domain_status: site.domain_status,
     status: site.status,
@@ -298,14 +311,16 @@ export async function persistManagedSite(site: ManagedSite): Promise<ManagedSite
     logo_url: site.logo_url,
     primary_color: site.primary_color,
     secondary_color: site.secondary_color,
-    deriv_app_id: site.deriv_app_id,
-    use_pooled_oauth: site.use_pooled_oauth,
+    deriv_app_id: '',
+    use_pooled_oauth: true,
     deriv_referral_link: site.deriv_referral_link,
     announcement_text: site.announcement_text,
     enabled_tabs: site.enabled_tabs,
     social_links: site.social_links,
     include_default_bots: site.include_default_bots,
     commission_share_pct: site.commission_share_pct,
+    payout_method: site.payout_method.trim(),
+    payout_wallet: site.payout_wallet.trim(),
     updated_at: new Date().toISOString(),
   };
 
@@ -348,7 +363,15 @@ export async function persistManagedSite(site: ManagedSite): Promise<ManagedSite
     if (insBotsErr) throw insBotsErr;
   }
 
-  return { ...site, id: savedSiteId, updated_at: updatedAt };
+  return {
+    ...site,
+    id: savedSiteId,
+    slug: cleanSlug,
+    vercel_domain: vercelDomain,
+    use_pooled_oauth: true,
+    deriv_app_id: '',
+    updated_at: updatedAt,
+  };
 }
 
 export async function deleteManagedSite(siteId: string): Promise<void> {
@@ -373,90 +396,345 @@ export async function uploadLogoAsset(file: File, userId: string): Promise<strin
   return data.publicUrl;
 }
 
-export function resolveTenantRuntimeBaseUrl(platform?: PlatformSettings): string {
-  const configured = (process.env.STUDIO_TENANT_RUNTIME_URL || '').trim();
-  if (configured) return configured.replace(/\/$/, '');
+export async function checkVercelSubdomainAvailability(slug: string): Promise<{
+  available: boolean;
+  vercel_domain: string;
+  url: string;
+  error?: string;
+  env_missing?: boolean;
+}> {
+  const clean = slug
+    .trim()
+    .toLowerCase()
+    .replace(/\.vercel\.app$/i, '')
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 
+  const vercelDomain = `${clean}.vercel.app`;
+  if (clean.length < 2) {
+    return {
+      available: false,
+      vercel_domain: vercelDomain,
+      url: `https://${vercelDomain}`,
+      error: 'Enter at least 2 characters.',
+    };
+  }
+  if (clean.includes('deriv') || clean.includes('binary')) {
+    return {
+      available: false,
+      vercel_domain: vercelDomain,
+      url: `https://${vercelDomain}`,
+      error: 'Names containing "deriv" or "binary" are restricted.',
+    };
+  }
+
+  // Check Supabase managed_sites first so duplicate slugs are caught immediately
+  if (studioSupabase) {
+    const { data: existing } = await studioSupabase
+      .from('managed_sites')
+      .select('id')
+      .or(`slug.eq.${clean},vercel_domain.eq.${vercelDomain}`)
+      .maybeSingle();
+    if (existing?.id) {
+      return {
+        available: false,
+        vercel_domain: vercelDomain,
+        url: `https://${vercelDomain}`,
+        error: `${vercelDomain} is already registered.`,
+      };
+    }
+  }
+
+  try {
+    const resp = await fetch('/api/domains', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'check_vercel_subdomain', slug: clean }),
+    });
+    const ct = resp.headers.get('content-type') || '';
+    if (ct.includes('application/json')) {
+      const data = await resp.json();
+      return {
+        available: Boolean(data.available),
+        vercel_domain: data.vercel_domain || vercelDomain,
+        url: data.url || `https://${vercelDomain}`,
+        error: data.error,
+        env_missing: Boolean(data.env_missing),
+      };
+    }
+  } catch {
+    // Local dev server without /api/domains serverless function
+  }
+
+  return {
+    available: true,
+    vercel_domain: vercelDomain,
+    url: `https://${vercelDomain}`,
+  };
+}
+
+export async function provisionVercelSubdomain(slug: string): Promise<{
+  ok: boolean;
+  vercel_domain: string;
+  vercel_domain_status: 'live' | 'pending';
+  url: string;
+  error?: string;
+}> {
+  const clean = slug.trim().toLowerCase();
+  const vercelDomain = `${clean}.vercel.app`;
+
+  try {
+    const resp = await fetch('/api/domains', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'provision_vercel_subdomain', slug: clean }),
+    });
+    const ct = resp.headers.get('content-type') || '';
+    if (ct.includes('application/json')) {
+      const data = await resp.json();
+      if (resp.ok && data.ok) {
+        return {
+          ok: true,
+          vercel_domain: data.vercel_domain || vercelDomain,
+          vercel_domain_status: 'live',
+          url: data.url || `https://${vercelDomain}`,
+        };
+      }
+      return {
+        ok: false,
+        vercel_domain: data.vercel_domain || vercelDomain,
+        vercel_domain_status: 'pending',
+        url: `https://${vercelDomain}`,
+        error: data.error,
+      };
+    }
+  } catch {
+    // Local dev fallback
+  }
+
+  return {
+    ok: false,
+    vercel_domain: vercelDomain,
+    vercel_domain_status: 'pending',
+    url: `https://${vercelDomain}`,
+    error: 'Deploy Studio to Vercel with VERCEL_API_TOKEN + VERCEL_TENANT_PROJECT_ID to activate .vercel.app domains.',
+  };
+}
+
+export async function loadCommissionLedger(user: StudioUser): Promise<{
+  commissions: CommissionRecord[];
+  payouts: PayoutRecord[];
+}> {
+  const client = requireSupabase();
+
+  let commQuery = client
+    .from('managed_site_commissions')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(500);
+
+  let payQuery = client
+    .from('managed_site_payouts')
+    .select('*')
+    .order('paid_at', { ascending: false })
+    .limit(200);
+
+  if (user.role !== 'super_admin') {
+    commQuery = commQuery.eq('owner_id', user.id);
+    payQuery = payQuery.eq('owner_id', user.id);
+  }
+
+  const [{ data: commRows }, { data: payRows }] = await Promise.all([commQuery, payQuery]);
+
+  const commissions: CommissionRecord[] = (commRows || []).map((r: any) => ({
+    id: String(r.id),
+    site_id: String(r.site_id),
+    owner_id: String(r.owner_id),
+    site_slug: String(r.site_slug || ''),
+    contract_id: String(r.contract_id || ''),
+    transaction_id: String(r.transaction_id || ''),
+    trader_loginid: String(r.trader_loginid || ''),
+    currency: String(r.currency || 'USD'),
+    contract_type: String(r.contract_type || ''),
+    symbol: String(r.symbol || ''),
+    stake_amount: Number(r.stake_amount || 0),
+    markup_pct: Number(r.markup_pct || 0),
+    operator_share_pct: Number(r.operator_share_pct || 0),
+    gross_markup_usd: Number(r.gross_markup_usd || 0),
+    operator_commission_usd: Number(r.operator_commission_usd || 0),
+    admin_net_usd: Number(r.admin_net_usd || 0),
+    payout_status: r.payout_status === 'paid' ? 'paid' : 'unpaid',
+    payout_id: r.payout_id ? String(r.payout_id) : null,
+    created_at: String(r.created_at || ''),
+  }));
+
+  const payouts: PayoutRecord[] = (payRows || []).map((p: any) => ({
+    id: String(p.id),
+    site_id: String(p.site_id),
+    owner_id: String(p.owner_id),
+    owner_email: String(p.owner_email || ''),
+    site_url: String(p.site_url || ''),
+    payout_method: String(p.payout_method || ''),
+    payout_wallet: String(p.payout_wallet || ''),
+    amount_usd: Number(p.amount_usd || 0),
+    trades_count: Number(p.trades_count || 0),
+    reference_note: String(p.reference_note || ''),
+    paid_at: String(p.paid_at || ''),
+  }));
+
+  return { commissions, payouts };
+}
+
+export async function markSiteCommissionsPaid(params: {
+  site: ManagedSite;
+  unpaidAmountUsd: number;
+  tradesCount: number;
+  referenceNote?: string;
+}): Promise<PayoutRecord> {
+  const client = requireSupabase();
+  const siteUrl = buildLiveTenantUrl(params.site);
+
+  const { data: payoutRow, error: payErr } = await client
+    .from('managed_site_payouts')
+    .insert({
+      site_id: params.site.id,
+      owner_id: params.site.owner_id,
+      owner_email: params.site.owner_email || '',
+      site_url: siteUrl,
+      payout_method: params.site.payout_method || '',
+      payout_wallet: params.site.payout_wallet || '',
+      amount_usd: Number(params.unpaidAmountUsd.toFixed(2)),
+      trades_count: params.tradesCount,
+      reference_note: (params.referenceNote || '').trim(),
+    })
+    .select('*')
+    .single();
+
+  if (payErr) throw payErr;
+
+  const { error: updErr } = await client
+    .from('managed_site_commissions')
+    .update({
+      payout_status: 'paid',
+      payout_id: payoutRow.id,
+    })
+    .eq('site_id', params.site.id)
+    .eq('payout_status', 'unpaid');
+
+  if (updErr) throw updErr;
+
+  return {
+    id: String(payoutRow.id),
+    site_id: String(payoutRow.site_id),
+    owner_id: String(payoutRow.owner_id),
+    owner_email: String(payoutRow.owner_email || ''),
+    site_url: String(payoutRow.site_url || siteUrl),
+    payout_method: String(payoutRow.payout_method || ''),
+    payout_wallet: String(payoutRow.payout_wallet || ''),
+    amount_usd: Number(payoutRow.amount_usd || 0),
+    trades_count: Number(payoutRow.trades_count || 0),
+    reference_note: String(payoutRow.reference_note || ''),
+    paid_at: String(payoutRow.paid_at || new Date().toISOString()),
+  };
+}
+
+/**
+ * Public-facing clean URL for a created site — ALWAYS https://<slug>.vercel.app
+ * (or https://<custom_domain> once custom domain SSL is live).
+ * Never exposes any internal template project name or ?site= query string.
+ */
+export function buildLiveTenantUrl(site: ManagedSite): string {
+  if (site.custom_domain && site.domain_status === 'live') {
+    return `https://${site.custom_domain.replace(/^https?:\/\//, '').replace(/\/$/, '')}`;
+  }
+  const vDom = (site.vercel_domain || `${site.slug}.vercel.app`)
+    .replace(/^https?:\/\//, '')
+    .replace(/\/$/, '');
+  return `https://${vDom}`;
+}
+
+/**
+ * Live iframe preview URL inside Site Studio.
+ */
+export function buildPreviewTenantUrl(site: ManagedSite): string {
   if (typeof window !== 'undefined') {
     const { protocol, hostname } = window.location;
 
     const e2bMatch = hostname.match(/^4004-(.+)\.e2b\.app$/i);
     if (e2bMatch) {
-      return `${protocol}//4003-${e2bMatch[1]}.e2b.app`;
+      return `${protocol}//4003-${e2bMatch[1]}.e2b.app/?site=${encodeURIComponent(site.slug)}`;
     }
 
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return `${protocol}//${hostname}:4003`;
+      return `${protocol}//${hostname}:4003/?site=${encodeURIComponent(site.slug)}`;
     }
   }
 
-  const platformTemplate = (platform?.tenant_template_base_url || '').trim();
-  if (platformTemplate) return platformTemplate.replace(/\/$/, '');
-
-  return DEFAULT_TENANT_TEMPLATE_URL;
-}
-
-export function buildPreviewTenantUrl(site: ManagedSite, platform?: PlatformSettings): string {
-  const base = resolveTenantRuntimeBaseUrl(platform);
-  return `${base}/?site=${encodeURIComponent(site.slug)}`;
-}
-
-export function buildLiveTenantUrl(site: ManagedSite, platform?: PlatformSettings): string {
-  if (site.custom_domain && site.domain_status === 'live') {
-    return `https://${site.custom_domain.replace(/^https?:\/\//, '').replace(/\/$/, '')}`;
+  if (site.vercel_domain_status === 'live') {
+    return buildLiveTenantUrl(site);
   }
-  return buildPreviewTenantUrl(site, platform);
+
+  const fallbackRuntime = (process.env.STUDIO_TENANT_RUNTIME_URL || '').trim().replace(/\/$/, '');
+  if (fallbackRuntime) {
+    return `${fallbackRuntime}/?site=${encodeURIComponent(site.slug)}`;
+  }
+
+  return buildLiveTenantUrl(site);
 }
 
-export function createBlankManagedSite(
+export function createConfiguredManagedSite(
   user: StudioUser,
   params: {
     brand_name: string;
+    tagline: string;
     slug: string;
+    logo_url: string;
     custom_domain: string;
     primary_color: string;
     deriv_referral_link: string;
-    preset: 'full' | 'bots_only' | 'pro_desk';
+    enabled_tabs: string[];
+    include_default_bots: boolean;
+    custom_bots: ManagedBotItem[];
+    social_links: Partial<Record<SocialPlatformKey, string>>;
+    payout_method: string;
+    payout_wallet: string;
+    vercel_domain_status: 'live' | 'pending';
   },
   platform: PlatformSettings
 ): ManagedSite {
-  const tabsByPreset: Record<'full' | 'bots_only' | 'pro_desk', string[]> = {
-    full: ALL_13_TABS.map(t => t.id),
-    bots_only: ['id-dbot-dashboard', 'id-bot-builder', 'id-ai-developer', 'id-trading-bots', 'id-ai-bots'],
-    pro_desk: [
-      'id-dbot-dashboard',
-      'id-ai-bots',
-      'id-trading-view',
-      'id-analysis-tool',
-      'id-digits-analysis',
-      'id-dtrader',
-      'id-copy-trading',
-      'id-tradepulse',
-    ],
-  };
+  const cleanSlug = params.slug
+    .toLowerCase()
+    .replace(/\.vercel\.app$/i, '')
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 
   return {
     id: `new-${Date.now()}`,
     owner_id: user.id,
     owner_email: user.email,
-    slug: params.slug.toLowerCase().replace(/[^a-z0-9-]/g, ''),
+    slug: cleanSlug,
+    vercel_domain: `${cleanSlug}.vercel.app`,
+    vercel_domain_status: params.vercel_domain_status,
     custom_domain: params.custom_domain.trim().toLowerCase(),
     domain_status: params.custom_domain.trim() ? 'verify_dns' : 'live',
     status: 'active',
     brand_name: params.brand_name.trim(),
-    tagline: 'SMART DERIV TOOLS',
-    logo_url: '/traderpulse-logo.jpg',
-    primary_color: params.primary_color,
+    tagline: params.tagline.trim() || 'SMART DERIV TOOLS',
+    logo_url: params.logo_url || '/traderpulse-logo.jpg',
+    primary_color: params.primary_color || '#0066FF',
     secondary_color: '#050914',
     deriv_app_id: '',
     use_pooled_oauth: true,
     pooled_deriv_app_id: platform.pooled_deriv_app_id,
     deriv_referral_link: params.deriv_referral_link.trim(),
     announcement_text: '',
-    enabled_tabs: tabsByPreset[params.preset],
-    social_links: {},
-    include_default_bots: true,
+    enabled_tabs:
+      params.enabled_tabs.length > 0 ? params.enabled_tabs : ALL_13_TABS.map(t => t.id),
+    social_links: params.social_links || {},
+    include_default_bots: params.include_default_bots,
     commission_share_pct: platform.default_commission_pct,
-    custom_bots: [],
+    payout_method: params.payout_method.trim(),
+    payout_wallet: params.payout_wallet.trim(),
+    custom_bots: params.custom_bots,
   };
 }

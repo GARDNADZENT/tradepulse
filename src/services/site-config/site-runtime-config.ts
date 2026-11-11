@@ -10,6 +10,7 @@ import { applyPrimaryColor } from '@/utils/apply-branding';
 import { getTradersPulseLogoSrc } from '@/utils/branding';
 import { setFaviconHref } from '@/utils/document-branding';
 import { setPreviewAppName, setPreviewLogo } from '@/utils/live-branding-store';
+import { installTenantCommissionTracker } from './site-commission-tracker';
 
 export interface TenantCustomBot {
     id: string;
@@ -24,7 +25,9 @@ export interface TenantCustomBot {
 
 export interface TenantSiteConfig {
     id: string;
+    owner_id?: string;
     slug: string;
+    vercel_domain?: string;
     custom_domain: string;
     domain_status: 'live' | 'verify_dns' | 'ssl_pending';
     status: 'active' | 'maintenance' | 'suspended';
@@ -36,16 +39,25 @@ export interface TenantSiteConfig {
     deriv_app_id: string;
     use_pooled_oauth: boolean;
     pooled_deriv_app_id?: string;
+    oauth_callback_hub_url?: string;
     deriv_referral_link: string;
     announcement_text: string;
     enabled_tabs: string[];
     social_links: Partial<Record<TSocialPlatformId, string>>;
     include_default_bots: boolean;
+    commission_share_pct?: number;
     custom_bots: TenantCustomBot[];
 }
 
 const TENANT_CACHE_PREFIX = 'tp_tenant_runtime_cache_v1:';
 const STICKY_SITE_SLUG_KEY = 'tp_active_tenant_slug';
+
+const MASTER_UNTENANTED_HOSTS = new Set([
+    'localhost',
+    '127.0.0.1',
+    'tradepulse-lovat.vercel.app',
+    'tradepulse-tracker2.vercel.app',
+]);
 
 type Listener = (config: TenantSiteConfig | null) => void;
 
@@ -55,6 +67,29 @@ const listeners = new Set<Listener>();
 const notifyListeners = () => {
     listeners.forEach(fn => fn(activeTenantConfig));
 };
+
+const getRegisteredCallbackHostname = (): string => {
+    const raw = (process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI || '').trim();
+    if (!raw || raw === '🔒') return '';
+    try {
+        return new URL(raw).hostname.toLowerCase();
+    } catch {
+        return '';
+    }
+};
+
+export function isMasterUntenantedHost(hostname: string): boolean {
+    const lower = (hostname || '').trim().toLowerCase();
+    if (!lower) return true;
+    if (MASTER_UNTENANTED_HOSTS.has(lower)) return true;
+    if (lower.endsWith('.e2b.app')) return true;
+    if (lower.endsWith('.vercel.app') && lower.includes('-git-')) return true;
+
+    const registeredHost = getRegisteredCallbackHostname();
+    if (registeredHost && lower === registeredHost) return true;
+
+    return false;
+}
 
 export function getActiveTenantConfig(): TenantSiteConfig | null {
     return activeTenantConfig;
@@ -81,10 +116,12 @@ export function getTenantLogoSrc(): string {
 
 export function getTenantDerivAppId(): string {
     if (!activeTenantConfig) return '';
-    if (activeTenantConfig.deriv_app_id?.trim()) {
+    // Only use an explicit custom deriv_app_id when use_pooled_oauth is explicitly false;
+    // otherwise all sites share the main TradersPulse Deriv App ID for unified commission tracking.
+    if (!activeTenantConfig.use_pooled_oauth && activeTenantConfig.deriv_app_id?.trim()) {
         return activeTenantConfig.deriv_app_id.trim();
     }
-    if (activeTenantConfig.use_pooled_oauth && activeTenantConfig.pooled_deriv_app_id?.trim()) {
+    if (activeTenantConfig.pooled_deriv_app_id?.trim()) {
         return activeTenantConfig.pooled_deriv_app_id.trim();
     }
     return '';
@@ -139,7 +176,6 @@ export function applyTenantDomEffects(config: TenantSiteConfig | null): void {
             ? config.enabled_tabs
             : TAB_IDS
     );
-    // Always keep at least Dashboard or the first enabled tab reachable
     const hiddenTabIds = TAB_IDS.filter(id => !enabledSet.has(id));
 
     if (hiddenTabIds.length === 0) {
@@ -189,14 +225,8 @@ async function fetchSupabaseTenantSite(
 ): Promise<TenantSiteConfig | null> {
     if (!supabase) return null;
 
-    const isLocalOrPreviewHost =
-        !hostname ||
-        hostname === 'localhost' ||
-        hostname === '127.0.0.1' ||
-        hostname.endsWith('.e2b.app') ||
-        hostname.endsWith('.vercel.app');
-
-    if (!slug && isLocalOrPreviewHost) {
+    const isMasterHost = isMasterUntenantedHost(hostname);
+    if (!slug && isMasterHost) {
         return null;
     }
 
@@ -213,22 +243,43 @@ async function fetchSupabaseTenantSite(
             siteRow = data;
         }
 
-        if (!siteRow && hostname && !isLocalOrPreviewHost) {
-            const { data } = await client
-                .from('managed_sites')
-                .select('*')
-                .eq('custom_domain', hostname)
-                .maybeSingle();
-            siteRow = data;
+        if (!siteRow && hostname && !isMasterHost) {
+            const cleanHost = hostname.replace(/^www\./, '');
 
-            if (!siteRow && hostname.split('.').length >= 3) {
-                const sub = hostname.split('.')[0];
-                const { data: bySub } = await client
+            if (cleanHost.endsWith('.vercel.app')) {
+                const { data: byVercelDom } = await client
                     .from('managed_sites')
                     .select('*')
-                    .eq('slug', sub)
+                    .eq('vercel_domain', cleanHost)
                     .maybeSingle();
-                siteRow = bySub;
+                siteRow = byVercelDom;
+
+                if (!siteRow) {
+                    const vercelSlug = cleanHost.replace(/\.vercel\.app$/i, '');
+                    const { data: bySlug } = await client
+                        .from('managed_sites')
+                        .select('*')
+                        .eq('slug', vercelSlug)
+                        .maybeSingle();
+                    siteRow = bySlug;
+                }
+            } else {
+                const { data: byCustomDom } = await client
+                    .from('managed_sites')
+                    .select('*')
+                    .in('custom_domain', [hostname, cleanHost])
+                    .maybeSingle();
+                siteRow = byCustomDom;
+
+                if (!siteRow && cleanHost.split('.').length >= 3) {
+                    const sub = cleanHost.split('.')[0];
+                    const { data: bySub } = await client
+                        .from('managed_sites')
+                        .select('*')
+                        .eq('slug', sub)
+                        .maybeSingle();
+                    siteRow = bySub;
+                }
             }
         }
 
@@ -246,7 +297,9 @@ async function fetchSupabaseTenantSite(
 
         const config: TenantSiteConfig = {
             id: String(siteRow.id),
+            owner_id: String(siteRow.owner_id || ''),
             slug: String(siteRow.slug),
+            vercel_domain: String(siteRow.vercel_domain || `${siteRow.slug}.vercel.app`),
             custom_domain: String(siteRow.custom_domain || ''),
             domain_status: siteRow.domain_status || 'live',
             status: siteRow.status || 'active',
@@ -256,13 +309,15 @@ async function fetchSupabaseTenantSite(
             primary_color: String(siteRow.primary_color || '#0066FF'),
             secondary_color: String(siteRow.secondary_color || '#050914'),
             deriv_app_id: String(siteRow.deriv_app_id || ''),
-            use_pooled_oauth: Boolean(siteRow.use_pooled_oauth),
+            use_pooled_oauth: siteRow.use_pooled_oauth !== false,
             pooled_deriv_app_id: String(platformRow?.pooled_deriv_app_id || ''),
+            oauth_callback_hub_url: String(platformRow?.oauth_callback_hub_url || ''),
             deriv_referral_link: String(siteRow.deriv_referral_link || ''),
             announcement_text: String(siteRow.announcement_text || ''),
             enabled_tabs: Array.isArray(siteRow.enabled_tabs) ? siteRow.enabled_tabs : TAB_IDS,
             social_links: (siteRow.social_links as Record<string, string>) || {},
             include_default_bots: siteRow.include_default_bots !== false,
+            commission_share_pct: Number(siteRow.commission_share_pct ?? 50),
             custom_bots: Array.isArray(botRows)
                 ? botRows.map((b: any) => ({
                       id: String(b.id),
@@ -290,13 +345,65 @@ async function fetchSupabaseTenantSite(
     }
 }
 
+/**
+ * Validates that a Central OAuth Callback Relay `return_to` origin belongs to an
+ * active site registered in `public.managed_sites`. Prevents open-redirect abuse.
+ */
+export async function verifyAuthorizedRelayReturnOrigin(returnTo: string): Promise<string | null> {
+    if (!returnTo || !supabase) return null;
+
+    let parsed: URL;
+    try {
+        parsed = new URL(returnTo);
+    } catch {
+        return null;
+    }
+
+    if (parsed.protocol !== 'https:' && parsed.hostname !== 'localhost') {
+        return null;
+    }
+
+    const host = parsed.hostname.toLowerCase();
+    const cleanHost = host.replace(/^www\./, '');
+
+    try {
+        const client: any = supabase;
+
+        if (cleanHost.endsWith('.vercel.app')) {
+            const vercelSlug = cleanHost.replace(/\.vercel\.app$/i, '');
+            const { data } = await client
+                .from('managed_sites')
+                .select('id, status')
+                .or(`vercel_domain.eq.${cleanHost},slug.eq.${vercelSlug}`)
+                .eq('status', 'active')
+                .limit(1)
+                .maybeSingle();
+            return data?.id ? parsed.origin : null;
+        }
+
+        const { data } = await client
+            .from('managed_sites')
+            .select('id, status')
+            .in('custom_domain', [host, cleanHost])
+            .eq('status', 'active')
+            .limit(1)
+            .maybeSingle();
+
+        return data?.id ? parsed.origin : null;
+    } catch {
+        return null;
+    }
+}
+
 export async function initializeTenantRuntime(): Promise<void> {
     if (typeof window === 'undefined') return;
 
-    // Purge any legacy local sandbox store from earlier sessions
     try {
         localStorage.removeItem('tp_studio_published_sites_v1');
     } catch {}
+
+    // Install passive real-account commission observer for tenant sites
+    installTenantCommissionTracker();
 
     // 1. Live Studio iframe preview listener (`postMessage`)
     window.addEventListener('message', (event: MessageEvent) => {
@@ -308,7 +415,6 @@ export async function initializeTenantRuntime(): Promise<void> {
         }
     });
 
-    // Notify parent Site Studio iframe host that runtime listener is ready for initial sync
     if (window.parent && window.parent !== window) {
         try {
             window.parent.postMessage({ type: 'TP_TENANT_READY' }, '*');
@@ -318,7 +424,7 @@ export async function initializeTenantRuntime(): Promise<void> {
     const { slug, hostname } = resolveRequestedTenantKey();
 
     // 2. Instant zero-flicker hydration from cached Supabase config
-    if (slug || hostname) {
+    if (slug || !isMasterUntenantedHost(hostname)) {
         try {
             const cachedRaw = localStorage.getItem(`${TENANT_CACHE_PREFIX}${slug || hostname}`);
             if (cachedRaw) {
