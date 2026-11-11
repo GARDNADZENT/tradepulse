@@ -5,12 +5,12 @@ import ApiTokenModal from '@/components/api-token-modal/api-token-modal';
 import { generateOAuthURL, getAppId } from '@/components/shared';
 import Button from '@/components/shared_ui/button';
 import { DBOT_TABS } from '@/constants/bot-contents';
-import { DERIV_CREATE_ACCOUNT_URL } from '@/constants/social-links';
 import useActiveAccount from '@/hooks/api/account/useActiveAccount';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useLogout } from '@/hooks/useLogout';
 import { useStore } from '@/hooks/useStore';
 import useThemeSwitcher from '@/hooks/useThemeSwitcher';
+import { getTenantReferralLink } from '@/services/site-config/site-runtime-config';
 import { Localize } from '@deriv-com/translations';
 import { Header, useDevice, Wrapper } from '@deriv-com/ui';
 import { AppLogo } from '../app-logo';
@@ -80,7 +80,7 @@ const AppHeader = observer(() => {
     }, [isAuthorizing, activeLoginid, setIsAuthorizing, authTimeout, isOAuthPending]);
 
     const handleSignup = useCallback(() => {
-        window.open(DERIV_CREATE_ACCOUNT_URL, '_blank', 'noopener,noreferrer');
+        window.open(getTenantReferralLink(), '_blank', 'noopener,noreferrer');
     }, []);
 
     const handleLogin = useCallback(async () => {

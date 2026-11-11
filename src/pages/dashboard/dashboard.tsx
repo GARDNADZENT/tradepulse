@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
 import GoogleDrive from '@/components/load-modal/google-drive';
@@ -6,6 +6,12 @@ import Dialog from '@/components/shared_ui/dialog';
 import MobileFullPageModal from '@/components/shared_ui/mobile-full-page-modal';
 import { DBOT_TABS } from '@/constants/bot-contents';
 import { useStore } from '@/hooks/useStore';
+import {
+    getActiveTenantConfig,
+    getTenantBrandName,
+    subscribeActiveTenantConfig,
+    TenantSiteConfig,
+} from '@/services/site-config/site-runtime-config';
 import { localize } from '@deriv-com/translations';
 import { useDevice } from '@deriv-com/ui';
 
@@ -84,6 +90,9 @@ const DashboardComponent = observer((_props: TMobileIconGuide) => {
     const { setFormVisibility } = quick_strategy;
     const { isDesktop } = useDevice();
     const [isDisclaimerOpen, setIsDisclaimerOpen] = useState(false);
+    const [tenantConfig, setTenantConfig] = useState<TenantSiteConfig | null>(() => getActiveTenantConfig());
+
+    useEffect(() => subscribeActiveTenantConfig(setTenantConfig), []);
 
     const openFileLoader = () => {
         toggleLoadModal();
@@ -257,6 +266,27 @@ const DashboardComponent = observer((_props: TMobileIconGuide) => {
         });
     }
 
+    const cardTabRequirement: Record<string, string> = {
+        'load-bot': 'id-bot-builder',
+        'quick-strategy': 'id-bot-builder',
+        'auto-trades': 'id-auto-trades',
+        'ai-bots': 'id-ai-bots',
+        'free-bots': 'id-free-bots',
+        'analysis-tool': 'id-analysis-tool',
+        dtrader: 'id-dtrader',
+        'google-drive': 'id-bot-builder',
+    };
+
+    const visibleActionCards =
+        tenantConfig && Array.isArray(tenantConfig.enabled_tabs) && tenantConfig.enabled_tabs.length > 0
+            ? actionCards.filter(card => {
+                  const reqTab = cardTabRequirement[card.id];
+                  return !reqTab || tenantConfig.enabled_tabs.includes(reqTab);
+              })
+            : actionCards;
+
+    const activeBrandName = getTenantBrandName();
+
     return (
         <React.Fragment>
             <div
@@ -277,7 +307,7 @@ const DashboardComponent = observer((_props: TMobileIconGuide) => {
                         {/* Left-Accented Action Cards Grid */}
                         <section className='tp-dash__actions-section' aria-label='Quick Actions'>
                             <div className='tp-dash__actions-grid' id='tab__dashboard__table__tiles'>
-                                {actionCards.map(card => (
+                                {visibleActionCards.map(card => (
                                     <button
                                         key={card.id}
                                         id={card.id}
@@ -324,7 +354,9 @@ const DashboardComponent = observer((_props: TMobileIconGuide) => {
                                                 </span>
                                             ))}
                                         </div>
-                                        <p className='tp-dash__review-quote'>&ldquo;{item.quote}&rdquo;</p>
+                                        <p className='tp-dash__review-quote'>
+                                            &ldquo;{item.quote.replace(/TradersPulse/g, activeBrandName)}&rdquo;
+                                        </p>
                                         <div className='tp-dash__reviewer'>
                                             <span className='tp-dash__avatar' aria-hidden='true'>
                                                 {item.initial}

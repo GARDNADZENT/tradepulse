@@ -13,6 +13,7 @@ import CoreStoreProvider from './CoreStoreProvider';
 import i18nInstance from './i18n';
 import './app-root.scss';
 import StandaloneLoginScreen from '@/components/login-screen/StandaloneLoginScreen';
+import SiteRuntimeGate from '@/components/site-runtime-gate/SiteRuntimeGate';
 
 const Layout = lazy(() => import('../components/layout'));
 const AppRoot = lazy(() => import('./app-root'));
@@ -45,8 +46,10 @@ const router = createBrowserRouter(
                                     <RoutePromptDialog />
                                     <InstallPrompt />
                                     <CoreStoreProvider>
-                                        <Layout />
-                                        <StandaloneLoginScreen />
+                                        <SiteRuntimeGate>
+                                            <Layout />
+                                            <StandaloneLoginScreen />
+                                        </SiteRuntimeGate>
                                     </CoreStoreProvider>
                                 </LocalStorageSyncWrapper>
                             </StoreProvider>

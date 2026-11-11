@@ -2,6 +2,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { observer } from 'mobx-react-lite';
 import { DBOT_TABS } from '@/constants/bot-contents';
 import { useStore } from '@/hooks/useStore';
+import {
+    getActiveTenantConfig,
+    subscribeActiveTenantConfig,
+    TenantSiteConfig,
+} from '@/services/site-config/site-runtime-config';
 import { fetchXmlWithCache, prefetchAllXmlInBackground } from '@/utils/freebots-cache';
 import './free-bots.scss';
 
@@ -11,6 +16,7 @@ interface SpecialBotEntry {
     id: string;
     name: string;
     file: string;
+    inlineXml?: string;
     category: Exclude<BotCategory, 'all'>[];
     strategy: string;
     description: string;
@@ -284,7 +290,10 @@ const FreeBots = observer(() => {
     const [searchQuery, setSearchQuery] = useState('');
     const [loadingBotId, setLoadingBotId] = useState<string | null>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const [tenantConfig, setTenantConfig] = useState<TenantSiteConfig | null>(() => getActiveTenantConfig());
     const xmlInputRef = useRef<HTMLInputElement | null>(null);
+
+    useEffect(() => subscribeActiveTenantConfig(setTenantConfig), []);
 
     useEffect(() => {
         prefetchAllXmlInBackground(SPECIAL_BOTS_CATALOG.map(b => b.file));
@@ -299,8 +308,25 @@ const FreeBots = observer(() => {
         return () => window.removeEventListener('tp-special-bots-filter', onFilterEvent);
     }, []);
 
+    const effectiveCatalog = useMemo<SpecialBotEntry[]>(() => {
+        const uploadedBots: SpecialBotEntry[] = (tenantConfig?.custom_bots || [])
+            .filter(b => b.is_active !== false && b.xml_content?.trim())
+            .map(b => ({
+                id: `tenant-bot-${b.id}`,
+                name: b.name,
+                file: '',
+                inlineXml: b.xml_content,
+                category: Array.isArray(b.categories) && b.categories.length > 0 ? b.categories : ['special'],
+                strategy: b.strategy || 'Custom Operator Bot',
+                description: b.description || 'Custom XML trading bot uploaded by this site operator.',
+            }));
+
+        const includeDefault = tenantConfig ? tenantConfig.include_default_bots !== false : true;
+        return includeDefault ? [...uploadedBots, ...SPECIAL_BOTS_CATALOG] : uploadedBots;
+    }, [tenantConfig]);
+
     const filteredBots = useMemo(() => {
-        return SPECIAL_BOTS_CATALOG.filter(bot => {
+        return effectiveCatalog.filter(bot => {
             const matchesCategory = activeCategory === 'all' || bot.category.includes(activeCategory);
             const q = searchQuery.trim().toLowerCase();
             const matchesSearch =
@@ -310,7 +336,7 @@ const FreeBots = observer(() => {
                 bot.description.toLowerCase().includes(q);
             return matchesCategory && matchesSearch;
         });
-    }, [activeCategory, searchQuery]);
+    }, [effectiveCatalog, activeCategory, searchQuery]);
 
     const loadXmlIntoVisibleBuilder = async (id: string, name: string, xml: string, saveType: 'pending' | 'local') => {
         setActiveTab(DBOT_TABS.BOT_BUILDER);
@@ -336,7 +362,7 @@ const FreeBots = observer(() => {
         setLoadingBotId(bot.id);
         setLoadError(null);
         try {
-            const xml = await fetchXmlWithCache(bot.file);
+            const xml = bot.inlineXml?.trim() || (await fetchXmlWithCache(bot.file));
             if (!xml) {
                 setLoadError(`Unable to load "${bot.name}". Please try again.`);
                 return;

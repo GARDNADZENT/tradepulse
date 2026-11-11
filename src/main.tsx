@@ -9,6 +9,7 @@ import {
     applyFaviconFromLogo,
     applyPrimaryColorFromConfig,
 } from './utils/document-branding';
+import { initializeTenantRuntime } from './services/site-config/site-runtime-config';
 import { performVersionCheck } from './utils/version-check';
 import { isPreviewMode } from './utils/is-preview-mode';
 import './styles/index.scss';
@@ -24,6 +25,9 @@ applyDocumentTitle();
 applyFaviconFromLogo();
 applyBrandFontFromConfig();
 applyPrimaryColorFromConfig();
+
+// Hydrate multi-tenant site configuration (custom domain, ?site=<slug>, or Studio live preview).
+void initializeTenantRuntime();
 
 // Removed AnalyticsInitializer() call - analytics dependency removed
 

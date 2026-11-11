@@ -8,6 +8,8 @@
   "scripts": {
     "dev": "rsbuild dev --port 4003",
     "build": "rsbuild build",
+    "studio:dev": "rsbuild dev --config studio/rsbuild.config.ts --port 4004",
+    "studio:build": "rsbuild build --config studio/rsbuild.config.ts",
     "test": "jest",
     "type-check": "tsc --noEmit",
     "generate:brand-css": "node scripts/generate-brand-css.js",

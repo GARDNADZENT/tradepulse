@@ -9,6 +9,11 @@ import {
 import type { AuthConfig } from '@/external/deriv-core';
 import { DERIV_CREATE_ACCOUNT_URL } from '@/constants/social-links';
 import { DerivWSAccountsService } from '@/services/derivws-accounts.service';
+import {
+    getActiveTenantConfig,
+    getTenantDerivAppId,
+    getTenantReferralLink,
+} from '@/services/site-config/site-runtime-config';
 import brandConfig from '../../../../../brand.config.json';
 
 // =============================================================================
@@ -65,6 +70,8 @@ export const isProduction = () => {
 export const isLocal = () => /localhost(:\d+)?$/i.test(window.location.hostname);
 
 export const getAppId = () => {
+    const tenantAppId = sanitizeEnvValue(getTenantDerivAppId());
+    if (tenantAppId) return tenantAppId;
     return sanitizeEnvValue(process.env.NEXT_PUBLIC_DERIV_APP_ID);
 };
 
@@ -194,7 +201,7 @@ const cacheReferral = (referral: ResolvedReferral): void => {
 export const generateOAuthURL = async (prompt?: string): Promise<string> => {
     try {
         if (prompt === 'registration') {
-            return DERIV_CREATE_ACCOUNT_URL;
+            return getTenantReferralLink();
         }
         const redirectUri = sanitizeEnvValue(process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI) || window.location.origin;
         const clientId = getAppId();
@@ -206,8 +213,10 @@ export const generateOAuthURL = async (prompt?: string): Promise<string> => {
             scopes: 'trade',
         };
 
-        // Static referral link (fallback for direct visits without affiliate click)
-        const referralLink = sanitizeEnvValue(process.env.NEXT_PUBLIC_DERIV_REFERRAL_LINK) || DERIV_CREATE_ACCOUNT_URL;
+        // Static referral link (tenant override -> deploy env -> default TradersPulse affiliate URL)
+        const tenantReferral = sanitizeEnvValue(getActiveTenantConfig()?.deriv_referral_link);
+        const referralLink =
+            tenantReferral || sanitizeEnvValue(process.env.NEXT_PUBLIC_DERIV_REFERRAL_LINK) || DERIV_CREATE_ACCOUNT_URL;
         if (referralLink) {
             const referral = parseReferralLink(referralLink);
             if (referral) {

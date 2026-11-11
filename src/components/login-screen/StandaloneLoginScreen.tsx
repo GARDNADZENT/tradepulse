@@ -1,8 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import ApiTokenModal from '@/components/api-token-modal/api-token-modal';
 import { generateOAuthURL } from '@/components/shared';
-import { DERIV_CREATE_ACCOUNT_URL, SOCIAL_LINKS, TSocialPlatformId } from '@/constants/social-links';
-import { getTradersPulseLogoSrc } from '@/utils/branding';
+import { TSocialPlatformId } from '@/constants/social-links';
+import {
+    getActiveTenantConfig,
+    getTenantBrandName,
+    getTenantLogoSrc,
+    getTenantReferralLink,
+    getTenantSocialLinks,
+    subscribeActiveTenantConfig,
+} from '@/services/site-config/site-runtime-config';
 import './LoginScreen.scss';
 
 const PARTICLES = 36;
@@ -156,6 +163,9 @@ const StandaloneLoginScreen: React.FC = () => {
     const [newLoginError, setNewLoginError] = useState('');
     const [socialHint, setSocialHint] = useState('');
     const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
+    const [, setTenantRev] = useState(0);
+
+    useEffect(() => subscribeActiveTenantConfig(() => setTenantRev(v => v + 1)), []);
 
     useEffect(() => {
         if (!show) return;
@@ -201,7 +211,7 @@ const StandaloneLoginScreen: React.FC = () => {
     const handleNewAccountsSignup = useCallback((e: React.MouseEvent) => {
         e.preventDefault();
         setNewLoginError('');
-        window.open(DERIV_CREATE_ACCOUNT_URL, '_blank', 'noopener,noreferrer');
+        window.open(getTenantReferralLink(), '_blank', 'noopener,noreferrer');
     }, []);
 
     const handleSocialClick = (label: string, url: string) => {
@@ -216,7 +226,10 @@ const StandaloneLoginScreen: React.FC = () => {
 
     if (!show) return null;
 
-    const logoSrc = getTradersPulseLogoSrc();
+    const logoSrc = getTenantLogoSrc();
+    const brandName = getTenantBrandName();
+    const isCustomBrand = Boolean(getActiveTenantConfig()?.brand_name?.trim());
+    const activeSocialLinks = getTenantSocialLinks();
 
     return (
         <div className={`login-screen${visible ? ' login-screen--visible' : ''}`}>
@@ -245,9 +258,15 @@ const StandaloneLoginScreen: React.FC = () => {
             {/* Top Header Bar */}
             <header className='login-screen__top-bar'>
                 <div className='login-screen__top-bar-left'>
-                    <img src={logoSrc} alt='TradersPulse' className='login-screen__top-logo' />
+                    <img src={logoSrc} alt={brandName} className='login-screen__top-logo' />
                     <span className='login-screen__wordmark'>
-                        TRADERS<b>PULSE</b>
+                        {isCustomBrand ? (
+                            <b>{brandName.toUpperCase()}</b>
+                        ) : (
+                            <>
+                                TRADERS<b>PULSE</b>
+                            </>
+                        )}
                     </span>
                 </div>
                 <div className='login-screen__top-bar-right'>
@@ -266,9 +285,9 @@ const StandaloneLoginScreen: React.FC = () => {
                 <div className='login-screen__auth-card'>
                     <div className='login-screen__auth-header'>
                         <div className='login-screen__card-logo-wrap'>
-                            <img src={logoSrc} alt='TradersPulse logo' className='login-screen__card-logo' />
+                            <img src={logoSrc} alt={`${brandName} logo`} className='login-screen__card-logo' />
                         </div>
-                        <h1 className='login-screen__auth-title'>Welcome to TradersPulse</h1>
+                        <h1 className='login-screen__auth-title'>Welcome to {brandName}</h1>
                         <p className='login-screen__auth-sub'>
                             Sign in to trade with AI bots, signals &amp; live execution
                         </p>
@@ -335,7 +354,7 @@ const StandaloneLoginScreen: React.FC = () => {
                     <section className='login-screen__socials' aria-label='Official Community and Socials'>
                         <h2 className='login-screen__socials-heading'>OFFICIAL COMMUNITY &amp; SOCIALS</h2>
                         <div className='login-screen__socials-grid'>
-                            {SOCIAL_LINKS.map(account => (
+                            {activeSocialLinks.map(account => (
                                 <button
                                     key={account.id}
                                     type='button'
@@ -354,7 +373,7 @@ const StandaloneLoginScreen: React.FC = () => {
             </main>
 
             <footer className='login-screen__bottom-bar'>
-                <span>© 2026 TradersPulse</span>
+                <span>© 2026 {brandName}</span>
                 <span className='login-screen__bottom-dot' aria-hidden='true'>
                     ·
                 </span>

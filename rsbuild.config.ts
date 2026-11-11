@@ -98,6 +98,7 @@ export default defineConfig({
   },
   html: { template: './index.html' },
   server: {
+    host: '0.0.0.0',
     compress: true,
   },
   dev: { hmr: true },

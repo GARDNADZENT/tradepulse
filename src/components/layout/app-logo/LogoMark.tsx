@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+    getTenantTagline,
+    subscribeActiveTenantConfig,
+} from '@/services/site-config/site-runtime-config';
+import {
     getPreviewAppName,
     getPreviewLogo,
     subscribePreviewAppName,
@@ -15,10 +19,12 @@ type TLogoMarkProps = {
 export const LogoMark = ({ height = 34 }: TLogoMarkProps) => {
     const [previewLogo, setPreviewLogo] = useState<string | null>(getPreviewLogo());
     const [previewAppName, setPreviewAppName] = useState<string | null>(getPreviewAppName());
+    const [tagline, setTagline] = useState<string>(() => getTenantTagline());
     const [candidateIndex, setCandidateIndex] = useState(0);
 
     useEffect(() => subscribePreviewLogo(setPreviewLogo), []);
     useEffect(() => subscribePreviewAppName(setPreviewAppName), []);
+    useEffect(() => subscribeActiveTenantConfig(() => setTagline(getTenantTagline())), []);
 
     const defaultLogoSrc = getTradersPulseLogoSrc();
 
@@ -48,7 +54,7 @@ export const LogoMark = ({ height = 34 }: TLogoMarkProps) => {
             />
             <span className='app-header__logo-stack'>
                 <span className='app-header__logo-text'>{appName}</span>
-                <span className='app-header__logo-sub'>SMART DERIV TOOLS</span>
+                <span className='app-header__logo-sub'>{tagline}</span>
             </span>
         </span>
     );
