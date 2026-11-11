@@ -12,6 +12,15 @@ const supabaseKey = (process.env.SUPABASE_PUBLISHABLE_KEY || '').trim();
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseKey);
 
+export const connectedSupabaseHost: string = (() => {
+  if (!supabaseUrl) return '';
+  try {
+    return new URL(supabaseUrl).host;
+  } catch {
+    return supabaseUrl;
+  }
+})();
+
 export const studioSupabase: SupabaseClient | null = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseKey)
   : null;
@@ -111,7 +120,10 @@ export async function signInWithEmail(
     const { data, error } = await client.auth.signUp({
       email: email.trim(),
       password,
-      options: { data: { full_name: resolvedName } },
+      options: {
+        emailRedirectTo: window.location.origin,
+        data: { full_name: resolvedName },
+      },
     });
     if (error) throw error;
     if (!data.user) {
@@ -147,6 +159,18 @@ export async function signInWithEmail(
     };
   }
   return sessionUser;
+}
+
+export async function resendConfirmationEmail(email: string): Promise<void> {
+  const client = requireSupabase();
+  const { error } = await client.auth.resend({
+    type: 'signup',
+    email: email.trim(),
+    options: {
+      emailRedirectTo: window.location.origin,
+    },
+  });
+  if (error) throw error;
 }
 
 export async function signInWithGoogleOAuth(): Promise<void> {

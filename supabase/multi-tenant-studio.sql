@@ -285,3 +285,12 @@ exception
         raise notice 'Skipped storage.objects policies: %', sqlerrm;
 end;
 $$;
+
+-- 6. Explicit API Role Grants & PostgREST Schema Cache Reload
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on public.studio_profiles to anon, authenticated;
+grant select, insert, update, delete on public.managed_sites to anon, authenticated;
+grant select, insert, update, delete on public.managed_site_bots to anon, authenticated;
+grant select, insert, update, delete on public.studio_platform_settings to anon, authenticated;
+
+notify pgrst, 'reload schema';

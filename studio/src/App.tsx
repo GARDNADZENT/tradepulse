@@ -10,6 +10,7 @@ import {
 } from './types';
 import {
   buildLiveTenantUrl,
+  connectedSupabaseHost,
   createBlankManagedSite,
   DEFAULT_PLATFORM_SETTINGS,
   deleteManagedSite,
@@ -18,6 +19,7 @@ import {
   isSupabaseConfigured,
   loadManagedSites,
   persistManagedSite,
+  resendConfirmationEmail,
   savePlatformSettings,
   signInWithEmail,
   signInWithGoogleOAuth,
@@ -107,6 +109,16 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     let mounted = true;
+
+    // Surface any Supabase OAuth / email-link redirect error from URL hash
+    if (typeof window !== 'undefined' && window.location.hash.includes('error_description=')) {
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const desc = hashParams.get('error_description');
+      if (desc) {
+        setAuthError(desc.replace(/\+/g, ' '));
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+    }
 
     (async () => {
       try {
@@ -574,7 +586,33 @@ export const App: React.FC = () => {
             </label>
 
             {authInfo && <div className="studio-toast">{authInfo}</div>}
-            {authError && <div className="studio-alert studio-alert--error">{authError}</div>}
+            {authError && (
+              <div className="studio-alert studio-alert--error">
+                <div>{authError}</div>
+                {authEmail.trim() &&
+                  (authError.toLowerCase().includes('confirm') ||
+                    authError.toLowerCase().includes('expired')) && (
+                    <button
+                      type="button"
+                      className="studio-btn studio-btn--ghost studio-btn--xs"
+                      style={{ marginTop: 8 }}
+                      onClick={async () => {
+                        try {
+                          await resendConfirmationEmail(authEmail);
+                          setAuthError('');
+                          setAuthInfo(
+                            `Sent a fresh confirmation link to ${authEmail.trim()} (redirecting back to ${window.location.origin}).`
+                          );
+                        } catch (e: any) {
+                          setAuthError(e?.message || 'Could not resend confirmation email.');
+                        }
+                      }}
+                    >
+                      Resend Confirmation Link
+                    </button>
+                  )}
+              </div>
+            )}
 
             <button
               type="submit"
@@ -724,7 +762,7 @@ export const App: React.FC = () => {
           <div>
             <h1 className="studio-topbar__heading">Multi-Site Control Plane</h1>
             <p className="studio-topbar__sub">
-              Connected to Supabase Multi-Tenant Cloud · Row-Level Security Active
+              Connected to Supabase ({connectedSupabaseHost}) · Row-Level Security Active
             </p>
           </div>
 
