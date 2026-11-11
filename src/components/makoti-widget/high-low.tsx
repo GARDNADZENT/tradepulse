@@ -478,136 +478,343 @@ export const HighLow: React.FC = () => {
     const phaseLabel = sniperPhase === 'idle' ? 'SCANNING' : sniperPhase === 'aiming' ? 'AIMING' : sniperPhase === 'firing' ? 'FIRING' : sniperPhase === 'in_trade' ? 'LIVE' : '';
 
     return (
-        <div className='mw-killer'>
-            <div className='mw-killer__fields'>
-                <div className='mw-field'>
-                    <label className='mw-label'>Stake ($)</label>
-                    <input className='mw-input' type='number' min='0.35' step='0.01'
-                        value={cfg.stake} onChange={e => setCfg(p => ({ ...p, stake: Math.max(0.35, parseFloat(e.target.value) || 0.35) }))} disabled={running} />
+        <div className='at-view'>
+            {/* 4-Card Session KPI Strip */}
+            <section className='at-kpi-grid'>
+                <div className='at-kpi-card'>
+                    <span className='at-kpi-card__label'>Session P/L:</span>
+                    <div
+                        className={`at-kpi-card__val at-kpi-card__val--mono ${
+                            pnl >= 0 ? 'at-kpi-card__val--pos' : 'at-kpi-card__val--neg'
+                        }`}
+                    >
+                        {pnl >= 0 ? '+' : ''}USD {pnl.toFixed(2)}
+                    </div>
                 </div>
-                <div className='mw-field'>
-                    <label className='mw-label'>Min Confidence</label>
-                    <input className='mw-input' type='number' min='0' max='100' step='1'
-                        value={cfg.minConfidence} onChange={e => setCfg(p => ({ ...p, minConfidence: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) }))} disabled={running} />
-                </div>
-            </div>
-            <div className='mw-killer__fields'>
-                <div className='mw-field'>
-                    <label className='mw-label'>Max Losses</label>
-                    <input className='mw-input' type='number' min='1' step='1'
-                        value={cfg.maxConsecutiveLosses} onChange={e => setCfg(p => ({ ...p, maxConsecutiveLosses: Math.max(1, parseInt(e.target.value) || 3) }))} disabled={running} />
-                </div>
-                <div className='mw-field'>
-                    <label className='mw-label'>Daily Stop ($)</label>
-                    <input className='mw-input' type='number' step='1'
-                        value={cfg.dailyStopLoss} onChange={e => setCfg(p => ({ ...p, dailyStopLoss: parseFloat(e.target.value) || -25 }))} disabled={running} />
-                </div>
-            </div>
-            <div className='mw-killer__vh'>
-                <label className='mw-killer__vh-toggle'>
-                    <input type='checkbox' checked={cfg.martingaleEnabled}
-                        onChange={e => setCfg(p => ({ ...p, martingaleEnabled: e.target.checked }))} disabled={running} />
-                    <span>Martingale <small>(x{cfg.martingale} on loss)</small></span>
-                </label>
-                <label className='mw-killer__vh-toggle'>
-                    <input type='checkbox' checked={cfg.useCompounding}
-                        onChange={e => setCfg(p => ({ ...p, useCompounding: e.target.checked }))} disabled={running} />
-                    <span>Compounding <small>(2% of P&L)</small></span>
-                </label>
-            </div>
 
-            <button className={`mw-btn${running ? ' mw-btn--stop' : ' mw-btn--kill'}`}
-                onClick={running ? stopEngine : startEngine}>
-                {running ? <><span className='mw-pulse' /> STOP</> : 'RUN'}
-            </button>
+                <div className='at-kpi-card'>
+                    <div className='at-kpi-card__top'>
+                        <span className='at-kpi-card__label'>Sniper Signal:</span>
+                        {running && (
+                            <span className='at-pill-badge at-pill-badge--indigo'>
+                                {currentConfidence}% Conf
+                            </span>
+                        )}
+                    </div>
+                    <div className='at-kpi-card__sub' style={{ fontWeight: 700, color: 'var(--at-text-primary)' }}>
+                        {currentSymbol
+                            ? `${SYMBOL_LABELS[currentSymbol] || currentSymbol} • ${phaseLabel || 'READY'}`
+                            : 'Scanning 10 Volatilities'}
+                    </div>
+                </div>
 
-            {running && (
-                <div className='mw-killer__signal'>
-                    <div className='mw-killer__signal-detail'>{status}</div>
-                    {currentSymbol && (
-                        <div className='mw-killer__signal-strength'>
-                            <span style={{ color: currentConfidence >= cfg.minConfidence ? '#22c55e' : '#f97316' }}>
-                                {SYMBOL_LABELS[currentSymbol] || currentSymbol}
-                            </span>
-                            <span style={{ color: '#facc15', marginLeft: 8 }}>
-                                {currentConfidence}%
-                            </span>
-                            <span style={{
-                                display: 'inline-block',
-                                marginLeft: 8,
-                                padding: '1px 6px',
-                                borderRadius: 3,
-                                fontSize: 11,
-                                fontWeight: 600,
-                                background: phaseColor,
-                                color: '#000',
-                            }}>
-                                {phaseLabel}
-                            </span>
-                            {sniperPhase === 'aiming' && sniperReason && (
-                                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
-                                    {sniperReason}
-                                </div>
-                            )}
-                            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4, display: 'flex', gap: 12 }}>
-                                <span>Flat: <span style={{ color: currentFlatTickRate > 0.2 ? '#ef4444' : '#22c55e' }}>{(currentFlatTickRate * 100).toFixed(0)}%</span></span>
-                                <span>Mom: <span style={{ color: currentMomentumStrength >= 0.5 ? '#22c55e' : '#f97316' }}>{(currentMomentumStrength * 100).toFixed(0)}%</span></span>
-                                <span>Noise: <span style={{ color: currentNoiseLevel > 0.4 ? '#ef4444' : '#22c55e' }}>{(currentNoiseLevel * 100).toFixed(0)}%</span></span>
+                <div className='at-kpi-card'>
+                    <span className='at-kpi-card__label'>Win Rate: {winRate}%</span>
+                    <div className='at-kpi-card__sub'>
+                        {totalTrades} Trades ({wins}W / {totalTrades - wins}L)
+                    </div>
+                </div>
+
+                <div className='at-kpi-card'>
+                    <div className='at-kpi-card__top'>
+                        <span className='at-kpi-card__label'>Daily Net P/L:</span>
+                        <span
+                            className={`at-status-dot ${
+                                inTrade ? 'at-status-dot--live' : running ? 'at-status-dot--warn' : ''
+                            }`}
+                        />
+                    </div>
+                    <div
+                        className={`at-kpi-card__val at-kpi-card__val--mono ${
+                            dailyPnl >= 0 ? 'at-kpi-card__val--pos' : 'at-kpi-card__val--neg'
+                        }`}
+                    >
+                        {dailyPnl >= 0 ? '+' : ''}USD {dailyPnl.toFixed(2)}
+                    </div>
+                </div>
+            </section>
+
+            {/* 2-Column Workspace */}
+            <div className='at-split'>
+                {/* Left Column: High / Low Sniper Parameters */}
+                <div className='at-col'>
+                    <section className='at-card'>
+                        <div className='at-card__header'>
+                            <div>
+                                <h2 className='at-card__title'>High / Low Sniper Config</h2>
+                                <p className='at-card__subtitle'>
+                                    Momentum &amp; micro-structure directional execution
+                                </p>
                             </div>
-                            {inTrade && <span className='mw-killer__active-dot'> LIVE</span>}
-                            {consecutiveLosses > 0 && <span style={{ color: '#ef4444', marginLeft: 8 }}>x{consecutiveLosses} losses</span>}
                         </div>
-                    )}
-                </div>
-            )}
 
-            {(running || pnl !== 0) && (
-                <div className='mw-killer__stats'>
-                    <div className={`mw-killer__pnl${pnl >= 0 ? ' mw-killer__pnl--pos' : ' mw-killer__pnl--neg'}`}>
-                        P&L: {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}
-                    </div>
-                    <div className='mw-killer__meta'>
-                        <span>Trades: {totalTrades}</span>
-                        <span>Win Rate: {winRate}%</span>
-                        <span>Daily: {dailyPnl >= 0 ? '+' : ''}${dailyPnl.toFixed(2)}</span>
-                    </div>
-                </div>
-            )}
+                        <div className='at-param-box'>
+                            <div className='at-param-row'>
+                                <span className='at-param-row__label'>Stake ($):</span>
+                                <div className='at-param-row__control'>
+                                    <input
+                                        className='mw-input'
+                                        type='number'
+                                        min='0.35'
+                                        step='0.01'
+                                        value={cfg.stake}
+                                        onChange={e =>
+                                            setCfg(p => ({
+                                                ...p,
+                                                stake: Math.max(0.35, parseFloat(e.target.value) || 0.35),
+                                            }))
+                                        }
+                                        disabled={running}
+                                    />
+                                </div>
+                            </div>
 
-            {trades.length > 0 && (
-                <div className='mw-killer__trades'>
-                    <div className='mw-killer__log-header'>
-                        <span className='mw-killer__log-title'>Trade History</span>
-                    </div>
-                    <div className='mw-killer__trade-list'>
-                        {trades.slice(0, 10).map((t, i) => (
-                            <div key={i} className={`mw-log-line mw-log-line--${t.won ? 'win' : 'loss'}`}>
-                                <span className='mw-log-time'>{t.time}</span>
-                                <span className='mw-log-msg'>
-                                    {t.won ? '+' : '-'}{t.direction === 'RUNHIGH' ? 'U' : 'D'} {SYMBOL_LABELS[t.symbol] || t.symbol} {t.won ? '+' : ''}${t.profit.toFixed(2)}
+                            <div className='at-param-row'>
+                                <span className='at-param-row__label'>Min Confidence (%):</span>
+                                <div className='at-param-row__control'>
+                                    <input
+                                        className='mw-input'
+                                        type='number'
+                                        min='0'
+                                        max='100'
+                                        step='1'
+                                        value={cfg.minConfidence}
+                                        onChange={e =>
+                                            setCfg(p => ({
+                                                ...p,
+                                                minConfidence: Math.min(
+                                                    100,
+                                                    Math.max(0, parseInt(e.target.value) || 0)
+                                                ),
+                                            }))
+                                        }
+                                        disabled={running}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className='at-param-row'>
+                                <span className='at-param-row__label'>Max Consecutive Losses:</span>
+                                <div className='at-param-row__control'>
+                                    <input
+                                        className='mw-input'
+                                        type='number'
+                                        min='1'
+                                        step='1'
+                                        value={cfg.maxConsecutiveLosses}
+                                        onChange={e =>
+                                            setCfg(p => ({
+                                                ...p,
+                                                maxConsecutiveLosses: Math.max(
+                                                    1,
+                                                    parseInt(e.target.value) || 3
+                                                ),
+                                            }))
+                                        }
+                                        disabled={running}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className='at-param-row'>
+                                <span className='at-param-row__label'>Daily Stop ($):</span>
+                                <div className='at-param-row__control'>
+                                    <input
+                                        className='mw-input'
+                                        type='number'
+                                        step='1'
+                                        value={cfg.dailyStopLoss}
+                                        onChange={e =>
+                                            setCfg(p => ({
+                                                ...p,
+                                                dailyStopLoss: parseFloat(e.target.value) || -25,
+                                            }))
+                                        }
+                                        disabled={running}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className='at-toggle-card'>
+                            <label className='at-toggle-row'>
+                                <div className='at-toggle-row__info'>
+                                    <span className='at-toggle-row__title'>Martingale</span>
+                                    <span className='at-toggle-row__sub'>
+                                        Multiply stake ×{cfg.martingale} on loss
+                                    </span>
+                                </div>
+                                <span className='at-switch'>
+                                    <input
+                                        type='checkbox'
+                                        checked={cfg.martingaleEnabled}
+                                        onChange={e =>
+                                            setCfg(p => ({
+                                                ...p,
+                                                martingaleEnabled: e.target.checked,
+                                            }))
+                                        }
+                                        disabled={running}
+                                    />
+                                    <span className='at-switch__slider' />
                                 </span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
+                            </label>
+                        </div>
 
-            {logs.length > 0 && (
-                <div className='mw-killer__log-wrap'>
-                    <div className='mw-killer__log-header'>
-                        <span className='mw-killer__log-title'>Activity Log</span>
-                        <button className='mw-btn-clear' onClick={clearLogs}>Clear</button>
-                    </div>
-                    <div className='mw-killer__log'>
-                        {logs.map((l, i) => (
-                            <div key={i} className={`mw-log-line mw-log-line--${l.type}`}>
-                                <span className='mw-log-time'>{l.time}</span>
-                                <span className='mw-log-msg'>{l.msg}</span>
-                            </div>
-                        ))}
-                    </div>
+                        <div className='at-toggle-card'>
+                            <label className='at-toggle-row'>
+                                <div className='at-toggle-row__info'>
+                                    <span className='at-toggle-row__title'>Compounding</span>
+                                    <span className='at-toggle-row__sub'>
+                                        Reinvest 2% of session P/L into stake
+                                    </span>
+                                </div>
+                                <span className='at-switch'>
+                                    <input
+                                        type='checkbox'
+                                        checked={cfg.useCompounding}
+                                        onChange={e =>
+                                            setCfg(p => ({
+                                                ...p,
+                                                useCompounding: e.target.checked,
+                                            }))
+                                        }
+                                        disabled={running}
+                                    />
+                                    <span className='at-switch__slider' />
+                                </span>
+                            </label>
+                        </div>
+
+                        <button
+                            type='button'
+                            className={`mw-btn${running ? ' mw-btn--stop' : ' mw-btn--kill'}`}
+                            onClick={running ? stopEngine : startEngine}
+                        >
+                            {running ? (
+                                <>
+                                    <span className='mw-pulse' /> STOP HIGH / LOW
+                                </>
+                            ) : (
+                                'RUN HIGH / LOW'
+                            )}
+                        </button>
+                    </section>
                 </div>
-            )}
+
+                {/* Right Column: Live Sniper Telemetry + Trade History + Activity Log */}
+                <div className='at-col'>
+                    <section className='at-card'>
+                        <div className='at-card__header'>
+                            <div>
+                                <h2 className='at-card__title'>Live Sniper Telemetry</h2>
+                                <p className='at-card__subtitle'>{status || 'Ready to scan momentum'}</p>
+                            </div>
+                            {phaseLabel && (
+                                <span
+                                    className='at-pill-badge'
+                                    style={{ background: phaseColor, color: '#ffffff' }}
+                                >
+                                    {phaseLabel}
+                                </span>
+                            )}
+                        </div>
+
+                        <div className='at-digit-chips' style={{ marginTop: 0 }}>
+                            <span className='at-digit-chip'>
+                                Market:{' '}
+                                {currentSymbol
+                                    ? SYMBOL_LABELS[currentSymbol] || currentSymbol
+                                    : '—'}
+                            </span>
+                            <span className='at-digit-chip'>
+                                Flat Ticks: {(currentFlatTickRate * 100).toFixed(0)}%
+                            </span>
+                            <span className='at-digit-chip'>
+                                Momentum: {(currentMomentumStrength * 100).toFixed(0)}%
+                            </span>
+                            <span className='at-digit-chip'>
+                                Noise: {(currentNoiseLevel * 100).toFixed(0)}%
+                            </span>
+                            {consecutiveLosses > 0 && (
+                                <span className='at-pill-badge at-pill-badge--rose-soft'>
+                                    {consecutiveLosses} Consecutive Losses
+                                </span>
+                            )}
+                        </div>
+
+                        {sniperPhase === 'aiming' && sniperReason && (
+                            <p
+                                style={{
+                                    marginTop: '14px',
+                                    marginBottom: 0,
+                                    fontSize: '13px',
+                                    color: 'var(--at-text-muted)',
+                                }}
+                            >
+                                {sniperReason}
+                            </p>
+                        )}
+                    </section>
+
+                    {trades.length > 0 && (
+                        <section className='at-card'>
+                            <div className='at-log-header'>
+                                <h3 className='at-card__title'>Recent Settlements</h3>
+                            </div>
+                            <div className='at-log-list'>
+                                {trades.slice(0, 10).map((t, i) => (
+                                    <div
+                                        key={i}
+                                        className={`mw-log-line mw-log-line--${
+                                            t.won ? 'win' : 'loss'
+                                        }`}
+                                    >
+                                        <span className='mw-log-time'>{t.time}</span>
+                                        <span className='mw-log-msg'>
+                                            {t.direction === 'RUNHIGH' ? '↑ HIGH' : '↓ LOW'} •{' '}
+                                            {SYMBOL_LABELS[t.symbol] || t.symbol} •{' '}
+                                            {t.won ? '+' : ''}${t.profit.toFixed(2)}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+
+                    <section className='at-card'>
+                        <div className='at-log-header'>
+                            <h3 className='at-card__title'>Activity Log</h3>
+                            {logs.length > 0 && (
+                                <button
+                                    type='button'
+                                    className='mw-btn-clear'
+                                    onClick={clearLogs}
+                                >
+                                    Clear
+                                </button>
+                            )}
+                        </div>
+                        {logs.length === 0 ? (
+                            <div className='at-log-empty'>
+                                Run High / Low Sniper to stream real-time market evaluations and fills.
+                            </div>
+                        ) : (
+                            <div className='at-log-list'>
+                                {logs.map((l, i) => (
+                                    <div
+                                        key={i}
+                                        className={`mw-log-line mw-log-line--${l.type}`}
+                                    >
+                                        <span className='mw-log-time'>{l.time}</span>
+                                        <span className='mw-log-msg'>{l.msg}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                </div>
+            </div>
         </div>
     );
 };

@@ -153,7 +153,6 @@ const Layout = observer(() => {
             <Body>
                 <Outlet />
             </Body>
-            {!isCallbackPage && isDesktop && <Footer />}
         </div>
     );
 });

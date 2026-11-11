@@ -2,63 +2,94 @@
 import React, { useState } from 'react';
 import { observer } from 'mobx-react-lite';
 import { useStore } from '@/hooks/useStore';
-import { useApiBase } from '@/hooks/useApiBase';
 import { useTradePulse } from '../TradePulseContext';
 import { localize } from '@deriv-com/translations';
 import {
     getCurrentJourneyDay,
     computeJourneyDay,
+    buildSchedule,
     formatCurrency,
     saveJourney,
 } from '../utils/calculations';
 import useTradePulseData from '../hooks/useTradePulseData';
-import useTradePulseFetch from '../hooks/useTradePulseFetch';
 import './MyJourney.scss';
 
 const MyJourney = observer(() => {
     const store = useStore();
-    const storeLoginid = store.client?.loginid ?? null;
-    const { connectionStatus } = useApiBase();
-    const { balance: fetchedBalance, loading } = useTradePulseFetch();
-    const balance = fetchedBalance;
-    const currency = 'USD';
+    const storeLoginid = store?.client?.loginid || localStorage.getItem('active_loginid') || null;
+    const { balance, currency: dataCurrency, overallStats, todayStats } = useTradePulseData();
+    const curr = store?.client?.currency || dataCurrency || 'USD';
 
-    const { journey, schedule, journeyLoading, currentAccount, refreshJourney, resetJourney } = useTradePulse();
-    const isConnected = connectionStatus === 'opened' || connectionStatus === 'OPENED';
+    const {
+        journey,
+        schedule,
+        journeyLoading,
+        currentAccount,
+        refreshJourney,
+        resetJourney,
+    } = useTradePulse();
 
     const [showJourneyModal, setShowJourneyModal] = useState(false);
     const [isLocking, setIsLocking] = useState(false);
     const [showResetModal, setShowResetModal] = useState(false);
     const [isResetting, setIsResetting] = useState(false);
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+    const fmtNum = (val: number) =>
+        Number(val || 0).toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        });
 
     const currentDay = journey ? getCurrentJourneyDay(journey.start_date) : 1;
-    const rows = schedule?.rows || [];
-    const idx = Math.min(Math.max(currentDay, 1), rows.length) - 1;
-    const baseRow = rows[idx];
-    const row = baseRow ? computeJourneyDay(baseRow, balance, currentDay) : undefined;
-    const displayRow = row || baseRow;
+    const rows = schedule?.rows && schedule.rows.length > 0
+        ? schedule.rows
+        : journey
+        ? buildSchedule(journey)
+        : [];
 
-    const progress = journey ? Math.min(100, Math.max(0, ((currentDay - 1) / journey.cycle_length_days) * 100)) : 0;
+    const clampedDay = rows.length > 0 ? Math.min(Math.max(currentDay, 1), rows.length) : 1;
+    const baseRow = rows[clampedDay - 1];
+    const computedRow = baseRow ? computeJourneyDay(baseRow, balance, currentDay) : undefined;
+    const displayRow = computedRow || baseRow;
+    const finalRow = rows.length > 0 ? rows[rows.length - 1] : undefined;
+
+    const progressPct = journey
+        ? Math.min(100, Math.max(0, Math.round(((clampedDay - 1) / journey.cycle_length_days) * 100)))
+        : 0;
     const delta = balance - (baseRow?.end ?? 0);
+    const isAhead = delta >= 0;
 
-    const { overallStats } = useTradePulseData();
-    const totalTrades = overallStats.total_trades || 0;
-    const winRate = overallStats.win_rate || 0;
-    const streakLabel = overallStats.win_streak > 0 ? `🔥 ${overallStats.win_streak} Wins` : overallStats.loss_streak > 0 ? `❄ ${overallStats.loss_streak} Losses` : '—';
-    const todayProfit = overallStats.total_profit || 0;
+    // Session metrics (uses today's stats when trades exist today, otherwise overall stats)
+    const activeStats = (todayStats?.total_trades ?? 0) > 0 ? todayStats : overallStats;
+    const totalTrades = activeStats?.total_trades || 0;
+    const winRate = activeStats?.win_rate || 0;
+    const winStreak = activeStats?.win_streak || 0;
+    const lossStreak = activeStats?.loss_streak || 0;
+    const streakLabel =
+        winStreak > 0 ? `${winStreak}W` : lossStreak > 0 ? `${lossStreak}L` : '0';
+    const sessionProfit = activeStats?.total_profit || 0;
 
     const handleLockJourney = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const loginid = currentAccount || storeLoginid;
         if (!loginid) {
-            alert('No account selected. Please log in first.');
+            setErrorMsg('No active Deriv account detected.');
             return;
         }
         setIsLocking(true);
+        setErrorMsg(null);
+
         const form = e.currentTarget;
-        const initial_balance = Number((form.elements.namedItem('j-initial') as HTMLInputElement).value);
-        const daily_target_pct = Number((form.elements.namedItem('j-rate') as HTMLInputElement).value);
-        const cycle_length_days = Number((form.elements.namedItem('j-days') as HTMLInputElement).value);
+        const initial_balance = Number(
+            (form.elements.namedItem('j-initial') as HTMLInputElement).value
+        );
+        const daily_target_pct = Number(
+            (form.elements.namedItem('j-rate') as HTMLInputElement).value
+        );
+        const cycle_length_days = Number(
+            (form.elements.namedItem('j-days') as HTMLInputElement).value
+        );
         const start_date = (form.elements.namedItem('j-start') as HTMLInputElement).value;
 
         try {
@@ -71,11 +102,11 @@ const MyJourney = observer(() => {
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
             });
-            await refreshJourney();
+            await refreshJourney(loginid);
             setShowJourneyModal(false);
         } catch (err) {
             console.error('Lock journey failed:', err);
-            alert(err instanceof Error ? err.message : 'Failed to lock journey');
+            setErrorMsg(err instanceof Error ? err.message : 'Failed to lock journey');
         } finally {
             setIsLocking(false);
         }
@@ -87,7 +118,7 @@ const MyJourney = observer(() => {
         setIsResetting(true);
         try {
             await resetJourney(loginid);
-            await refreshJourney();
+            await refreshJourney(loginid);
             setShowResetModal(false);
         } catch (err) {
             console.error('Reset journey failed:', err);
@@ -96,291 +127,473 @@ const MyJourney = observer(() => {
         }
     };
 
-    if (journeyLoading) {
-        return (
-            <div className='tradepulse__page'>
-                <div className='tradepulse__section'>
-                    <div className='tradepulse__section-header'>
-                        <div>
-                            <div className='tradepulse__section-brand'>{localize('Today')}</div>
-                            <h2 className='tradepulse__section-title'>{localize("Today's Target")}</h2>
-                            <p className='tradepulse__section-subtitle'>{localize('Track your daily progress against the plan.')}</p>
-                        </div>
-                    </div>
-                    <div className='tradepulse__kpi-grid'>
-                        {[...Array(6)].map((_, i) => (
-                            <div key={i} className='tradepulse__kpi-card'>
-                                <div className='tradepulse__skeleton tradepulse__skeleton-text tradepulse__skeleton-text--short'></div>
-                                <div className='tradepulse__skeleton tradepulse__skeleton-title'></div>
-                            </div>
-                        ))}
-                    </div>
-                    <div className='tradepulse__skeleton tradepulse__skeleton-card'></div>
-                </div>
-            </div>
-        );
-    }
-
-    if (!journey || !schedule) {
-        return (
-            <div className='tradepulse__page'>
-                <div className='tradepulse__section'>
-                    <div className='tradepulse__section-header'>
-                        <div>
-                            <div className='tradepulse__section-brand'>{localize('Today')}</div>
-                            <h2 className='tradepulse__section-title'>{localize("Today's Target")}</h2>
-                            <p className='tradepulse__section-subtitle'>{localize('Track your daily progress against the plan.')}</p>
-                        </div>
-                    </div>
-                    <div className='tradepulse__card' style={{ textAlign: 'center' }}>
-                        <div className='tradepulse__kpi-icon' style={{ width: '64px', height: '64px', margin: '0 auto 16px', color: 'var(--tp-accent)' }}>
-                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path>
-                                <path d="M12 6v6l4 2"></path>
-                            </svg>
-                        </div>
-                        <h3 className='tradepulse__section-title' style={{ margin: '0 0 12px', textAlign: 'center' }}>{localize('No Journey Locked')}</h3>
-                        <p style={{ fontSize: '0.95rem', color: 'var(--tp-text-secondary)', maxWidth: '440px', margin: '0 auto 28px', lineHeight: 1.7 }}>
-                            {localize('Create your permanent trading plan. Set your goals, lock your journey, and track your progress automatically.')}
+    const renderModals = () => (
+        <>
+            {showJourneyModal && (
+                <div className='tradepulse__modal-overlay'>
+                    <div className='tradepulse__modal fade-in'>
+                        <h3 className='tradepulse__modal-title'>{localize('Lock Your Journey')}</h3>
+                        <p className='tradepulse__modal-text'>
+                            {localize(
+                                'Once locked, your compounding plan runs automatically each day until you complete the cycle or reset it.'
+                            )}
                         </p>
-                        <button
-                            onClick={() => setShowJourneyModal(true)}
-                            className='tradepulse__btn tradepulse__btn--primary'
-                        >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path>
-                                <path d="M12 6v6l4 2"></path>
-                            </svg>
-                            {localize('Start My Journey')}
-                        </button>
-                    </div>
-                </div>
-
-                {/* Journey Creation Modal */}
-                {showJourneyModal && (
-                    <div className='my-journey__modal-overlay' onClick={() => setShowJourneyModal(false)}>
-                        <div className='my-journey__modal' onClick={e => e.stopPropagation()}>
-                            <div className='my-journey__modal-header' style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <div>
-                                    <div className='my-journey__label'>{localize('Lock Your Journey')}</div>
-                                    <h3 className='my-journey__modal-title'>{localize('Start My Journey')}</h3>
+                        {errorMsg && <div className='tp-journey-alert'>{errorMsg}</div>}
+                        <form onSubmit={handleLockJourney} className='tp-journey-modal-form'>
+                            <div className='tradepulse__form-group'>
+                                <label className='tradepulse__form-label'>
+                                    {localize('Starting Balance')} ({curr})
+                                </label>
+                                <div className='tradepulse__input-wrap'>
+                                    <span className='tradepulse__input-prefix'>$</span>
+                                    <input
+                                        type='number'
+                                        name='j-initial'
+                                        className='tradepulse__form-input'
+                                        defaultValue={balance > 0 ? balance.toFixed(2) : '50.00'}
+                                        step='0.01'
+                                        min='1'
+                                        required
+                                    />
                                 </div>
-                                <button onClick={() => setShowJourneyModal(false)} style={{ background: 'none', border: 'none', color: 'var(--tp-text-tertiary)', cursor: 'pointer', padding: '4px' }}>
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                                    </svg>
+                            </div>
+
+                            <div className='tp-journey-modal-row'>
+                                <div className='tradepulse__form-group'>
+                                    <label className='tradepulse__form-label'>
+                                        {localize('Daily Return (%)')}
+                                    </label>
+                                    <input
+                                        type='number'
+                                        name='j-rate'
+                                        className='tradepulse__form-input'
+                                        defaultValue='10.0'
+                                        step='0.1'
+                                        min='0.1'
+                                        max='100'
+                                        required
+                                    />
+                                </div>
+                                <div className='tradepulse__form-group'>
+                                    <label className='tradepulse__form-label'>
+                                        {localize('Cycle Length (Days)')}
+                                    </label>
+                                    <input
+                                        type='number'
+                                        name='j-days'
+                                        className='tradepulse__form-input'
+                                        defaultValue='30'
+                                        step='1'
+                                        min='1'
+                                        max='365'
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <div className='tradepulse__form-group'>
+                                <label className='tradepulse__form-label'>
+                                    {localize('Start Date')}
+                                </label>
+                                <input
+                                    type='date'
+                                    name='j-start'
+                                    className='tradepulse__form-input'
+                                    defaultValue={new Date().toISOString().slice(0, 10)}
+                                    required
+                                />
+                            </div>
+
+                            <div className='tradepulse__modal-actions'>
+                                <button
+                                    type='button'
+                                    className='tradepulse__btn tradepulse__btn--secondary'
+                                    onClick={() => setShowJourneyModal(false)}
+                                >
+                                    {localize('Cancel')}
+                                </button>
+                                <button
+                                    type='submit'
+                                    className='tradepulse__btn tradepulse__btn--primary'
+                                    disabled={isLocking}
+                                >
+                                    {isLocking
+                                        ? localize('Locking...')
+                                        : localize('Confirm & Lock Plan')}
                                 </button>
                             </div>
-                            <form onSubmit={handleLockJourney} className='my-journey__modal-body'>
-                                <p className='my-journey__modal-text'>
-                                    {localize('Set your trading goals. Once locked, these values cannot be changed — only reset.')}
-                                </p>
-                                <div className='my-journey__settings-grid'>
-                                    <div className='my-journey__field'>
-                                        <label className='my-journey__label'>{localize('Initial Balance (USD)')}</label>
-                                        <input name='j-initial' type='number' min='1' step='0.01' defaultValue='1000' required className='my-journey__input' />
-                                    </div>
-                                    <div className='my-journey__field'>
-                                        <label className='my-journey__label'>{localize('Daily Target (%)')}</label>
-                                        <input name='j-rate' type='number' min='0.01' max='100' step='0.01' defaultValue='5' required className='my-journey__input' />
-                                    </div>
-                                    <div className='my-journey__field'>
-                                        <label className='my-journey__label'>{localize('Cycle Length (Days)')}</label>
-                                        <input name='j-days' type='number' min='1' max='365' defaultValue='30' required className='my-journey__input' />
-                                    </div>
-                                    <div className='my-journey__field'>
-                                        <label className='my-journey__label'>{localize('Start Date')}</label>
-                                        <input name='j-start' type='date' required className='my-journey__input' />
-                                    </div>
-                                </div>
-                                <div className='my-journey__modal-actions'>
-                                    <button type='button' onClick={() => setShowJourneyModal(false)} disabled={isLocking} className='my-journey__cancel-btn'>
-                                        {localize('Cancel')}
-                                    </button>
-                                    <button type='submit' disabled={isLocking} className='my-journey__save-btn'>
-                                        {isLocking ? localize('Locking...') : localize('Lock Journey')}
-                                    </button>
-                                </div>
-                            </form>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {showResetModal && (
+                <div className='tradepulse__modal-overlay'>
+                    <div className='tradepulse__modal fade-in'>
+                        <h3 className='tradepulse__modal-title'>{localize('Reset Journey?')}</h3>
+                        <p className='tradepulse__modal-text'>
+                            {localize(
+                                'This will unlock and clear your active compounding schedule so you can configure a fresh plan. Your Deriv account balance and trading history will not be affected.'
+                            )}
+                        </p>
+                        <div className='tradepulse__modal-actions'>
+                            <button
+                                type='button'
+                                className='tradepulse__btn tradepulse__btn--secondary'
+                                onClick={() => setShowResetModal(false)}
+                            >
+                                {localize('Cancel')}
+                            </button>
+                            <button
+                                type='button'
+                                className='tradepulse__btn tradepulse__btn--danger'
+                                onClick={handleResetJourney}
+                                disabled={isResetting}
+                            >
+                                {isResetting ? localize('Resetting...') : localize('Yes, Reset Plan')}
+                            </button>
                         </div>
                     </div>
-                )}
+                </div>
+            )}
+        </>
+    );
+
+    if (journeyLoading) {
+        return (
+            <div className='tradepulse__page fade-in'>
+                <div className='tradepulse__card'>
+                    <div className='tradepulse__card-body'>
+                        <div className='tradepulse__skeleton tradepulse__skeleton-title' />
+                        <div className='tradepulse__skeleton tradepulse__skeleton-text tradepulse__skeleton-text--medium' />
+                    </div>
+                </div>
+                <div className='tradepulse__kpi-grid'>
+                    {[...Array(6)].map((_, i) => (
+                        <div key={i} className='tradepulse__kpi-card'>
+                            <div className='tradepulse__skeleton tradepulse__skeleton-text tradepulse__skeleton-text--short' />
+                            <div className='tradepulse__skeleton tradepulse__skeleton-title' />
+                        </div>
+                    ))}
+                </div>
             </div>
         );
     }
 
-    const showBalanceSkeleton = loading && balance === 0;
+    if (!journey || rows.length === 0) {
+        return (
+            <div className='tradepulse__page fade-in'>
+                <div className='tp-empty-card'>
+                    <div className='tp-empty-card__icon'>
+                        <svg
+                            width='28'
+                            height='28'
+                            viewBox='0 0 24 24'
+                            fill='none'
+                            stroke='currentColor'
+                            strokeWidth='2'
+                            strokeLinecap='round'
+                            strokeLinejoin='round'
+                        >
+                            <circle cx='12' cy='12' r='10' />
+                            <polyline points='12 6 12 12 16 14' />
+                        </svg>
+                    </div>
+                    <h2 className='tp-empty-card__title'>
+                        {localize('Start Your Compounding Journey')}
+                    </h2>
+                    <p className='tp-empty-card__desc'>
+                        {localize(
+                            'Lock in your starting equity, daily return target, and cycle length to track daily targets automatically against your live Deriv balance.'
+                        )}
+                    </p>
+                    <button
+                        type='button'
+                        className='tradepulse__btn tradepulse__btn--primary'
+                        onClick={() => setShowJourneyModal(true)}
+                    >
+                        + {localize('Start My Journey')}
+                    </button>
+                </div>
+                {renderModals()}
+            </div>
+        );
+    }
+
+    const startingBal = displayRow?.start ?? journey.initial_balance;
+    const targetProfit = displayRow?.profit ?? 0;
+    const expectedBal = displayRow?.end ?? journey.initial_balance;
+    const finalGoalBal = finalRow?.end ?? expectedBal;
 
     return (
         <div className='tradepulse__page fade-in'>
-            {/* Today's Target */}
-            <section className='tradepulse__section'>
-                <div className='tradepulse__section-header'>
-                    <div>
-                        <div className='tradepulse__section-brand'>{localize('Today')}</div>
-                        <h2 className='tradepulse__section-title'>{localize("Today's Target")}</h2>
-                        <p className='tradepulse__section-subtitle'>{localize('Track your daily progress against the plan.')}</p>
+            {/* Soft Lavender / Indigo Hero Banner */}
+            <section className='tp-hero'>
+                <div>
+                    <div className='tp-hero__eyebrow'>
+                        TODAY • DAY {clampedDay} OF {journey.cycle_length_days}
                     </div>
-                    <div className='tradepulse__live-indicator'>
-                        <span className={`tradepulse__live-dot${isConnected ? ' tradepulse__live-dot--active' : ''}`}></span>
-                        <span>{isConnected ? localize('Live') : localize('Waiting for connection')}</span>
-                    </div>
-                </div>
-
-                {/* Locked Journey Banner */}
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    padding: '12px 18px',
-                    background: 'var(--tp-accent-soft)',
-                    border: '1px solid rgba(99, 102, 241, .2)',
-                    borderRadius: '12px',
-                    marginBottom: '24px',
-                }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--tp-accent)', flexShrink: 0 }}>
-                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                    </svg>
-                    <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--tp-accent)' }}>
-                        {localize('Journey Locked')}
-                    </span>
-                    <span style={{ fontSize: '0.875rem', color: 'var(--tp-text-secondary)', marginLeft: '4px' }}>
-                        {localize('Your plan is active and linked to your account.')}
-                    </span>
-                    <button onClick={() => setShowResetModal(true)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--tp-text-tertiary)', cursor: 'pointer', padding: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.875rem', fontWeight: 500 }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12"></path>
-                            <path d="M3 5v7h7"></path>
+                    <h1 className='tp-hero__title'>{localize("Today's Target")}</h1>
+                    <p className='tp-hero__sub'>
+                        <svg
+                            width='15'
+                            height='15'
+                            viewBox='0 0 24 24'
+                            fill='none'
+                            stroke='currentColor'
+                            strokeWidth='2.2'
+                            strokeLinecap='round'
+                            strokeLinejoin='round'
+                        >
+                            <rect x='3' y='11' width='18' height='11' rx='2' ry='2' />
+                            <path d='M7 11V7a5 5 0 0 1 10 0v4' />
                         </svg>
-                        {localize('Reset Journey')}
-                    </button>
+                        <span>{localize('Journey Locked — Linked to account')}</span>
+                    </p>
                 </div>
 
-                <div className='tradepulse__kpi-grid'>
-                    <KPICard label={localize('Starting Balance')} value={formatCurrency(baseRow.start, currency)} icon='wallet' />
-                    <KPICard label={localize("Today's Profit Target")} value={`+${formatCurrency(baseRow.profit, currency)}`} icon='target' accent />
-                    <KPICard label={localize('Required %')} value={`${baseRow.rate}%`} icon='percent' />
-                    <KPICard label={localize('Expected Balance')} value={formatCurrency(baseRow.end, currency)} icon='trending-up' />
-                    <KPICard
-                        label={localize('Live Balance')}
-                        value={showBalanceSkeleton ? '' : formatCurrency(balance, currency)}
-                        icon='activity'
-                        live
-                        highlight={delta >= 0}
-                        sub={showBalanceSkeleton ? '' : (delta >= 0 ? `+${formatCurrency(delta, currency)} vs target` : `${formatCurrency(delta, currency)} vs target`)}
-                        skeleton={showBalanceSkeleton}
-                    />
-                    <KPICard label={localize('30-Day Goal')} value={formatCurrency(rows[rows.length - 1]?.end ?? 0, currency)} icon='flag' />
-                </div>
+                <button
+                    type='button'
+                    className='tp-hero__reset-btn'
+                    onClick={() => setShowResetModal(true)}
+                >
+                    {localize('Reset Journey')}
+                </button>
+            </section>
 
-                <div className='tradepulse__progress-card'>
-                    <div className='tradepulse__progress-header'>
-                        <div>
-                            <div className='tradepulse__progress-label'>{localize('Cycle Progress')}</div>
-                            <div className='tradepulse__progress-sub'>{localize('Day')} {currentDay} {localize('of')} {journey.cycle_length_days}</div>
-                        </div>
-                        <div className='tradepulse__progress-pct'>{Math.round(progress)}%</div>
+            {/* 3x2 Executive Bento KPI Grid */}
+            <section className='tradepulse__kpi-grid'>
+                {/* 1. Starting Balance */}
+                <div className='tradepulse__kpi-card'>
+                    <div className='tradepulse__kpi-header'>
+                        <span className='tradepulse__kpi-label'>
+                            {localize('Starting Balance')}
+                        </span>
+                        <span className='tradepulse__kpi-badge-icon tradepulse__kpi-badge-icon--slate'>
+                            $
+                        </span>
                     </div>
+                    <div className='tradepulse__kpi-value'>
+                        <span className='tp-curr'>{curr}</span>
+                        {fmtNum(startingBal)}
+                    </div>
+                    <div className='tradepulse__kpi-sub'>
+                        Initial {formatCurrency(journey.initial_balance, curr)}
+                    </div>
+                </div>
+
+                {/* 2. Today's Profit Target */}
+                <div className='tradepulse__kpi-card tradepulse__kpi-card--accent'>
+                    <div className='tradepulse__kpi-header'>
+                        <span className='tradepulse__kpi-label'>
+                            {localize("Today's Profit Target")}
+                        </span>
+                        <span className='tradepulse__kpi-badge-icon tradepulse__kpi-badge-icon--indigo'>
+                            <svg
+                                width='18'
+                                height='18'
+                                viewBox='0 0 24 24'
+                                fill='none'
+                                stroke='currentColor'
+                                strokeWidth='2.2'
+                            >
+                                <polyline points='23 6 13.5 15.5 8.5 10.5 1 18' />
+                                <polyline points='17 6 23 6 23 12' />
+                            </svg>
+                        </span>
+                    </div>
+                    <div className='tradepulse__kpi-value tradepulse__kpi-value--brand'>
+                        <span className='tp-underline-brand'>
+                            +{curr} {fmtNum(targetProfit)}
+                        </span>
+                    </div>
+                    <div className='tradepulse__kpi-sub'>
+                        +{Number(journey.daily_target_pct).toFixed(1)}% daily compounding
+                    </div>
+                </div>
+
+                {/* 3. Required % */}
+                <div className='tradepulse__kpi-card'>
+                    <div className='tradepulse__kpi-header'>
+                        <span className='tradepulse__kpi-label'>{localize('Required %')}</span>
+                        <span className='tradepulse__kpi-badge-icon tradepulse__kpi-badge-icon--emerald'>
+                            %
+                        </span>
+                    </div>
+                    <div className='tradepulse__kpi-value'>
+                        {Number(journey.daily_target_pct).toFixed(1)}%
+                    </div>
+                    <div className='tradepulse__kpi-sub'>Compounded daily target</div>
+                </div>
+
+                {/* 4. Expected Balance */}
+                <div className='tradepulse__kpi-card'>
+                    <div className='tradepulse__kpi-header'>
+                        <span className='tradepulse__kpi-label'>
+                            {localize('Expected Balance')}
+                        </span>
+                        <span className='tradepulse__kpi-badge-icon tradepulse__kpi-badge-icon--slate'>
+                            <svg
+                                width='18'
+                                height='18'
+                                viewBox='0 0 24 24'
+                                fill='none'
+                                stroke='currentColor'
+                                strokeWidth='2'
+                            >
+                                <rect x='3' y='4' width='18' height='18' rx='2' ry='2' />
+                                <line x1='16' y1='2' x2='16' y2='6' />
+                                <line x1='8' y1='2' x2='8' y2='6' />
+                                <line x1='3' y1='10' x2='21' y2='10' />
+                            </svg>
+                        </span>
+                    </div>
+                    <div className='tradepulse__kpi-value'>
+                        <span className='tp-curr'>{curr}</span>
+                        {fmtNum(expectedBal)}
+                    </div>
+                    <div className='tradepulse__kpi-sub'>End of Day {clampedDay} goal</div>
+                </div>
+
+                {/* 5. Live Balance */}
+                <div className='tradepulse__kpi-card'>
+                    <div className='tradepulse__kpi-header'>
+                        <span className='tradepulse__kpi-label'>{localize('Live Balance')}</span>
+                        <span className='tradepulse__kpi-badge-icon tradepulse__kpi-badge-icon--slate'>
+                            <svg
+                                width='18'
+                                height='18'
+                                viewBox='0 0 24 24'
+                                fill='none'
+                                stroke='currentColor'
+                                strokeWidth='2'
+                            >
+                                <polyline points='22 12 18 12 15 21 9 3 6 12 2 12' />
+                            </svg>
+                        </span>
+                    </div>
+                    <div className='tradepulse__kpi-value tradepulse__kpi-value--live'>
+                        <span className={`tp-underline${!isAhead ? ' tp-underline--loss' : ''}`}>
+                            <span className='tp-curr'>{curr}</span>
+                            {fmtNum(balance)}
+                        </span>
+                    </div>
+                    <div
+                        className={`tradepulse__kpi-sub ${
+                            isAhead ? 'tradepulse__kpi-sub--profit' : 'tradepulse__kpi-sub--loss'
+                        }`}
+                    >
+                        {isAhead
+                            ? `+${formatCurrency(delta, curr)} ahead of target`
+                            : `${formatCurrency(delta, curr)} behind target`}
+                    </div>
+                </div>
+
+                {/* 6. Cycle Final Goal */}
+                <div className='tradepulse__kpi-card'>
+                    <div className='tradepulse__kpi-header'>
+                        <span className='tradepulse__kpi-label'>
+                            {journey.cycle_length_days}-Day Goal
+                        </span>
+                        <span className='tradepulse__kpi-badge-icon tradepulse__kpi-badge-icon--indigo'>
+                            <svg
+                                width='18'
+                                height='18'
+                                viewBox='0 0 24 24'
+                                fill='none'
+                                stroke='currentColor'
+                                strokeWidth='2'
+                            >
+                                <circle cx='12' cy='12' r='10' />
+                                <circle cx='12' cy='12' r='6' />
+                                <circle cx='12' cy='12' r='2' />
+                            </svg>
+                        </span>
+                    </div>
+                    <div className='tradepulse__kpi-value tradepulse__kpi-value--brand'>
+                        <span className='tp-curr'>{curr}</span>
+                        {fmtNum(finalGoalBal)}
+                    </div>
+                    <div className='tradepulse__kpi-sub'>Projected final equity</div>
+                </div>
+            </section>
+
+            {/* Cycle Progress + Session Strip */}
+            <section className='tradepulse__progress-card'>
+                <div className='tradepulse__progress-header'>
+                    <div>
+                        <div className='tradepulse__progress-label'>
+                            {localize('Cycle Progress')}
+                        </div>
+                        <div className='tradepulse__progress-sub'>
+                            Day {clampedDay} of {journey.cycle_length_days} • Started{' '}
+                            {journey.start_date}
+                        </div>
+                    </div>
+                    <div className='tradepulse__progress-pct'>{progressPct}%</div>
+                </div>
+
+                <div className='tradepulse__progress-track-wrap'>
                     <div className='tradepulse__progress-bar'>
-                        <div className='tradepulse__progress-fill' style={{ width: `${progress}%` }} />
+                        <div
+                            className='tradepulse__progress-fill'
+                            style={{ width: `${Math.max(4, progressPct)}%` }}
+                        />
+                    </div>
+                </div>
+
+                <div className='tradepulse__session-strip'>
+                    <div className='tradepulse__session-metric'>
+                        <div className='tradepulse__session-metric-label'>
+                            {localize('Trades Today')}
+                        </div>
+                        <div className='tradepulse__session-metric-val'>{totalTrades}</div>
+                    </div>
+                    <div className='tradepulse__session-metric'>
+                        <div className='tradepulse__session-metric-label'>
+                            {localize('Win Rate')}
+                        </div>
+                        <div className='tradepulse__session-metric-val'>
+                            {winRate.toFixed(1)}%
+                        </div>
+                    </div>
+                    <div className='tradepulse__session-metric'>
+                        <div className='tradepulse__session-metric-label'>
+                            {localize('Streak')}
+                        </div>
+                        <div
+                            className={`tradepulse__session-metric-val ${
+                                winStreak > 0
+                                    ? 'tradepulse__text-success'
+                                    : lossStreak > 0
+                                    ? 'tradepulse__text-danger'
+                                    : ''
+                            }`}
+                        >
+                            {streakLabel}
+                        </div>
+                    </div>
+                    <div className='tradepulse__session-metric'>
+                        <div className='tradepulse__session-metric-label'>
+                            {localize('Session Net P/L')}
+                        </div>
+                        <div
+                            className={`tradepulse__session-metric-val ${
+                                sessionProfit >= 0
+                                    ? 'tradepulse__text-success'
+                                    : 'tradepulse__text-danger'
+                            }`}
+                        >
+                            {sessionProfit >= 0 ? '+' : ''}
+                            {formatCurrency(sessionProfit, curr)}
+                        </div>
                     </div>
                 </div>
             </section>
 
-            {/* Reset Confirmation Modal */}
-            {showResetModal && (
-                <div className='tradepulse__modal-overlay' onClick={() => setShowResetModal(false)}>
-                    <div className='tradepulse__modal'>
-                        <h3 className='tradepulse__modal-title'>{localize('Reset Journey')}</h3>
-                        <p className='tradepulse__modal-text'>
-                            {localize('This will permanently delete your locked trading journey and schedule from both local storage and the cloud. This action cannot be undone.')}
-                        </p>
-                        <div className='tradepulse__modal-actions'>
-                            <button className='tradepulse__btn tradepulse__btn--secondary' onClick={() => setShowResetModal(false)} disabled={isResetting}>
-                                {localize('Cancel')}
-                            </button>
-                            <button className='tradepulse__btn tradepulse__btn--danger' onClick={handleResetJourney} disabled={isResetting}>
-                                {isResetting ? localize('Resetting...') : localize('Reset Journey')}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {renderModals()}
         </div>
     );
 });
-
-const KPICard = ({ label, value, sub, icon, accent, live, highlight, skeleton }: {
-    label: string;
-    value: string;
-    sub?: string;
-    icon?: string;
-    accent?: boolean;
-    live?: boolean;
-    highlight?: boolean;
-    skeleton?: boolean;
-}) => (
-    <div className='tradepulse__kpi-card'>
-        <div className='tradepulse__kpi-header'>
-            <span className='tradepulse__kpi-label'>{label}</span>
-            {icon && (
-                <svg className='tradepulse__kpi-icon' viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    {icon === 'wallet' && <><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></>}
-                    {icon === 'target' && <><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></>}
-                    {icon === 'percent' && <><line x1="19" y1="5" x2="5" y2="19"></line><circle cx="6.5" cy="6.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></>}
-                    {icon === 'trending-up' && <><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></>}
-                    {icon === 'activity' && <><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></>}
-                    {icon === 'flag' && <><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></>}
-                </svg>
-            )}
-        </div>
-        {skeleton ? (
-            <div className='tradepulse__skeleton tradepulse__skeleton-title'></div>
-        ) : (
-            <div className={`tradepulse__kpi-value ${live ? 'tradepulse__kpi-value--live' : highlight ? 'tradepulse__kpi-value--profit' : accent ? 'tradepulse__kpi-value--brand' : ''}`}>{value}</div>
-        )}
-        {sub && !skeleton && <div className='tradepulse__kpi-sub'>{sub}</div>}
-    </div>
-);
-
-const SummaryCard = ({ label, value, icon, accent, highlight, tone }: {
-    label: string;
-    value: string;
-    icon?: string;
-    accent?: boolean;
-    highlight?: boolean;
-    tone?: 'emerald' | 'rose' | 'brand' | 'amber';
-}) => {
-    const colorClass = tone === 'emerald' ? 'tradepulse__text-success' : tone === 'rose' ? 'tradepulse__text-danger' : tone === 'brand' ? 'tradepulse__text-brand' : tone === 'amber' ? 'tradepulse__text-warning' : '';
-    return (
-    <div className='tradepulse__summary-card'>
-        <div className='tradepulse__summary-header'>
-            <span className='tradepulse__summary-label'>{label}</span>
-            {icon && (
-                <svg className='tradepulse__summary-icon' viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    {icon === 'activity' && <><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></>}
-                    {icon === 'trophy' && <><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></>}
-                    {icon === 'flame' && <><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></>}
-                    {icon === 'trending-up' && <><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></>}
-                    {icon === 'trending-down' && <><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline><polyline points="17 18 23 18 23 12"></polyline></>}
-                    {icon === 'alert-triangle' && <><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></>}
-                    {icon === 'percent' && <><line x1="19" y1="5" x2="5" y2="19"></line><circle cx="6.5" cy="6.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></>}
-                    {icon === 'wallet' && <><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></>}
-                    {icon === 'flag' && <><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></>}
-                    {icon === 'bar-chart-3' && <><path d="M3 3v18"></path><path d="M18 17V9"></path><path d="M13 17V5"></path><path d="M8 17v-3"></path></>}
-                </svg>
-            )}
-        </div>
-        <div className={`tradepulse__summary-value ${colorClass}`}>{value}</div>
-    </div>
-    );
-};
-
-const formatCurrency = (value: number, currency: string): string => {
-    if (Math.abs(value) < 0.01) return `${currency} 0.00`;
-    return `${currency} ${value.toFixed(2)}`;
-};
 
 export default MyJourney;

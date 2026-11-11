@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AccountSwitcher from '../account-switcher';
 
+declare const require: (id: string) => any;
+
 const mockCheckAndRegenerateWebSocket = jest.fn();
 
 const mockAccountList = [
@@ -106,12 +108,14 @@ describe('AccountSwitcher', () => {
         require('@/external/bot-skeleton/services/api/api-base').api_base.is_running = false;
     });
 
-    it('returns null when activeAccount is not provided', () => {
+    it('returns null when activeAccount and loginid are not provided', () => {
+        const { useApiBase } = require('@/hooks/useApiBase');
+        useApiBase.mockReturnValue({ accountList: [], activeLoginid: '' });
         const { container } = render(<AccountSwitcher activeAccount={undefined} />);
         expect(container).toBeEmptyDOMElement();
     });
 
-    it('renders active account type and balance', () => {
+    it('renders active account type label and balance in compact official Deriv layout', () => {
         render(<AccountSwitcher activeAccount={mockActiveAccount} />);
         expect(screen.getByText('Real account')).toBeInTheDocument();
         expect(screen.getByTestId('dt_balance')).toHaveTextContent('100.00 USD');
@@ -120,6 +124,7 @@ describe('AccountSwitcher', () => {
     it('opens dropdown on click when multiple accounts exist', () => {
         render(<AccountSwitcher activeAccount={mockActiveAccount} />);
         fireEvent.click(screen.getByTestId('dt_acc_info'));
+        expect(screen.getByTestId('dt_acc_dropdown')).toBeInTheDocument();
         expect(screen.getByRole('listbox')).toBeInTheDocument();
     });
 
@@ -131,25 +136,32 @@ describe('AccountSwitcher', () => {
         });
         render(<AccountSwitcher activeAccount={mockActiveAccount} />);
         fireEvent.click(screen.getByTestId('dt_acc_info'));
-        expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('dt_acc_dropdown')).not.toBeInTheDocument();
     });
 
     it('does not open dropdown when api_base.is_running is true', () => {
         require('@/external/bot-skeleton/services/api/api-base').api_base.is_running = true;
         render(<AccountSwitcher activeAccount={mockActiveAccount} />);
         fireEvent.click(screen.getByTestId('dt_acc_info'));
-        expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('dt_acc_dropdown')).not.toBeInTheDocument();
     });
 
-    it('does not open dropdown with a single account', () => {
+    it('opens compact account switcher and Log out action with a single or PAT account', () => {
+        const mockOnLogout = jest.fn();
         const { useApiBase } = require('@/hooks/useApiBase');
         useApiBase.mockReturnValue({
             accountList: [{ loginid: 'CR123', currency: 'USD', balance: 100, is_virtual: 0 }],
             activeLoginid: 'CR123',
         });
-        render(<AccountSwitcher activeAccount={mockActiveAccount} />);
+        render(<AccountSwitcher activeAccount={mockActiveAccount} onLogout={mockOnLogout} />);
         fireEvent.click(screen.getByTestId('dt_acc_info'));
-        expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+        expect(screen.getByTestId('dt_acc_dropdown')).toBeInTheDocument();
+        expect(screen.getByRole('listbox')).toBeInTheDocument();
+        expect(screen.getAllByRole('option')).toHaveLength(1);
+        const logoutBtn = screen.getByTestId('dt_account_card_logout');
+        expect(logoutBtn).toBeInTheDocument();
+        fireEvent.click(logoutBtn);
+        expect(mockOnLogout).toHaveBeenCalledTimes(1);
     });
 
     it('closes dropdown on outside click', () => {
@@ -246,5 +258,47 @@ describe('AccountSwitcher', () => {
             expect(sendViaNewSystemWithPromise).toHaveBeenCalledWith({ topup_virtual: 1 });
             expect(sendViaNewSystemWithPromise).toHaveBeenCalledWith({ balance: 1 });
         });
+    });
+
+    it('renders portaled mobile account dropdown above layout layers and closes on backdrop tap', () => {
+        const originalInnerWidth = window.innerWidth;
+        Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 375 });
+
+        try {
+            const mockOnLogout = jest.fn();
+            const { container } = render(
+                <AccountSwitcher activeAccount={mockDemoActiveAccount} onLogout={mockOnLogout} />
+            );
+            const trigger = screen.getByTestId('dt_acc_info');
+            fireEvent.click(trigger);
+
+            const dropdown = screen.getByTestId('dt_acc_dropdown');
+            expect(dropdown).toBeInTheDocument();
+            // Portaled to document.body so header/body stacking contexts cannot hide it on mobile
+            expect(dropdown.parentElement).toBe(document.body);
+            expect(dropdown).toHaveClass('acc-dropdown--portal');
+            expect(dropdown).toHaveClass('acc-dropdown--mobile');
+            expect(dropdown.style.position).toBe('fixed');
+
+            // Ensure wrapper itself does not trap the dropdown inside the header stacking context
+            expect(container.querySelector('[data-testid="dt_acc_dropdown"]')).toBeNull();
+
+            // Tapping an interactive control inside the portaled dropdown works without outside-click race
+            const backdrop = screen.getByTestId('dt_acc_dropdown_backdrop');
+            expect(backdrop).toBeInTheDocument();
+            fireEvent.mouseDown(dropdown);
+            expect(screen.getByTestId('dt_acc_dropdown')).toBeInTheDocument();
+
+            // Tapping the mobile backdrop closes the dropdown cleanly
+            fireEvent.mouseDown(backdrop);
+            fireEvent.click(backdrop);
+            expect(screen.queryByTestId('dt_acc_dropdown')).not.toBeInTheDocument();
+        } finally {
+            Object.defineProperty(window, 'innerWidth', {
+                writable: true,
+                configurable: true,
+                value: originalInnerWidth,
+            });
+        }
     });
 });

@@ -1,0 +1,27 @@
+{
+  "name": "traderspulse-site-studio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone Multi-Site SaaS Control Plane for TradersPulse white-label Deriv trading platforms",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "rsbuild dev --port 4004",
+    "build": "rsbuild build",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@rsbuild/core": "^1.7.6",
+    "@rsbuild/plugin-react": "^1.4.6",
+    "@rsbuild/plugin-sass": "^1.5.3",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.5.3"
+  }
+}

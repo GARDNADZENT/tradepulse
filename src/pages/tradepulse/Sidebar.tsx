@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState } from 'react';
+import { getTradersPulseLogoSrc } from '@/utils/branding';
 import { useTradePulse } from './TradePulseContext';
 
 const Sidebar = () => {
@@ -37,9 +38,11 @@ const Sidebar = () => {
             <aside className={`tradepulse__sidebar ${isOpen ? 'tradepulse__sidebar--open' : ''}`}>
                 <div className='tradepulse__sidebar-header'>
                     <div className='tradepulse__sidebar-logo'>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-                        </svg>
+                        <img
+                            src={getTradersPulseLogoSrc()}
+                            alt='TradersPulse'
+                            style={{ width: '32px', height: '32px', borderRadius: '8px', objectFit: 'cover' }}
+                        />
                     </div>
                     <div className='tradepulse__sidebar-brand'>
                         <div className='tradepulse__sidebar-brand-name'>TradersPulse</div>
@@ -104,26 +107,26 @@ const Sidebar = () => {
                     )}
 
                     <div className='tradepulse__sidebar-section'>Social</div>
-                    <a href='https://wa.me/message/B2KVSWHA6VF4O1' target='_blank' rel='noopener' className='tradepulse__sidebar-link'>
+                    <a href='https://chat.whatsapp.com/HiWVW11p2o55KhioHB9fVR?s=cl&p=a&iam=2' target='_blank' rel='noopener noreferrer' className='tradepulse__sidebar-link'>
                         <svg className='tradepulse__sidebar-icon' viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
                         </svg>
                         WhatsApp
                     </a>
-                    <a href='https://t.me/gadnadolo' target='_blank' rel='noopener' className='tradepulse__sidebar-link'>
+                    <a href='https://t.me/gadnadolo' target='_blank' rel='noopener noreferrer' className='tradepulse__sidebar-link'>
                         <svg className='tradepulse__sidebar-icon' viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <line x1="22" y1="2" x2="11" y2="13"></line>
                             <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
                         </svg>
                         Telegram
                     </a>
-                    <a href='https://tiktok.com/@yourhandle' target='_blank' rel='noopener' className='tradepulse__sidebar-link'>
+                    <a href='https://vm.tiktok.com/ZS9yxAFjuXbnh-Kd3HM/' target='_blank' rel='noopener noreferrer' className='tradepulse__sidebar-link'>
                         <svg className='tradepulse__sidebar-icon' viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M9 12a4 4 0 1 0 4 4V2"></path>
                         </svg>
                         TikTok
                     </a>
-                    <a href='https://tradepulse.sytes.net/' target='_blank' rel='noopener' className='tradepulse__sidebar-link'>
+                    <a href='https://tradepulse.sytes.net/' target='_blank' rel='noopener noreferrer' className='tradepulse__sidebar-link'>
                         <svg className='tradepulse__sidebar-icon' viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <circle cx="12" cy="12" r="10"></circle>
                             <line x1="2" y1="12" x2="22" y2="12"></line>
@@ -131,7 +134,7 @@ const Sidebar = () => {
                         </svg>
                         Website
                     </a>
-                    <a href='https://www.youtube.com/@gardnadzenttechnologies4239' target='_blank' rel='noopener' className='tradepulse__sidebar-link'>
+                    <a href='https://www.youtube.com/@gardnadzenttechnologies4239' target='_blank' rel='noopener noreferrer' className='tradepulse__sidebar-link'>
                         <svg className='tradepulse__sidebar-icon' viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <polygon points="23 7 16 12 23 17 23 7"></polygon>
                             <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>

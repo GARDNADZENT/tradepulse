@@ -4,7 +4,7 @@
     <variable id=":Z8WvPXWG?qCe|8=iii1">Expected Profit</variable>
     <variable id="npjk]$ok2mHXaLX3H9c!">text1</variable>
     <variable id="L.cN$B-UUzkS|eDQm2xZ">Stop Loss</variable>
-    <variable id="Z#O[6rW6Py~-[w0JMa2(">Duke</variable>
+    <variable id="Z#O[6rW6Py~-[w0JMa2(">TradersPulse</variable>
     <variable id="S10~wx4EJ/w3gZZ;v77Y">Total Lost</variable>
     <variable id="7Q4y$nr_sr!x2NkOu%)2">Stake</variable>
     <variable id="Op-Cim@t?DJN?i;G)w)C">Count Loss</variable>
@@ -76,10 +76,10 @@
                 </value>
                 <next>
                   <block type="variables_set" id="(L7uerF;lB@GRwrmYJs:" collapsed="true">
-                    <field name="VAR" id="Z#O[6rW6Py~-[w0JMa2(">Duke</field>
+                    <field name="VAR" id="Z#O[6rW6Py~-[w0JMa2(">TradersPulse</field>
                     <value name="VALUE">
                       <block type="text" id="f/o*lQ5UVDQ:qj)L$B0H" collapsed="true">
-                        <field name="TEXT">mrduke</field>
+                        <field name="TEXT">TradersPulse</field>
                       </block>
                     </value>
                   </block>
@@ -209,10 +209,10 @@
             </value>
             <statement name="DO0">
               <block type="variables_set" id="59NDFK@I+AAt`Kzw#~-)" collapsed="true">
-                <field name="VAR" id="Z#O[6rW6Py~-[w0JMa2(">Duke</field>
+                <field name="VAR" id="Z#O[6rW6Py~-[w0JMa2(">TradersPulse</field>
                 <value name="VALUE">
                   <block type="text" id="0JGIdVY4%fk(cGryrp(I" collapsed="true">
-                    <field name="TEXT">MRduke</field>
+                    <field name="TEXT">TradersPulse</field>
                   </block>
                 </value>
                 <next>
@@ -261,10 +261,10 @@
             </statement>
             <statement name="ELSE">
               <block type="variables_set" id="%R]rN{@L|5?sSYtmO;w9" collapsed="true">
-                <field name="VAR" id="Z#O[6rW6Py~-[w0JMa2(">Duke</field>
+                <field name="VAR" id="Z#O[6rW6Py~-[w0JMa2(">TradersPulse</field>
                 <value name="VALUE">
                   <block type="text" id="v=)^:38ajjd0uSP]`Iez" collapsed="true">
-                    <field name="TEXT">MRduke</field>
+                    <field name="TEXT">TradersPulse</field>
                   </block>
                 </value>
                 <next>
@@ -339,10 +339,10 @@
                 </value>
                 <statement name="DO0">
                   <block type="variables_set" id="j!:K:p.QKyxcr1M,IV_," collapsed="true">
-                    <field name="VAR" id="Z#O[6rW6Py~-[w0JMa2(">Duke</field>
+                    <field name="VAR" id="Z#O[6rW6Py~-[w0JMa2(">TradersPulse</field>
                     <value name="VALUE">
                       <block type="text" id="XZZ:bmvHq/5+Ot2[fUo)" collapsed="true">
-                        <field name="TEXT">MRduke</field>
+                        <field name="TEXT">TradersPulse</field>
                       </block>
                     </value>
                     <next>
@@ -433,10 +433,10 @@
                 </statement>
                 <statement name="ELSE">
                   <block type="variables_set" id="[0~~!AT}x=5fqh?g76X1" collapsed="true">
-                    <field name="VAR" id="Z#O[6rW6Py~-[w0JMa2(">Duke</field>
+                    <field name="VAR" id="Z#O[6rW6Py~-[w0JMa2(">TradersPulse</field>
                     <value name="VALUE">
                       <block type="text" id="$r_$t)WahP9YPcV50o*M" collapsed="true">
-                        <field name="TEXT">MRduke</field>
+                        <field name="TEXT">TradersPulse</field>
                       </block>
                     </value>
                     <next>
@@ -480,10 +480,10 @@
                     </value>
                     <statement name="DO0">
                       <block type="variables_set" id="2t*v`~ZTuz[OP:!wBLsy" collapsed="true">
-                        <field name="VAR" id="Z#O[6rW6Py~-[w0JMa2(">Duke</field>
+                        <field name="VAR" id="Z#O[6rW6Py~-[w0JMa2(">TradersPulse</field>
                         <value name="VALUE">
                           <block type="text" id="YWy,X|1_x}=CUH2$::~s" collapsed="true">
-                            <field name="TEXT">MRduke</field>
+                            <field name="TEXT">TradersPulse</field>
                           </block>
                         </value>
                         <next>

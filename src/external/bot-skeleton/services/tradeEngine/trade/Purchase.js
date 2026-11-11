@@ -40,6 +40,82 @@ const getStakeVariableName = () => {
     }
 };
 
+const SYMBOL_FALLBACK_NAMES = {
+    R_10: 'Volatility 10 Index',
+    R_25: 'Volatility 25 Index',
+    R_50: 'Volatility 50 Index',
+    R_75: 'Volatility 75 Index',
+    R_100: 'Volatility 100 Index',
+    '1HZ10V': 'Volatility 10 (1s) Index',
+    '1HZ25V': 'Volatility 25 (1s) Index',
+    '1HZ50V': 'Volatility 50 (1s) Index',
+    '1HZ75V': 'Volatility 75 (1s) Index',
+    '1HZ100V': 'Volatility 100 (1s) Index',
+    JD10: 'Jump 10 Index',
+    JD25: 'Jump 25 Index',
+    JD50: 'Jump 50 Index',
+    JD75: 'Jump 75 Index',
+    JD100: 'Jump 100 Index',
+};
+
+const resolveMarketDisplayName = symbol => {
+    if (!symbol) return 'Market';
+    try {
+        const botSymbols = ApiHelpers?.instance?.active_symbols?.getSymbolsForBot?.() || [];
+        const matchBot = botSymbols.find(s => s?.value === symbol);
+        if (matchBot?.text) return matchBot.text;
+
+        const rawSymbols = Array.isArray(api_base?.active_symbols) ? api_base.active_symbols : [];
+        const matchRaw = rawSymbols.find(s => (s?.underlying_symbol || s?.symbol) === symbol);
+        if (matchRaw) {
+            return (
+                matchRaw.underlying_symbol_name ||
+                matchRaw.display_name ||
+                matchRaw.name ||
+                SYMBOL_FALLBACK_NAMES[symbol] ||
+                symbol
+            );
+        }
+    } catch (e) {
+        // fallback map below
+    }
+    return SYMBOL_FALLBACK_NAMES[symbol] || symbol;
+};
+
+const buildPurchaseLongcode = (contractType, tradeOptions = {}) => {
+    const marketName = resolveMarketDisplayName(tradeOptions.symbol);
+    const duration = tradeOptions.duration ?? 1;
+    const unitMap = { t: 'ticks', s: 'seconds', m: 'minutes', h: 'hours', d: 'days' };
+    const unitLabel = unitMap[tradeOptions.duration_unit || 't'] || 'ticks';
+    const barrier =
+        tradeOptions.prediction !== undefined
+            ? tradeOptions.prediction
+            : tradeOptions.barrierOffset !== undefined
+              ? tradeOptions.barrierOffset
+              : '';
+
+    switch (contractType) {
+        case 'DIGITOVER':
+            return `Win payout if the last digit of ${marketName} is strictly higher than ${barrier} after ${duration} ${unitLabel}.`;
+        case 'DIGITUNDER':
+            return `Win payout if the last digit of ${marketName} is strictly lower than ${barrier} after ${duration} ${unitLabel}.`;
+        case 'DIGITEVEN':
+            return `Win payout if the last digit of ${marketName} is even after ${duration} ${unitLabel}.`;
+        case 'DIGITODD':
+            return `Win payout if the last digit of ${marketName} is odd after ${duration} ${unitLabel}.`;
+        case 'DIGITMATCH':
+            return `Win payout if the last digit of ${marketName} is ${barrier} after ${duration} ${unitLabel}.`;
+        case 'DIGITDIFF':
+            return `Win payout if the last digit of ${marketName} is not ${barrier} after ${duration} ${unitLabel}.`;
+        case 'CALL':
+            return `Win payout if ${marketName} is strictly higher than entry spot at ${duration} ${unitLabel} after contract start time.`;
+        case 'PUT':
+            return `Win payout if ${marketName} is strictly lower than entry spot at ${duration} ${unitLabel} after contract start time.`;
+        default:
+            return `Win payout on ${marketName} (${contractType}) after ${duration} ${unitLabel}.`;
+    }
+};
+
 const getStakeVariableCandidates = () => {
     const derived = getStakeVariableName();
     if (!derived) return [];
@@ -49,16 +125,101 @@ const getStakeVariableCandidates = () => {
     return candidates;
 };
 
+const getPredictionVariableName = () => {
+    try {
+        const workspace = window?.Blockly?.derivWorkspace || window?.Blockly?.getMainWorkspace?.();
+        if (!workspace) return null;
+        const blocks = workspace.getAllBlocks?.(false) || [];
+        const trade_options_block = blocks.find(block =>
+            ['trade_definition_tradeoptions', 'trade_definition_tradeoptions_payout'].includes(block.type)
+        );
+        if (!trade_options_block) return null;
+        const pred_input = trade_options_block.getInput?.('PREDICTION');
+        const target_block = pred_input?.connection?.targetBlock?.();
+        if (!target_block || target_block.type !== 'variables_get') return null;
+        const var_name = target_block.getFieldValue?.('VAR');
+        if (!var_name) return null;
+        const generated_name = window.Blockly?.JavaScript?.variableDB_?.getName?.(
+            var_name,
+            window.Blockly.Variables?.CATEGORY_NAME
+        );
+        return generated_name || var_name;
+    } catch (e) {
+        return null;
+    }
+};
+
 export default Engine =>
     class Purchase extends Engine {
-        async purchase(contract_type) {
-            if (this.vh_state.enabled && this.vh_state.is_virtual) {
-                return this.virtualPurchase(contract_type);
+        resolveLivePrediction(custom_prediction) {
+            if (
+                custom_prediction !== undefined &&
+                custom_prediction !== null &&
+                custom_prediction !== '' &&
+                Number.isFinite(Number(custom_prediction))
+            ) {
+                return Number(custom_prediction);
             }
-            return this.realPurchase(contract_type);
+            if (this._overridePrediction !== undefined && Number.isFinite(Number(this._overridePrediction))) {
+                const val = Number(this._overridePrediction);
+                this._overridePrediction = undefined;
+                return val;
+            }
+            if (typeof window !== 'undefined' && window.BinaryBotCustomPrediction !== undefined) {
+                const val = Number(window.BinaryBotCustomPrediction);
+                window.BinaryBotCustomPrediction = undefined;
+                if (Number.isFinite(val)) return val;
+            }
+            const predVarName = getPredictionVariableName();
+            if (predVarName) {
+                const liveVal = this.getInterpreterVariable(predVarName);
+                if (liveVal !== undefined && liveVal !== null && Number.isFinite(Number(liveVal))) {
+                    return Number(liveVal);
+                }
+            }
+            return this.tradeOptions?.prediction;
         }
 
-        async virtualPurchase(contract_type) {
+        getInterpreterVariable(name) {
+            try {
+                const dbot = window?.DBot;
+                if (!dbot?.interpreter?.bot?.tradeEngine) return undefined;
+                const interpreter = dbot.interpreter.getInterpreter?.();
+                if (!interpreter || typeof interpreter.getProperty !== 'function') return undefined;
+                const scopeCandidates = [
+                    interpreter.stateStack &&
+                        interpreter.stateStack[interpreter.stateStack.length - 1] &&
+                        interpreter.stateStack[interpreter.stateStack.length - 1].scope &&
+                        interpreter.stateStack[interpreter.stateStack.length - 1].scope.object,
+                    interpreter.globalObject,
+                    interpreter.globalScope && interpreter.globalScope.object,
+                    interpreter.global,
+                ];
+                for (const candidate of scopeCandidates) {
+                    if (!candidate || typeof candidate !== 'object') continue;
+                    try {
+                        const raw = interpreter.getProperty(candidate, name);
+                        if (raw === undefined) continue;
+                        const unwrapped = interpreter.pseudoToNative ? interpreter.pseudoToNative(raw) : raw;
+                        if (unwrapped !== undefined) return unwrapped;
+                    } catch (e) {
+                        // continue checking scopes
+                    }
+                }
+            } catch (e) {
+                // noop
+            }
+            return undefined;
+        }
+
+        async purchase(contract_type, custom_prediction) {
+            if (this.vh_state.enabled && this.vh_state.is_virtual) {
+                return this.virtualPurchase(contract_type, custom_prediction);
+            }
+            return this.realPurchase(contract_type, custom_prediction);
+        }
+
+        async virtualPurchase(contract_type, custom_prediction) {
             this.applyAlternateMarketsToCurrentTradeOptions();
 
             const { duration, duration_unit, symbol } = this.tradeOptions;
@@ -71,11 +232,7 @@ export default Engine =>
                 target_ticks = Math.ceil(duration_seconds);
             }
 
-            let resolved_prediction = this.tradeOptions.prediction;
-            if (typeof window !== 'undefined' && window.BinaryBotCustomPrediction !== undefined) {
-                resolved_prediction = Number(window.BinaryBotCustomPrediction);
-                window.BinaryBotCustomPrediction = undefined;
-            }
+            const resolved_prediction = this.resolveLivePrediction(custom_prediction);
 
             const configured_stake = Number(this.tradeOptions.amount) || 1;
             if (!this.vh_state.initial_stake || this.vh_state.initial_stake === 0) {
@@ -221,6 +378,8 @@ export default Engine =>
                 is_sold: true,
                 entry_spot: entry_spot_str,
                 exit_spot: end_spot_str,
+                last_digit,
+                prediction_barrier,
                 is_virtual: true,
                 contract_type: trade_contract_type,
                 symbol: this.tradeOptions.symbol,
@@ -229,14 +388,15 @@ export default Engine =>
             this.updateVirtualTotals(simulated_contract);
             this.store.dispatch(sell());
 
+            const isFastExecution =
+                typeof window === 'undefined' || window.__tpExecutionFast !== false;
+            const restartDelay = isFastExecution ? 10 : 650;
+
             setTimeout(() => {
                 const resolve = this.vh_state.virtual_resolve;
                 this.resetVirtualTrade();
                 if (resolve) resolve();
 
-                // For virtual trades, do NOT run the bot's after_purchase blocks
-                // (e.g. martingale logic) — virtual results should not affect
-                // real trading stake calculations.
                 try {
                     if (typeof console !== 'undefined') {
                         console.debug('[Virtual Hook] Skipping afterPromise for virtual trade');
@@ -247,7 +407,7 @@ export default Engine =>
 
                 setTimeout(() => {
                     this.store.dispatch(start());
-                }, 10);
+                }, restartDelay);
             }, 0);
         }
 
@@ -268,18 +428,52 @@ export default Engine =>
 
         updateVirtualTotals(contract) {
             const win = contract.profit > 0;
+            const targetVirtualWins = Math.max(1, Number(this.vh_state.return_after_virtual_wins) || 1);
+            let switchedToReal = false;
 
-            if (win) {
+            if (this.vh_state.threshold > 0) {
+                if (win) {
+                    this.vh_state.loss_count = 0;
+                    this.vh_state.current_stake = this.vh_state.initial_stake;
+                } else {
+                    this.vh_state.loss_count++;
+                    if (this.vh_state.loss_count >= this.vh_state.threshold) {
+                        this.vh_state.is_virtual = false;
+                        this.vh_state.needs_stake_reset = true;
+                        this.vh_state.real_loss_count = 0;
+                        this.resetStakeVariableForRealTrading();
+                        switchedToReal = true;
+                    }
+                }
+            } else if (win) {
+                this.vh_state.virtual_win_count = (this.vh_state.virtual_win_count || 0) + 1;
                 this.vh_state.loss_count = 0;
                 this.vh_state.current_stake = this.vh_state.initial_stake;
-            } else {
-                this.vh_state.loss_count++;
-                if (this.vh_state.threshold > 0 && this.vh_state.loss_count >= this.vh_state.threshold) {
+                if (this.vh_state.virtual_win_count >= targetVirtualWins) {
                     this.vh_state.is_virtual = false;
+                    this.vh_state.virtual_win_count = 0;
+                    this.vh_state.real_loss_count = 0;
                     this.vh_state.needs_stake_reset = true;
                     this.resetStakeVariableForRealTrading();
+                    switchedToReal = true;
                 }
+            } else {
+                this.vh_state.virtual_win_count = 0;
+                this.vh_state.loss_count = (this.vh_state.loss_count || 0) + 1;
             }
+
+            globalObserver.emit('ui.log.success', {
+                log_type: 'virtual_hook',
+                extra: {
+                    event: 'virtual_settled',
+                    is_win: win,
+                    contract_type: contract.contract_type,
+                    barrier: Number.isNaN(contract.prediction_barrier) ? null : contract.prediction_barrier,
+                    digit: contract.last_digit,
+                    win_progress: `${ switchedToReal ? targetVirtualWins : this.vh_state.virtual_win_count || 0}/${targetVirtualWins}`,
+                    switched_to_real: switchedToReal,
+                },
+            });
 
             const now = Math.floor(Date.now() / 1000);
             const virtual_id = `virtual_${now}_${Math.random()}`;
@@ -370,11 +564,34 @@ export default Engine =>
 
             this.vh_state.real_trade_count = (this.vh_state.real_trade_count || 0) + 1;
 
+            if (this.vh_state.threshold > 0) {
+                if (win) {
+                    this.vh_state.is_virtual = true;
+                    this.vh_state.loss_count = 0;
+                    this.vh_state.step_count = 0;
+                    this.vh_state.current_stake = this.vh_state.initial_stake;
+                }
+                return;
+            }
+
+            const enterLosses = Math.max(1, Number(this.vh_state.enter_after_actual_losses) || 2);
             if (win) {
-                this.vh_state.is_virtual = true;
-                this.vh_state.loss_count = 0;
-                this.vh_state.step_count = 0;
-                this.vh_state.current_stake = this.vh_state.initial_stake;
+                this.vh_state.real_loss_count = 0;
+            } else {
+                this.vh_state.real_loss_count = (this.vh_state.real_loss_count || 0) + 1;
+                if (this.vh_state.real_loss_count >= enterLosses) {
+                    this.vh_state.is_virtual = true;
+                    this.vh_state.virtual_win_count = 0;
+                    this.vh_state.real_loss_count = 0;
+                    globalObserver.emit('ui.log.success', {
+                        log_type: 'virtual_hook',
+                        extra: {
+                            event: 'entered_virtual',
+                            enter_losses: enterLosses,
+                            return_wins: this.vh_state.return_after_virtual_wins || 1,
+                        },
+                    });
+                }
             }
         }
 
@@ -412,12 +629,18 @@ export default Engine =>
             return this.tradeOptions;
         }
 
-        async realPurchase(contract_type) {
+        async realPurchase(contract_type, custom_prediction) {
             this.setInterpreterVariable('BinaryBotPrivateLastTradeVirtual', false);
 
             if (this.store.getState().scope !== BEFORE_PURCHASE) {
                 return Promise.resolve();
             }
+
+            const resolvedPrediction = this.resolveLivePrediction(custom_prediction);
+            const effectiveTradeOptions =
+                resolvedPrediction !== undefined
+                    ? { ...this.tradeOptions, prediction: resolvedPrediction }
+                    : this.tradeOptions;
 
             const onSuccess = response => {
                 const { buy } = response;
@@ -436,7 +659,11 @@ export default Engine =>
                 }
 
                 delayIndex = 0;
-                log(LogTypes.PURCHASE, { transaction_id: buy.transaction_id });
+                const resolvedLongcode = buy.longcode || buildPurchaseLongcode(contract_type, effectiveTradeOptions);
+                log(LogTypes.PURCHASE, {
+                    longcode: resolvedLongcode,
+                    transaction_id: buy.transaction_id,
+                });
                 info({
                     accountID: this.accountInfo.loginid,
                     totalRuns: this.updateAndReturnTotalRuns(),
@@ -501,7 +728,11 @@ export default Engine =>
                 this.tradeOptions.amount = this.vh_state.initial_stake || this.tradeOptions.amount || 1;
             }
 
-            const trade_option = tradeOptionToBuy(contract_type, this.tradeOptions);
+            const finalTradeOptions =
+                resolvedPrediction !== undefined
+                    ? { ...this.tradeOptions, prediction: resolvedPrediction }
+                    : this.tradeOptions;
+            const trade_option = tradeOptionToBuy(contract_type, finalTradeOptions);
             const action = () => api_base.api.send(trade_option);
 
             this.isSold = false;

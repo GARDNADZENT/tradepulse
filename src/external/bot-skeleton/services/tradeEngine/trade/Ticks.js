@@ -9,31 +9,154 @@ import { getDirection, getLastDigit } from '../utils/helpers';
 import { expectPositiveInteger } from '../utils/sanitize';
 import * as constants from './state/constants';
 
-let tickListenerKey;
+let lastGlobalJournalTickStamp = '';
+let lastGlobalConditionStamp = '';
+
+const inspectWorkspaceJournalDigitWindow = explicitWindow => {
+    const manual = Number(explicitWindow);
+    if (Number.isFinite(manual) && manual >= 2 && manual <= 10) {
+        return Math.floor(manual);
+    }
+
+    try {
+        const ws = typeof window !== 'undefined' ? window.Blockly?.derivWorkspace : null;
+        if (!ws || typeof ws.getAllBlocks !== 'function') return 1;
+
+        const blocks = ws.getAllBlocks(false) || [];
+        for (let i = 0; i < blocks.length; i++) {
+            const b = blocks[i];
+            if (!b || (typeof b.isEnabled === 'function' && !b.isEnabled()) || b.disabled) continue;
+
+            if (b.type === 'last_digits_condition' || b.type === 'ai_digits_threshold') {
+                const nInput = b.getInputTargetBlock?.('N');
+                const nVal = Number(nInput?.getFieldValue?.('NUM') ?? b.getFieldValue?.('N'));
+                if (Number.isFinite(nVal) && nVal >= 2 && nVal <= 10) {
+                    return Math.floor(nVal);
+                }
+            }
+
+            if (b.type === 'vh_virtual_streak_ready') {
+                const sVal = Number(b.getFieldValue?.('STREAK'));
+                if (Number.isFinite(sVal) && sVal >= 2 && sVal <= 10) {
+                    return Math.floor(sVal);
+                }
+            }
+
+            if (b.type === 'lists_getSublist') {
+                const listTarget = b.getInputTargetBlock?.('LIST');
+                const isDigitList =
+                    listTarget?.type === 'lastDigitList' ||
+                    (listTarget?.type === 'variables_get' &&
+                        /digit/i.test(String(listTarget?.getField?.('VAR')?.getText?.() || '')));
+                if (isDigitList) {
+                    const at1 = Number(b.getInputTargetBlock?.('AT1')?.getFieldValue?.('NUM'));
+                    const at2 = Number(b.getInputTargetBlock?.('AT2')?.getFieldValue?.('NUM'));
+                    const candidate = Number.isFinite(at1) && at1 >= 2 && at1 <= 10 ? at1 : at2;
+                    if (Number.isFinite(candidate) && candidate >= 2 && candidate <= 10) {
+                        return Math.floor(candidate);
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        // fallback to universal single last digit
+    }
+
+    return 1;
+};
 
 export default Engine =>
     class Ticks extends Engine {
         async watchTicks(symbol) {
-            if (symbol && this.symbol !== symbol) {
-                this.symbol = symbol;
-                const { ticksService } = this.$scope;
+            if (!symbol) return;
+            const { ticksService } = this.$scope;
+            const prevListener = ticksService?._activeBotWatchListener;
 
-                await ticksService.stopMonitor({
-                    symbol,
-                    key: tickListenerKey,
-                });
+            if (this.symbol !== symbol || !this._tickListenerKey || prevListener?.engine !== this) {
+                if (prevListener?.symbol && prevListener?.key) {
+                    try {
+                        await ticksService.stopMonitor({
+                            symbol: prevListener.symbol,
+                            key: prevListener.key,
+                        });
+                    } catch (e) {
+                        // ignore stale listener cleanup errors
+                    }
+                    ticksService._activeBotWatchListener = null;
+                }
+
+                this.symbol = symbol;
+                this._tickListenerKey = null;
+
                 const callback = ticks => {
+                    if (ticksService?._activeBotWatchListener && ticksService._activeBotWatchListener.engine !== this) {
+                        return;
+                    }
                     if (this.is_proposal_subscription_required) {
                         this.checkProposalReady();
                     }
                     const lastTick = ticks.slice(-1)[0];
                     if (!lastTick) return;
+                    this.latestTick = lastTick;
                     const { epoch } = lastTick;
                     this.store.dispatch({ type: constants.NEW_TICK, payload: epoch });
+
+                    const tickStamp = `${symbol}:${epoch}`;
+                    if (!epoch || this._lastScheduledTickEpoch === epoch || lastGlobalJournalTickStamp === tickStamp) {
+                        return;
+                    }
+                    this._lastScheduledTickEpoch = epoch;
+
+                    const pipSize = this.getPipSize() ?? 2;
+                    const snapshotTicks = ticks.slice(-10);
+
+                    setTimeout(() => {
+                        try {
+                            if (
+                                ticksService?._activeBotWatchListener &&
+                                ticksService._activeBotWatchListener.engine !== this
+                            ) {
+                                return;
+                            }
+                            const currentScope = this.store?.getState?.()?.scope;
+                            const isBotActive = currentScope && currentScope !== constants.STOP;
+                            if (!isBotActive || lastGlobalJournalTickStamp === tickStamp) {
+                                return;
+                            }
+
+                            lastGlobalJournalTickStamp = tickStamp;
+
+                            // If the bot's own notify / condition blocks already wrote to the Journal on this tick,
+                            // follow the bot's own output without emitting a duplicate generic line.
+                            if (
+                                this._lastCustomJournalEpoch === epoch ||
+                                (this._lastCustomJournalAt && Date.now() - this._lastCustomJournalAt < 250)
+                            ) {
+                                return;
+                            }
+
+                            const windowSize = inspectWorkspaceJournalDigitWindow(this.journal_digit_window);
+                            const recentDigits = snapshotTicks
+                                .slice(-windowSize)
+                                .map(t => getLastDigit(Number(t.quote).toFixed(pipSize)));
+                            if (recentDigits.length > 0) {
+                                globalObserver.emit('ui.log.success', {
+                                    log_type: 'tick_digits',
+                                    extra: {
+                                        window_size: windowSize,
+                                        digits: recentDigits,
+                                    },
+                                });
+                            }
+                        } catch (e) {
+                            // non-blocking journal tick telemetry
+                        }
+                    }, 90);
                 };
 
                 const key = await ticksService.monitor({ symbol, callback });
-                tickListenerKey = key;
+                this._tickListenerKey = key;
+                ticksService._activeBotWatchListener = { symbol, key, engine: this };
             }
         }
 
@@ -99,35 +222,95 @@ export default Engine =>
         }
 
         async areLastDigitsEven(count) {
+            const safeCount = Math.max(1, Number(count) || 1);
+            if (safeCount > 1) this.journal_digit_window = safeCount;
             const digits = await this.getLastDigitList();
-            const last_n = digits.slice(-count);
+            const last_n = digits.slice(-safeCount);
             const result = last_n.length > 0 && last_n.every(d => d % 2 === 0);
             this.logLastDigitsAnalysis('ALL_EVEN', last_n, result);
             return result;
         }
 
         async areLastDigitsOdd(count) {
+            const safeCount = Math.max(1, Number(count) || 1);
+            if (safeCount > 1) this.journal_digit_window = safeCount;
             const digits = await this.getLastDigitList();
-            const last_n = digits.slice(-count);
+            const last_n = digits.slice(-safeCount);
             const result = last_n.length > 0 && last_n.every(d => d % 2 !== 0);
             this.logLastDigitsAnalysis('ALL_ODD', last_n, result);
             return result;
         }
 
-        logLastDigitsAnalysis(condition, digits, result) {
-            const conditionText = condition === 'ALL_EVEN' ? 'all even' : condition === 'ALL_ODD' ? 'all odd' : condition;
-            globalObserver.emit('ui.log.success', {
-                log_type: 'digits_analysis',
-                extra: { condition: conditionText, digits, result },
-            });
+        async areLastDigitsThreshold(count, op = 'LT', barrier = 4) {
+            const safeCount = Math.max(1, Number(count) || 1);
+            if (safeCount > 1) this.journal_digit_window = safeCount;
+            const numBarrier = Number(barrier);
+            const digits = await this.getLastDigitList();
+            const last_n = digits.slice(-safeCount);
+            const result =
+                last_n.length >= safeCount &&
+                last_n.every(d => {
+                    const v = Number(d);
+                    if (op === 'LT') return v < numBarrier;
+                    if (op === 'GT') return v > numBarrier;
+                    if (op === 'LTE') return v <= numBarrier;
+                    if (op === 'GTE') return v >= numBarrier;
+                    return v === numBarrier;
+                });
+            const opLabel =
+                op === 'LT'
+                    ? `< ${numBarrier}`
+                    : op === 'GT'
+                      ? `> ${numBarrier}`
+                      : op === 'LTE'
+                        ? `<= ${numBarrier}`
+                        : op === 'GTE'
+                          ? `>= ${numBarrier}`
+                          : `== ${numBarrier}`;
+            this.logLastDigitsAnalysis(`all ${opLabel}`, last_n, result);
+            return result;
         }
 
-        logLastDigitsAnalysis(condition, digits, result) {
+        async isTickRunDirection(count, dir = 'RISE') {
+            const safeCount = Math.max(1, Number(count) || 2);
+            const ticks = await this.getTicks();
+            const slice = Array.isArray(ticks) ? ticks.slice(-(safeCount + 1)) : [];
+            let result = slice.length >= safeCount + 1;
+            if (result) {
+                for (let i = 1; i < slice.length; i++) {
+                    if (dir === 'FALL') {
+                        if (!(slice[i] < slice[i - 1])) {
+                            result = false;
+                            break;
+                        }
+                    } else if (!(slice[i] > slice[i - 1])) {
+                        result = false;
+                        break;
+                    }
+                }
+            }
+            const lastDigits = this.getLastDigitsFromList(slice).slice(-Math.min(safeCount, 10));
+            const label = dir === 'FALL' ? `Falling run (${safeCount} ticks): ` : `Rising run (${safeCount} ticks): `;
+            this.logLastDigitsAnalysis(`${dir}_${safeCount}`, lastDigits, result, label);
+            return result;
+        }
+
+        logBotCondition(condition, digits, result, summary) {
+            this.logLastDigitsAnalysis(condition, digits, result, summary);
+        }
+
+        logLastDigitsAnalysis(condition, digits, result, summary) {
+            const epoch = this.latestTick?.epoch ?? null;
+            this._lastCustomJournalEpoch = epoch;
+            this._lastCustomJournalAt = Date.now();
+            const condKey = `${this.symbol || ''}:${epoch || ''}:${condition}`;
+            if (epoch && lastGlobalConditionStamp === condKey) return;
+            if (epoch) lastGlobalConditionStamp = condKey;
+
             const conditionText = condition === 'ALL_EVEN' ? 'all even' : condition === 'ALL_ODD' ? 'all odd' : condition;
-            const resultText = result ? 'TRUE' : 'FALSE';
             globalObserver.emit('ui.log.success', {
                 log_type: 'digits_analysis',
-                extra: { condition: conditionText, digits, result },
+                extra: { condition: conditionText, digits, result, summary },
             });
         }
 

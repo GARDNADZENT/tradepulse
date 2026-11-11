@@ -244,82 +244,236 @@ export const UnderUnderMarket: React.FC = () => {
     useEffect(() => { return () => { runRef.current = false; unsubscribeAll(); if (wsRef.current) { wsRef.current.close(); wsRef.current = null; } }; }, [unsubscribeAll]);
 
     return (
-        <div className='mw-uum'>
-            <div className='mw-uum__controls'>
-                <div className='mw-field'>
-                    <label className='mw-label'>Stake ($)</label>
-                    <input className='mw-input' type='number' step='0.01' min='0' value={stake} onChange={e => setStake(e.target.value)} disabled={running} />
-                </div>
-                <div className='mw-field'>
-                    <label className='mw-label'>Martingale (x)</label>
-                    <input className='mw-input' type='number' step='0.1' min='1' value={martingale} onChange={e => setMartingale(e.target.value)} disabled={running} />
-                </div>
-            </div>
-
-            <div className='mw-uum__section'>
-                <div className='mw-uum__section-title'>Primary Option</div>
-                <div className='mw-uum__controls'>
-                    <div className='mw-field'>
-                        <label className='mw-label'>Contract Type</label>
-                        <MwSelect value={pSide} options={[{ value: 'DIGITUNDER', label: 'UNDER' }, { value: 'DIGITOVER', label: 'OVER' }]}
-                            onChange={v => setPSide(v as ContractSide)} disabled={running} />
-                    </div>
-                    <div className='mw-field'>
-                        <label className='mw-label'>Prediction Digit</label>
-                        <MwSelect value={pDigit} options={[0,1,2,3,4,5,6,7,8,9].map(d => ({ value: String(d), label: String(d) }))}
-                            onChange={v => setPDigit(v)} disabled={running} />
+        <div className='at-view'>
+            {/* 4-Card Session KPI Strip */}
+            <section className='at-kpi-grid'>
+                <div className='at-kpi-card'>
+                    <span className='at-kpi-card__label'>Session P/L:</span>
+                    <div
+                        className={`at-kpi-card__val at-kpi-card__val--mono ${
+                            pnl >= 0 ? 'at-kpi-card__val--pos' : 'at-kpi-card__val--neg'
+                        }`}
+                    >
+                        {pnl >= 0 ? '+' : ''}USD {pnl.toFixed(2)}
                     </div>
                 </div>
-            </div>
 
-            <div className='mw-uum__section'>
-                <div className='mw-uum__section-title'>Recovery Option</div>
-                <div className='mw-uum__controls'>
-                    <div className='mw-field'>
-                        <label className='mw-label'>Contract Type</label>
-                        <MwSelect value={rSide} options={[{ value: 'DIGITOVER', label: 'OVER' }, { value: 'DIGITUNDER', label: 'UNDER' }]}
-                            onChange={v => setRSide(v as ContractSide)} disabled={running} />
-                    </div>
-                    <div className='mw-field'>
-                        <label className='mw-label'>Prediction Digit</label>
-                        <MwSelect value={rDigit} options={[0,1,2,3,4,5,6,7,8,9].map(d => ({ value: String(d), label: String(d) }))}
-                            onChange={v => setRDigit(v)} disabled={running} />
+                <div className='at-kpi-card'>
+                    <span className='at-kpi-card__label'>Primary Barrier:</span>
+                    <div className='at-kpi-card__row'>
+                        <span className='at-kpi-card__val'>
+                            {pSide === 'DIGITUNDER' ? 'UNDER' : 'OVER'} {pDigit}
+                        </span>
                     </div>
                 </div>
-            </div>
 
-            <button className={`mw-btn ${running ? 'mw-btn--stop' : 'mw-btn--kill'}`} onClick={running ? stop : start}>
-                {running ? 'STOP' : 'RUN'}
-            </button>
+                <div className='at-kpi-card'>
+                    <span className='at-kpi-card__label'>Recovery Barrier:</span>
+                    <div className='at-kpi-card__row'>
+                        <span className='at-kpi-card__val'>
+                            {rSide === 'DIGITUNDER' ? 'UNDER' : 'OVER'} {rDigit}
+                        </span>
+                    </div>
+                </div>
 
-            <div className='mw-uum__stats'>
-                <span>P&L: <b className={pnl >= 0 ? 'mw-win' : 'mw-loss'}>${pnl.toFixed(2)}</b></span>
-                <span>Trades: {trades}</span>
-                <span className={conn ? 'mw-win' : 'mw-loss'}>{conn ? 'Connected' : 'Disconnected'}</span>
-            </div>
+                <div className='at-kpi-card'>
+                    <div className='at-kpi-card__top'>
+                        <span className='at-kpi-card__label'>Trades: {trades}</span>
+                        <span className={`at-status-dot ${conn ? 'at-status-dot--live' : ''}`} />
+                    </div>
+                    <div className='at-kpi-card__sub'>
+                        {conn ? 'Stream Connected' : 'Awaiting Connection'}
+                    </div>
+                </div>
+            </section>
 
-            <div className='mw-uum__progress'>
-                <div className='mw-uum__progress-title'>Volatility Progress</div>
-                {ALL_SYMBOLS.map(sym => {
-                    const p = symProg[sym];
-                    return (
-                        <div key={sym} className={`mw-uum__prog-row ${p?.status === 'trading' ? 'mw-uum__prog-row--active' : ''} ${p?.status === 'won' ? 'mw-uum__prog-row--won' : ''} ${p?.status === 'lost' ? 'mw-uum__prog-row--lost' : ''}`}>
-                            <span className='mw-uum__prog-sym'>{SYMBOL_LABELS[sym]}</span>
-                            <span className='mw-uum__prog-digits'>{p?.lastDigits?.length ? p.lastDigits.join(' ') : '...'}</span>
-                            <span className='mw-uum__prog-ticks'>{p?.ticks || 0}</span>
-                            <span className={`mw-uum__prog-status mw-uum__prog-status--${p?.status || 'idle'}`}>{p?.status || 'idle'}</span>
+            {/* 2-Column Workspace */}
+            <div className='at-split'>
+                {/* Left Column: Strategy Parameters */}
+                <div className='at-col'>
+                    <section className='at-card'>
+                        <div className='at-card__header'>
+                            <div>
+                                <h2 className='at-card__title'>Under / Under Market Config</h2>
+                                <p className='at-card__subtitle'>
+                                    Dual-barrier primary &amp; recovery multi-volatility execution
+                                </p>
+                            </div>
                         </div>
-                    );
-                })}
-            </div>
 
-            <div className='mw-uum__logs'>
-                {logs.map((l, i) => (
-                    <div key={i} className={`mw-log-line mw-log-line--${l.type}`}>
-                        <span className='mw-log-time'>{l.time}</span>
-                        <span className='mw-log-msg'>{l.msg}</span>
-                    </div>
-                ))}
+                        <div className='at-field-grid'>
+                            <div className='mw-field'>
+                                <label className='mw-label'>Stake ($)</label>
+                                <input
+                                    className='mw-input'
+                                    type='number'
+                                    step='0.01'
+                                    min='0'
+                                    value={stake}
+                                    onChange={e => setStake(e.target.value)}
+                                    disabled={running}
+                                />
+                            </div>
+                            <div className='mw-field'>
+                                <label className='mw-label'>Martingale (x)</label>
+                                <input
+                                    className='mw-input'
+                                    type='number'
+                                    step='0.1'
+                                    min='1'
+                                    value={martingale}
+                                    onChange={e => setMartingale(e.target.value)}
+                                    disabled={running}
+                                />
+                            </div>
+                        </div>
+
+                        <div className='at-toggle-card'>
+                            <div className='at-toggle-row__title'>Primary Option</div>
+                            <div className='at-field-grid' style={{ marginBottom: 0 }}>
+                                <div className='mw-field'>
+                                    <label className='mw-label'>Contract Type</label>
+                                    <MwSelect
+                                        value={pSide}
+                                        options={[
+                                            { value: 'DIGITUNDER', label: 'UNDER' },
+                                            { value: 'DIGITOVER', label: 'OVER' },
+                                        ]}
+                                        onChange={v => setPSide(v as ContractSide)}
+                                        disabled={running}
+                                    />
+                                </div>
+                                <div className='mw-field'>
+                                    <label className='mw-label'>Prediction Digit</label>
+                                    <MwSelect
+                                        value={pDigit}
+                                        options={[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(d => ({
+                                            value: String(d),
+                                            label: String(d),
+                                        }))}
+                                        onChange={v => setPDigit(v)}
+                                        disabled={running}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className='at-toggle-card'>
+                            <div className='at-toggle-row__title'>Recovery Option</div>
+                            <div className='at-field-grid' style={{ marginBottom: 0 }}>
+                                <div className='mw-field'>
+                                    <label className='mw-label'>Contract Type</label>
+                                    <MwSelect
+                                        value={rSide}
+                                        options={[
+                                            { value: 'DIGITOVER', label: 'OVER' },
+                                            { value: 'DIGITUNDER', label: 'UNDER' },
+                                        ]}
+                                        onChange={v => setRSide(v as ContractSide)}
+                                        disabled={running}
+                                    />
+                                </div>
+                                <div className='mw-field'>
+                                    <label className='mw-label'>Prediction Digit</label>
+                                    <MwSelect
+                                        value={rDigit}
+                                        options={[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(d => ({
+                                            value: String(d),
+                                            label: String(d),
+                                        }))}
+                                        onChange={v => setRDigit(v)}
+                                        disabled={running}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <button
+                            type='button'
+                            className={`mw-btn ${running ? 'mw-btn--stop' : 'mw-btn--kill'}`}
+                            onClick={running ? stop : start}
+                        >
+                            {running ? (
+                                <>
+                                    <span className='mw-pulse' /> STOP UNDER / UNDER
+                                </>
+                            ) : (
+                                'RUN UNDER / UNDER'
+                            )}
+                        </button>
+                    </section>
+                </div>
+
+                {/* Right Column: Volatility Progress + Execution Log */}
+                <div className='at-col'>
+                    <section className='at-card'>
+                        <div className='at-card__header'>
+                            <div>
+                                <h2 className='at-card__title'>Live Volatility Progress</h2>
+                                <p className='at-card__subtitle'>
+                                    Recent trailing digits &amp; execution states across all 10 indices
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className='at-vol-list'>
+                            {ALL_SYMBOLS.map(sym => {
+                                const p = symProg[sym];
+                                const status = p?.status || 'idle';
+                                const badgeClass =
+                                    status === 'won'
+                                        ? 'at-pill-badge--emerald-soft'
+                                        : status === 'lost'
+                                        ? 'at-pill-badge--rose-soft'
+                                        : status === 'trading'
+                                        ? 'at-pill-badge--indigo-soft'
+                                        : 'at-pill-badge--amber-soft';
+
+                                return (
+                                    <div key={sym} className='at-vol-row'>
+                                        <span className='at-vol-row__sym'>
+                                            {SYMBOL_LABELS[sym]}
+                                        </span>
+                                        <span className='at-vol-row__badge'>
+                                            {p?.lastDigits?.length
+                                                ? p.lastDigits.join(' · ')
+                                                : 'Waiting for ticks…'}
+                                        </span>
+                                        <span className='at-vol-row__badge'>
+                                            {p?.ticks || 0} ticks
+                                        </span>
+                                        <span className={`at-pill-badge ${badgeClass}`}>
+                                            {status.toUpperCase()}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </section>
+
+                    <section className='at-card'>
+                        <div className='at-log-header'>
+                            <h3 className='at-card__title'>Activity Log</h3>
+                        </div>
+                        {logs.length === 0 ? (
+                            <div className='at-log-empty'>
+                                Run Under / Under to stream live execution events here.
+                            </div>
+                        ) : (
+                            <div className='at-log-list'>
+                                {logs.map((l, i) => (
+                                    <div
+                                        key={i}
+                                        className={`mw-log-line mw-log-line--${l.type}`}
+                                    >
+                                        <span className='mw-log-time'>{l.time}</span>
+                                        <span className='mw-log-msg'>{l.msg}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                </div>
             </div>
         </div>
     );

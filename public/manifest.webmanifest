@@ -1,13 +1,13 @@
 {
-    "name": "MAKOTI TRADERS",
-    "short_name": "Makoti",
+    "name": "TRADERSPULSE",
+    "short_name": "TradersPulse",
     "description": "Automate your trades — import an existing bot or create a trading bot from scratch with guides, FAQs, and tutorials.",
     "start_url": "./",
     "scope": "./",
     "display": "standalone",
     "orientation": "any",
-    "background_color": "#ffffff",
-    "theme_color": "#3B82F6",
+    "background_color": "#001840",
+    "theme_color": "#102A71",
     "lang": "en",
     "icons": [
         {

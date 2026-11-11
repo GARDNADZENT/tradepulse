@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { observer } from 'mobx-react-lite';
 import { useStore } from '@/hooks/useStore';
 import { loadJourney, normalizeJourneyDays } from './utils/calculations';
 import { journeyService } from '@/services/supabase/journey.service';
@@ -109,17 +110,18 @@ export const useTradePulse = () => {
     return ctx;
 };
 
-export const TradePulseProvider = ({ children }: { children: ReactNode }) => {
+export const TradePulseProvider = observer(({ children }: { children: ReactNode }) => {
     const store = useStore();
-    const storeClient = store.client;
-    const initialLoginid = storeClient?.loginid ?? null;
+    const storeClient = store?.client;
+    const activeLoginid = storeClient?.loginid || localStorage.getItem('active_loginid') || null;
+    const storeLoggedIn = Boolean(storeClient?.is_logged_in || activeLoginid);
     const initialAccounts = storeClient?.accounts ?? [];
 
     const [state, setState] = useState<TradePulseState>({
-        isLoggedIn: false,
+        isLoggedIn: storeLoggedIn,
         token: null,
         accounts: initialAccounts.length > 0 ? initialAccounts : [],
-        currentAccount: initialLoginid,
+        currentAccount: activeLoginid,
         schedule: null,
         todayDay: 0,
         contracts: [],
@@ -134,10 +136,16 @@ export const TradePulseProvider = ({ children }: { children: ReactNode }) => {
     });
 
     useEffect(() => {
-        if (initialLoginid && !state.currentAccount) {
-            setState(prev => ({ ...prev, currentAccount: initialLoginid }));
+        if (activeLoginid && activeLoginid !== state.currentAccount) {
+            setState(prev => ({
+                ...prev,
+                isLoggedIn: true,
+                currentAccount: activeLoginid,
+            }));
+        } else if (storeLoggedIn !== state.isLoggedIn) {
+            setState(prev => ({ ...prev, isLoggedIn: storeLoggedIn }));
         }
-    }, [initialLoginid, state.currentAccount]);
+    }, [activeLoginid, storeLoggedIn, state.currentAccount, state.isLoggedIn]);
 
     const setPartial = useCallback((updates: Partial<TradePulseState>) => {
         setState(prev => ({ ...prev, ...updates }));
@@ -308,4 +316,4 @@ export const TradePulseProvider = ({ children }: { children: ReactNode }) => {
             {children}
         </TradePulseContext.Provider>
     );
-};
+});

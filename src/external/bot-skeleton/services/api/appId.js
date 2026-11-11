@@ -1,4 +1,5 @@
 import { getSocketURL } from '@/components/shared';
+import { getAuthInfo } from '@/external/deriv-core';
 import DerivAPIBasic from '@deriv/deriv-api/dist/DerivAPIBasic';
 import APIMiddleware from './api-middleware';
 
@@ -8,6 +9,27 @@ import APIMiddleware from './api-middleware';
 let derivApiInstance = null;
 let derivApiPromise = null;
 let currentWebSocketURL = null;
+
+export const getCurrentWebSocketURL = () => currentWebSocketURL;
+
+export const hasStoredAuthCredentials = () => {
+    try {
+        const authInfo = getAuthInfo();
+        if (authInfo?.access_token) return true;
+        if (typeof window !== 'undefined') {
+            const patMode = window.localStorage.getItem('deriv_pat_mode');
+            const v3Token =
+                window.localStorage.getItem('deriv_api_token') || window.localStorage.getItem('authToken');
+            if (patMode === 'v3' && v3Token) return true;
+        }
+    } catch {
+        // ignore storage errors
+    }
+    return false;
+};
+
+export const isCurrentSocketPublic = () =>
+    Boolean(currentWebSocketURL && currentWebSocketURL.endsWith('/ws/public'));
 
 /**
  * Clears the singleton instance (useful for logout or forced reconnection)
@@ -33,8 +55,11 @@ export const clearDerivApiInstance = () => {
  * @returns Promise with DerivAPIBasic instance
  */
 export const generateDerivApiInstance = async (forceNew = false) => {
-    // If forcing new instance, clear existing one
-    if (forceNew) {
+    // Upgrade immediately if credentials now exist while the singleton is still on /ws/public
+    const shouldUpgradeFromPublic = isCurrentSocketPublic() && hasStoredAuthCredentials();
+
+    // If forcing new instance (or upgrading from public after PAT/OAuth login), clear existing one
+    if (forceNew || shouldUpgradeFromPublic) {
         console.log('[DerivAPI] Forcing new instance creation');
         clearDerivApiInstance();
     }
@@ -75,6 +100,39 @@ export const generateDerivApiInstance = async (forceNew = false) => {
 
             console.log('[DerivAPI] Creating new WebSocket connection to:', wsURL);
             const deriv_socket = new WebSocket(wsURL);
+            if (wsURL.includes('/websockets/v3')) {
+                const rawSend = deriv_socket.send.bind(deriv_socket);
+                deriv_socket.send = data => {
+                    if (typeof data === 'string') {
+                        try {
+                            const parsed = JSON.parse(data);
+                            if (parsed && typeof parsed === 'object') {
+                                if (
+                                    ('proposal' in parsed || 'contracts_for' in parsed) &&
+                                    parsed.underlying_symbol &&
+                                    !parsed.symbol
+                                ) {
+                                    parsed.symbol = parsed.underlying_symbol;
+                                    delete parsed.underlying_symbol;
+                                }
+                                if (
+                                    parsed.parameters &&
+                                    typeof parsed.parameters === 'object' &&
+                                    parsed.parameters.underlying_symbol &&
+                                    !parsed.parameters.symbol
+                                ) {
+                                    parsed.parameters.symbol = parsed.parameters.underlying_symbol;
+                                    delete parsed.parameters.underlying_symbol;
+                                }
+                                return rawSend(JSON.stringify(parsed));
+                            }
+                        } catch {
+                            // fall through to rawSend
+                        }
+                    }
+                    return rawSend(data);
+                };
+            }
             window._newSystemWS = deriv_socket;
             const deriv_api = new DerivAPIBasic({
                 connection: deriv_socket,

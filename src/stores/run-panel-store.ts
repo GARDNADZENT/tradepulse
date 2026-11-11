@@ -6,6 +6,11 @@ import { generateOAuthURL, isSafari, mobileOSDetect, standalone_routes } from '@
 import { contract_stages, TContractStage } from '@/constants/contract-stage';
 import { run_panel } from '@/constants/run-panel';
 import { ErrorTypes, MessageTypes, observer, unrecoverable_errors } from '@/external/bot-skeleton';
+import { api_base } from '@/external/bot-skeleton/services/api/api-base';
+import {
+    hasStoredAuthCredentials,
+    isCurrentSocketPublic,
+} from '@/external/bot-skeleton/services/api/appId';
 import { getSelectedTradeType } from '@/external/bot-skeleton/scratch/utils';
 import { handleBackendError, isBackendError } from '@/utils/error-handler';
 // import { journalError, switch_account_notification } from '@/utils/bot-notifications';
@@ -101,13 +106,13 @@ export default class RunPanelStore {
         this.timer = null;
     }
 
-    active_index = 0;
+    active_index = 2;
     contract_stage: TContractStage = contract_stages.NOT_RUNNING;
     dialog_options = {};
     has_open_contract = false;
     is_running = false;
     is_statistics_info_modal_open = false;
-    is_drawer_open = true;
+    is_drawer_open = false;
     is_dialog_open = false;
     is_sell_requested = false;
     show_bot_stop_message = false;
@@ -185,6 +190,9 @@ export default class RunPanelStore {
         this.dbot.saveRecentWorkspace();
         this.dbot.unHighlightAllBlocks();
         if (!client.is_logged_in) {
+            client.hydrateFromStoredSession?.();
+        }
+        if (!client.is_logged_in) {
             this.showLoginDialog();
             return;
         }
@@ -195,6 +203,15 @@ export default class RunPanelStore {
          * syncronously, so keep above await.
          */
         if (is_ios || isSafari()) this.preloadAudio();
+
+        // Ensure the trading WebSocket is upgraded from public to authenticated for PAT/OAuth sessions
+        if ((!api_base.is_authorized || isCurrentSocketPublic()) && hasStoredAuthCredentials()) {
+            try {
+                await api_base.init(true);
+            } catch {
+                // Bot tradeEngine will surface any connection error cleanly via journal
+            }
+        }
 
         this.registerBotListeners();
 
@@ -211,7 +228,6 @@ export default class RunPanelStore {
         runInAction(() => {
             this.setIsRunning(true);
             ui.setPromptHandler(true);
-            this.toggleDrawer(true);
             this.run_id = `run-${Date.now()}`;
 
             summary_card.clear();

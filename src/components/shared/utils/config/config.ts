@@ -7,7 +7,13 @@ import {
     resolveReferralViaProxy,
 } from '@/external/deriv-core';
 import type { AuthConfig } from '@/external/deriv-core';
+import { DERIV_CREATE_ACCOUNT_URL } from '@/constants/social-links';
 import { DerivWSAccountsService } from '@/services/derivws-accounts.service';
+import {
+    getActiveTenantConfig,
+    getTenantDerivAppId,
+    getTenantReferralLink,
+} from '@/services/site-config/site-runtime-config';
 import brandConfig from '../../../../../brand.config.json';
 
 // =============================================================================
@@ -34,22 +40,69 @@ export const WS_SERVERS = {
 // Helper Functions
 // =============================================================================
 
+const sanitizeEnvValue = (value?: string): string => {
+    if (!value) return '';
+    const trimmed = value.trim();
+    return trimmed === '🔒' ? '' : trimmed;
+};
+
+export const DERIV_V3_WS_ENDPOINTS = [
+    'wss://ws.derivws.com/websockets/v3',
+    'wss://ws.binaryws.com/websockets/v3',
+    'wss://green.derivws.com/websockets/v3',
+    'wss://blue.derivws.com/websockets/v3',
+] as const;
+
 // Helper to check if we're on production.
 // NEXT_PUBLIC_DERIV_ENV is the authoritative signal (set at build/deploy time and
-// also read by vendored deriv-core for OAuth), so a deployed partner domain resolves the
-// same environment for WebSocket and OAuth. Falls back to hostname detection when
-// the env var is unset (e.g. local dev).
+// also read by vendored deriv-core for OAuth). When unset, default to production
+// unless the hostname explicitly indicates staging (matching deriv-core/config/urls.ts).
 export const isProduction = () => {
-    const env = process.env.NEXT_PUBLIC_DERIV_ENV;
+    const env = sanitizeEnvValue(process.env.NEXT_PUBLIC_DERIV_ENV);
     if (env === 'production') return true;
     if (env === 'preview' || env === 'staging') return false;
 
-    const hostname = window.location.hostname;
-    const productionDomains = Object.values(PRODUCTION_DOMAINS) as string[];
-    return productionDomains.includes(hostname);
+    const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+    if (hostname && hostname.includes('staging')) return false;
+    return true;
 };
 
 export const isLocal = () => /localhost(:\d+)?$/i.test(window.location.hostname);
+
+export const getAppId = () => {
+    const tenantAppId = sanitizeEnvValue(getTenantDerivAppId());
+    if (tenantAppId) return tenantAppId;
+    return sanitizeEnvValue(process.env.NEXT_PUBLIC_DERIV_APP_ID);
+};
+
+/**
+ * Returns a valid numeric app_id for Legacy Deriv V3 WebSocket endpoints (/websockets/v3).
+ * NEXT_PUBLIC_DERIV_APP_ID may contain a V2 OAuth client_id string (e.g. UUID / app_...)
+ * or be unset — /websockets/v3 rejects non-numeric app_ids during handshake, so fall back to 1089.
+ */
+export const getLegacyWsAppId = (): string => {
+    const raw = getAppId();
+    return raw && /^\d+$/.test(raw) ? raw : '1089';
+};
+
+export const getPreferredV3SocketURL = (): string => {
+    const appId = getLegacyWsAppId();
+    if (typeof window !== 'undefined') {
+        const saved = window.localStorage.getItem('deriv_v3_ws_url');
+        if (saved && saved.startsWith('wss://')) {
+            try {
+                const parsed = new URL(saved);
+                if (!/^\d+$/.test(parsed.searchParams.get('app_id') || '')) {
+                    parsed.searchParams.set('app_id', appId);
+                }
+                return parsed.toString();
+            } catch {
+                // ignore malformed URL and use default below
+            }
+        }
+    }
+    return `${DERIV_V3_WS_ENDPOINTS[0]}?app_id=${appId}`;
+};
 
 const getDefaultServerURL = () => {
     const isProductionEnv = isProduction();
@@ -64,29 +117,39 @@ const getDefaultServerURL = () => {
 };
 
 /**
- * Gets the WebSocket URL using the authenticated flow
- * 1. Get access token from auth_info (localStorage via vendored deriv-core)
- * 2. Fetch OTP WebSocket URL from DerivWSAccountsService
- *
- * @returns Promise with WebSocket URL or fallback to default server
+ * Gets the WebSocket URL using the authenticated flow:
+ * 1. V2 OAuth / Bearer PAT: get access_token from auth_info -> fetch OTP WebSocket URL
+ * 2. Legacy V3 API Token: connect to verified V3 WebSocket URL so api_base can authorize(token)
+ * 3. Unauthenticated fallback: public V2 WebSocket URL
  */
 export const getSocketURL = async (): Promise<string> => {
     try {
         const authInfo = getAuthInfo();
-        if (!authInfo || !authInfo.access_token) {
-            return getDefaultServerURL();
+        if (authInfo && authInfo.access_token) {
+            const wsUrl = await DerivWSAccountsService.getAuthenticatedWebSocketURL(authInfo.access_token);
+            return wsUrl;
         }
 
-        const wsUrl = await DerivWSAccountsService.getAuthenticatedWebSocketURL(authInfo.access_token);
-        return wsUrl;
+        if (typeof window !== 'undefined') {
+            const patMode = window.localStorage.getItem('deriv_pat_mode');
+            const v3Token = window.localStorage.getItem('deriv_api_token') || window.localStorage.getItem('authToken');
+            if (patMode === 'v3' && v3Token) {
+                return getPreferredV3SocketURL();
+            }
+        }
+
+        return getDefaultServerURL();
     } catch (error) {
         console.error('[DerivWS] Error in getSocketURL:', error);
+        if (typeof window !== 'undefined') {
+            const patMode = window.localStorage.getItem('deriv_pat_mode');
+            const v3Token = window.localStorage.getItem('deriv_api_token') || window.localStorage.getItem('authToken');
+            if (patMode === 'v3' && v3Token) {
+                return getPreferredV3SocketURL();
+            }
+        }
         return getDefaultServerURL();
     }
-};
-
-export const getAppId = () => {
-    return process.env.NEXT_PUBLIC_DERIV_APP_ID;
 };
 
 export const getDebugServiceWorker = () => {
@@ -137,8 +200,14 @@ const cacheReferral = (referral: ResolvedReferral): void => {
  */
 export const generateOAuthURL = async (prompt?: string): Promise<string> => {
     try {
-        const redirectUri = process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI;
-        const clientId = process.env.NEXT_PUBLIC_DERIV_APP_ID;
+        if (prompt === 'registration') {
+            return getTenantReferralLink();
+        }
+        const hasCustomTenantAppId = Boolean(sanitizeEnvValue(getActiveTenantConfig()?.deriv_app_id));
+        const redirectUri = hasCustomTenantAppId
+            ? window.location.origin
+            : sanitizeEnvValue(process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI) || window.location.origin;
+        const clientId = getAppId();
         if (!clientId) return '';
 
         const config: AuthConfig = {
@@ -147,8 +216,10 @@ export const generateOAuthURL = async (prompt?: string): Promise<string> => {
             scopes: 'trade',
         };
 
-        // Static referral link (fallback for direct visits without affiliate click)
-        const referralLink = process.env.NEXT_PUBLIC_DERIV_REFERRAL_LINK;
+        // Static referral link (tenant override -> deploy env -> default TradersPulse affiliate URL)
+        const tenantReferral = sanitizeEnvValue(getActiveTenantConfig()?.deriv_referral_link);
+        const referralLink =
+            tenantReferral || sanitizeEnvValue(process.env.NEXT_PUBLIC_DERIV_REFERRAL_LINK) || DERIV_CREATE_ACCOUNT_URL;
         if (referralLink) {
             const referral = parseReferralLink(referralLink);
             if (referral) {

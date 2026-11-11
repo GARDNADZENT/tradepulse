@@ -92,7 +92,7 @@ const config: Config = {
     // A map from regular expressions to module names or to arrays of module names that allow to stub out resources with a single module
     moduleNameMapper: {
         '\\.(css|less|scss)$': '<rootDir>/__mocks__/styleMock.js',
-        '\\.(gif|ttf|eot|svg)$': '<rootDir>/__mocks__/fileMock.js',
+        '\\.(gif|ttf|eot|svg|png|jpe?g|webp)$': '<rootDir>/__mocks__/fileMock.js',
         'react-dom/server': '<rootDir>/__mocks__/react-dom-server.js',
         '@deriv-com/translations': '<rootDir>/__mocks__/translation.mock.js',
         '@deriv-com/ui': derivComUiDir,
@@ -103,6 +103,7 @@ const config: Config = {
         '^@/components/(.*)$': '<rootDir>/src/components/$1',
         '^@/constants/(.*)$': '<rootDir>/src/constants/$1',
         '^@/hooks/(.*)$': '<rootDir>/src/hooks/$1',
+        '^@/lib/(.*)$': '<rootDir>/src/lib/$1',
         '^@/stores/(.*)$': '<rootDir>/src/stores/$1',
         '^@/pages/(.*)$': '<rootDir>/src/pages/$1',
         '^@/services/(.*)$': '<rootDir>/src/services/$1',

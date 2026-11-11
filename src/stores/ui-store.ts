@@ -8,13 +8,11 @@ import { isTouchDevice } from '@/components/shared/utils/screen/responsive';
  * rather than forcing light.
  */
 function getInitialDarkMode(): boolean {
+    if (typeof window === 'undefined') return true;
     const stored = localStorage.getItem('theme');
-    if (stored === 'dark') return true;
     if (stored === 'light') return false;
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-        return false;
-    }
-    return window.matchMedia('(prefers-color-scheme: dark)')?.matches ?? false;
+    if (stored === 'dark') return true;
+    return true;
 }
 
 export default class UiStore {

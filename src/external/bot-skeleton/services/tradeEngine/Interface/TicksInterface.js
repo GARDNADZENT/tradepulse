@@ -12,6 +12,8 @@ const getTicksInterface = tradeEngine => {
         getLastDigitList: (...args) => tradeEngine.getLastDigitList(...args),
         areLastDigitsEven: (...args) => tradeEngine.areLastDigitsEven(...args),
         areLastDigitsOdd: (...args) => tradeEngine.areLastDigitsOdd(...args),
+        areLastDigitsThreshold: (...args) => tradeEngine.areLastDigitsThreshold(...args),
+        isTickRunDirection: (...args) => tradeEngine.isTickRunDirection(...args),
     };
 };
 

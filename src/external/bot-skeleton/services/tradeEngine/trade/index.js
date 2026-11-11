@@ -78,9 +78,16 @@ export default class TradeEngine extends Balance(Purchase(Sell(OpenContract(Prop
         this.subscription_id_for_accumulators = null;
         this.is_proposal_requested_for_accumulators = false;
         this.store = createStore(rootReducer, applyMiddleware(thunk));
+        this.journal_digit_window = 2;
+        this._lastJournalTickEpoch = null;
         this.vh_state = {
             is_virtual: false,
+            start_mode: 'virtual',
             loss_count: 0,
+            virtual_win_count: 0,
+            real_loss_count: 0,
+            enter_after_actual_losses: 2,
+            return_after_virtual_wins: 1,
             enabled: false,
             threshold: 0,
             needs_stake_reset: false,

@@ -1,16 +1,16 @@
-// ─── MAKOTI WIDGET ───────────────────────────────────────────────────────────
+// ─── TRADERSPULSE WIDGET ─────────────────────────────────────────────────────
 
-$mw-accent:   #f97316;
-$mw-accent2:  #ef4444;
-$mw-bg:       #0f1117;
-$mw-bg2:      #181c27;
-$mw-bg3:      #1e2336;
-$mw-border:   rgba(249,115,22,0.2);
-$mw-text:     #e2e8f0;
-$mw-muted:    #64748b;
-$mw-win:      #22c55e;
+$mw-accent:   #2563EB;
+$mw-accent2:  #102A71;
+$mw-bg:       #001840;
+$mw-bg2:      #081e4a;
+$mw-bg3:      #0d265c;
+$mw-border:   rgba(255, 255, 255, 0.16);
+$mw-text:     #ffffff;
+$mw-muted:    #94a3b8;
+$mw-win:      #10b981;
 $mw-loss:     #ef4444;
-$mw-radius:   10px;
+$mw-radius:   12px;
 
 // ─── FLOATING BUTTON ─────────────────────────────────────────────────────────
 
@@ -20,9 +20,9 @@ $mw-radius:   10px;
     width: 56px;
     height: 56px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #f97316 0%, #ef4444 100%);
-    border: 2px solid rgba(255,255,255,0.15);
-    box-shadow: 0 0 0 4px rgba(249,115,22,0.15), 0 8px 32px rgba(0,0,0,0.5);
+    background: linear-gradient(135deg, #102A71 0%, #001840 100%);
+    border: 2px solid rgba(255,255,255,0.22);
+    box-shadow: 0 0 0 4px rgba(16, 42, 113, 0.25), 0 8px 32px rgba(0, 12, 36, 0.55);
     cursor: grab;
     touch-action: none;
     will-change: transform;
@@ -35,15 +35,15 @@ $mw-radius:   10px;
     user-select: none;
     padding: 0;
 
-    &:hover { box-shadow: 0 0 0 6px rgba(249,115,22,0.25), 0 12px 40px rgba(0,0,0,0.6); }
+    &:hover { box-shadow: 0 0 0 6px rgba(16, 42, 113, 0.35), 0 12px 40px rgba(0, 12, 36, 0.65); }
     &:active { cursor: grabbing; }
-    &--open { box-shadow: 0 0 0 6px rgba(249,115,22,0.3), 0 0 24px rgba(249,115,22,0.5); }
+    &--open { box-shadow: 0 0 0 6px rgba(16, 42, 113, 0.4), 0 0 24px rgba(37, 99, 235, 0.45); }
 
     &__pulse {
         position: absolute;
         inset: -4px;
         border-radius: 50%;
-        border: 2px solid rgba(249,115,22,0.6);
+        border: 2px solid rgba(59, 130, 246, 0.6);
         animation: mw-ripple 2s ease-out infinite;
         pointer-events: none;
     }
@@ -112,9 +112,9 @@ $mw-radius:   10px;
     width: 44px;
     height: 44px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #f97316 0%, #ef4444 100%);
-    border: 2px solid rgba(255,255,255,0.15);
-    box-shadow: 0 0 0 4px rgba(249,115,22,0.15), 0 8px 32px rgba(0,0,0,0.5);
+    background: linear-gradient(135deg, #102A71 0%, #001840 100%);
+    border: 2px solid rgba(255,255,255,0.22);
+    box-shadow: 0 0 0 4px rgba(16, 42, 113, 0.25), 0 8px 32px rgba(0, 12, 36, 0.55);
     cursor: pointer;
     display: flex;
     align-items: center;

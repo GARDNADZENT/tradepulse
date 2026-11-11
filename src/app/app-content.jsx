@@ -54,7 +54,9 @@ const AppContent = observer(() => {
     // App Builder static preview, which intentionally runs without env vars.
     useEffect(() => {
         if (isPreviewMode()) return;
-        if (!process.env.NEXT_PUBLIC_DERIV_APP_ID) {
+        if (typeof window !== 'undefined' && window.localStorage.getItem('active_loginid')) return;
+        const rawAppId = process.env.NEXT_PUBLIC_DERIV_APP_ID;
+        if (!rawAppId || rawAppId.trim() === '🔒') {
             botNotification(localize('Waiting for environment variables to be set…'), undefined, { type: 'warning' });
         }
     }, []);

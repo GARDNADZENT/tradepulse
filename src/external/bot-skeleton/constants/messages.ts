@@ -41,4 +41,6 @@ export enum LogTypes {
     WELCOME_BACK = 'welcome_back',
     WELCOME = 'welcome',
     DIGITS_ANALYSIS = 'digits_analysis',
+    TICK_DIGITS = 'tick_digits',
+    VIRTUAL_HOOK = 'virtual_hook',
 }

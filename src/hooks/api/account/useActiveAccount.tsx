@@ -17,10 +17,22 @@ const useActiveAccount = ({
 }) => {
     const { accountList, activeLoginid } = useApiBase();
 
-    const activeAccount = useMemo(
-        () => accountList?.find(account => account.loginid === activeLoginid),
-        [activeLoginid, accountList]
-    );
+    const activeAccount = useMemo(() => {
+        const matched = accountList?.find(account => account.loginid === activeLoginid);
+        if (matched) return matched;
+        if (!activeLoginid) return undefined;
+        let storedCurr = 'USD';
+        try {
+            const map = JSON.parse(localStorage.getItem('client.accounts') || '{}');
+            if (map?.[activeLoginid]?.currency) storedCurr = String(map[activeLoginid].currency);
+        } catch {}
+        return {
+            loginid: activeLoginid,
+            currency: storedCurr,
+            is_virtual: isVirtualAccount(activeLoginid) ? 1 : 0,
+            is_disabled: 0,
+        } as any;
+    }, [activeLoginid, accountList]);
 
     const currentBalanceData = allBalanceData?.accounts?.[activeAccount?.loginid ?? ''];
 

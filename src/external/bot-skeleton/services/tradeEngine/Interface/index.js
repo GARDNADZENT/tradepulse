@@ -4,13 +4,16 @@ import getTicksInterface from './TicksInterface';
 import getToolsInterface from './ToolsInterface';
 
 const sleep = (observer, arg = 1) => {
+    const isFast =
+        typeof window !== 'undefined' && window.localStorage?.getItem('tp_fast_execution') === 'true';
+    const delayMs = isFast ? Math.min(Math.max(Number(arg) || 0, 0) * 1000, 60) : arg * 1000;
     return new Promise(
         r =>
             // eslint-disable-next-line no-promise-executor-return
             setTimeout(() => {
                 r();
                 setTimeout(() => observer.emit('CONTINUE'), 0);
-            }, arg * 1000),
+            }, delayMs),
         () => {}
     );
 };

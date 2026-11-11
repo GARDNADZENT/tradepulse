@@ -577,112 +577,310 @@ export const DiffersAuto: React.FC = () => {
 
     useEffect(() => { return () => { runRef.current = false; unsubscribeAll(); if (cooldownTimerRef.current) { clearTimeout(cooldownTimerRef.current); } if (wsRef.current) { wsRef.current.close(); wsRef.current = null; } }; }, [unsubscribeAll]);
 
+    const activeDiffersStake =
+        recoveryPhaseRef.current !== 'idle'
+            ? recoveryStakeRef.current
+            : currentStakeRef.current;
+    const daWinRate = trades > 0 ? ((wins / trades) * 100).toFixed(1) : '0.0';
+
     return (
-        <div className='mw-da'>
-            <div className='mw-da__controls'>
-                <div className='mw-field'>
-                    <label className='mw-label'>Stake ($)</label>
-                    <input className='mw-input' type='number' step='0.01' min='0' value={stake} onChange={e => setStake(e.target.value)} disabled={running} />
-                </div>
-                <div className='mw-field'>
-                    <label className='mw-label'>Martingale (x)</label>
-                    <input className='mw-input' type='number' step='0.1' min='1' value={martingale} onChange={e => setMartingale(e.target.value)} disabled={running} />
-                </div>
-                <div className='mw-field'>
-                    <label className='mw-label'>Max Appearance</label>
-                    <input className='mw-input' type='number' step='1' min='2' max='20' value={maxAppearance} onChange={e => setMaxAppearance(e.target.value)} disabled={running} />
-                </div>
-            </div>
-
-            {/* ── Recovery toggle ── */}
-            <div className='mw-da__recovery-toggle'>
-                <label className='mw-killer__vh-toggle'>
-                    <input type='checkbox' checked={recoveryEnabled} onChange={e => setRecoveryEnabled(e.target.checked)} disabled={running} />
-                    <span>Rise/Fall Recovery</span>
-                </label>
-            </div>
-
-            {/* ── Recovery fields — only visible when enabled ── */}
-            {recoveryEnabled && (
-                <div className='mw-da__recovery-fields'>
-                    <div className='mw-field'>
-                        <label className='mw-label'>Loss Threshold</label>
-                        <input className='mw-input' type='number' step='1' min='1' max='20' value={lossThreshold} onChange={e => setLossThreshold(e.target.value)} disabled={running} />
-                    </div>
-                    <div className='mw-field'>
-                        <label className='mw-label'>Max Tick Direction</label>
-                        <input className='mw-input' type='number' step='1' min='2' max='20' value={maxTickDirection} onChange={e => setMaxTickDirection(e.target.value)} disabled={running} />
+        <div className='at-view'>
+            {/* 4-Card Session KPI Strip */}
+            <section className='at-kpi-grid'>
+                <div className='at-kpi-card'>
+                    <span className='at-kpi-card__label'>Session P/L:</span>
+                    <div
+                        className={`at-kpi-card__val at-kpi-card__val--mono ${
+                            pnl >= 0 ? 'at-kpi-card__val--pos' : 'at-kpi-card__val--neg'
+                        }`}
+                    >
+                        {pnl >= 0 ? '+' : ''}USD {pnl.toFixed(2)}
                     </div>
                 </div>
-            )}
 
-            <button className={`mw-btn ${running ? 'mw-btn--stop' : 'mw-btn--kill'}`} onClick={running ? stop : start}>
-                {running ? 'STOP' : 'RUN DIFFERS AUTO'}
-            </button>
-
-            {running && (
-                <div className='mw-da__mode'>
-                    {recoveryPhaseRef.current === 'idle'
-                        ? `Monitoring — differ when digit repeats ${cfgRef.current.max}x`
-                        : `🔄 RECOVERY ${recoveryPhaseRef.current.toUpperCase()} — recovering $${recoveryLossRef.current.toFixed(2)}`}
-                    {lockRef.current && <span className='mw-da__active-dot'> ● TRADING</span>}
-                </div>
-            )}
-
-            <div className='mw-da__stats'>
-                <span>P&L: <b className={pnl >= 0 ? 'mw-win' : 'mw-loss'}>${pnl.toFixed(2)}</b></span>
-                <span>Trades: {trades}</span>
-                <span className='mw-win'>W: {wins}</span>
-                <span className='mw-loss'>L: {losses}</span>
-                <span>Stake: ${(recoveryPhaseRef.current !== 'idle' ? recoveryStakeRef.current : currentStakeRef.current).toFixed(2)}</span>
-                <span className={conn ? 'mw-win' : 'mw-loss'}>{conn ? 'Connected' : 'Disconnected'}</span>
-            </div>
-
-            {/* ── Recovery progress ── */}
-            {recoveryEnabled && recoveryDisplay.phase !== 'idle' && running && (
-                <div className='mw-da__recovery-progress'>
-                    <div className='mw-da__recovery-title'>Recovery Progress</div>
-                    <div className='mw-da__recovery-bar-wrap'>
-                        <div className='mw-da__recovery-bar' style={{ width: `${Math.min((recoveryDisplay.recovered / Math.max(recoveryDisplay.loss, 0.01)) * 100, 100)}%` }} />
-                    </div>
-                    <div className='mw-da__recovery-info'>
-                        <span>Phase: <b>{recoveryDisplay.phase}</b></span>
-                        <span>Loss: <b className='mw-loss'>${recoveryDisplay.loss.toFixed(2)}</b></span>
-                        <span>Recovered: <b className={recoveryDisplay.recovered >= 0 ? 'mw-win' : 'mw-loss'}>${recoveryDisplay.recovered.toFixed(2)}</b></span>
-                        {recoveryDisplay.phase === 'virtual' && <span>Virtual L: <b className='mw-loss'>{recoveryDisplay.virtualLosses}/{cfgRef.current.threshold}</b></span>}
+                <div className='at-kpi-card'>
+                    <span className='at-kpi-card__label'>Total Trades: {trades}</span>
+                    <div className='at-kpi-card__sub'>
+                        ({wins}W / {losses}L • {daWinRate}%)
                     </div>
                 </div>
-            )}
 
-            <div className='mw-da__progress'>
-                <div className='mw-da__progress-title'>Volatility Streaks</div>
-                {ALL_SYMBOLS.map(sym => {
-                    const p = symProg[sym];
-                    const streakPct = p ? Math.min((p.streakCount / cfgRef.current.max) * 100, 100) : 0;
-                    const isReady = p?.status === 'READY';
-                    const isRecovery = p?.status === 'recovery';
-                    return (
-                        <div key={sym} className={`mw-da__prog-row ${isReady ? 'mw-da__prog-row--ready' : ''} ${isRecovery ? 'mw-da__prog-row--trading' : ''}`}>
-                            <span className='mw-da__prog-sym'>{SYMBOL_LABELS[sym]}</span>
-                            <div className='mw-da__prog-bar-wrap'>
-                                <div className='mw-da__prog-bar' style={{ width: `${streakPct}%`, background: isReady ? '#ef4444' : '#f97316' }} />
+                <div className='at-kpi-card'>
+                    <span className='at-kpi-card__label'>Active Stake:</span>
+                    <div className='at-kpi-card__row'>
+                        <span className='at-kpi-card__val at-kpi-card__val--mono'>
+                            USD {(running ? activeDiffersStake : parseFloat(stake) || 0).toFixed(2)}
+                        </span>
+                    </div>
+                </div>
+
+                <div className='at-kpi-card'>
+                    <div className='at-kpi-card__top'>
+                        <span className='at-kpi-card__label'>Engine Mode:</span>
+                        <span
+                            className={`at-status-dot ${
+                                running ? 'at-status-dot--live' : conn ? 'at-status-dot--warn' : ''
+                            }`}
+                        />
+                    </div>
+                    <div className='at-kpi-card__sub' style={{ fontWeight: 700, color: 'var(--at-text-primary)' }}>
+                        {running
+                            ? recoveryPhaseRef.current === 'idle'
+                                ? `Repeat ${cfgRef.current.max}× Trigger`
+                                : `Recovery (${recoveryPhaseRef.current.toUpperCase()})`
+                            : conn
+                            ? 'Ready'
+                            : 'Connecting…'}
+                    </div>
+                </div>
+            </section>
+
+            {/* 2-Column Workspace */}
+            <div className='at-split'>
+                {/* Left Column: Differs Auto Parameters */}
+                <div className='at-col'>
+                    <section className='at-card'>
+                        <div className='at-card__header'>
+                            <div>
+                                <h2 className='at-card__title'>Differs Auto Config</h2>
+                                <p className='at-card__subtitle'>
+                                    Fires DIGITDIFF when any digit repeats N consecutive times
+                                </p>
                             </div>
-                            <span className='mw-da__prog-digit'>{p && p.streakDigit != null ? p.streakDigit : '—'}</span>
-                            <span className='mw-da__prog-count'>{p?.streakCount || 0}/{cfgRef.current.max}</span>
-                            <span className='mw-da__prog-dir' title='Direction streak'>{p?.dirDir || '—'}{p?.dirCount || 0}</span>
-                            <span className={`mw-da__prog-status ${isReady ? 'mw-da__prog-status--ready' : ''} ${isRecovery ? 'mw-da__prog-status--recovery' : ''}`}>{p?.status || 'idle'}</span>
                         </div>
-                    );
-                })}
-            </div>
 
-            <div className='mw-da__logs'>
-                {logs.map((l, i) => (
-                    <div key={i} className={`mw-log-line mw-log-line--${l.type}`}>
-                        <span className='mw-log-time'>{l.time}</span>
-                        <span className='mw-log-msg'>{l.msg}</span>
-                    </div>
-                ))}
+                        <div className='at-param-box'>
+                            <div className='at-param-row'>
+                                <span className='at-param-row__label'>Stake ($):</span>
+                                <div className='at-param-row__control'>
+                                    <input
+                                        className='mw-input'
+                                        type='number'
+                                        step='0.01'
+                                        min='0'
+                                        value={stake}
+                                        onChange={e => setStake(e.target.value)}
+                                        disabled={running}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className='at-param-row'>
+                                <span className='at-param-row__label'>Martingale (x):</span>
+                                <div className='at-param-row__control'>
+                                    <input
+                                        className='mw-input'
+                                        type='number'
+                                        step='0.1'
+                                        min='1'
+                                        value={martingale}
+                                        onChange={e => setMartingale(e.target.value)}
+                                        disabled={running}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className='at-param-row'>
+                                <span className='at-param-row__label'>Max Appearance:</span>
+                                <div className='at-param-row__control'>
+                                    <input
+                                        className='mw-input'
+                                        type='number'
+                                        step='1'
+                                        min='2'
+                                        max='20'
+                                        value={maxAppearance}
+                                        onChange={e => setMaxAppearance(e.target.value)}
+                                        disabled={running}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className='at-toggle-card'>
+                            <label className='at-toggle-row'>
+                                <div className='at-toggle-row__info'>
+                                    <span className='at-toggle-row__title'>Rise / Fall Recovery</span>
+                                    <span className='at-toggle-row__sub'>
+                                        Recover digit losses via directional streak entries
+                                    </span>
+                                </div>
+                                <span className='at-switch'>
+                                    <input
+                                        type='checkbox'
+                                        checked={recoveryEnabled}
+                                        onChange={e => setRecoveryEnabled(e.target.checked)}
+                                        disabled={running}
+                                    />
+                                    <span className='at-switch__slider' />
+                                </span>
+                            </label>
+
+                            {recoveryEnabled && (
+                                <div className='at-field-grid' style={{ marginBottom: 0 }}>
+                                    <div className='mw-field'>
+                                        <label className='mw-label'>Loss Threshold</label>
+                                        <input
+                                            className='mw-input'
+                                            type='number'
+                                            step='1'
+                                            min='1'
+                                            max='20'
+                                            value={lossThreshold}
+                                            onChange={e => setLossThreshold(e.target.value)}
+                                            disabled={running}
+                                        />
+                                    </div>
+                                    <div className='mw-field'>
+                                        <label className='mw-label'>Max Tick Direction</label>
+                                        <input
+                                            className='mw-input'
+                                            type='number'
+                                            step='1'
+                                            min='2'
+                                            max='20'
+                                            value={maxTickDirection}
+                                            onChange={e => setMaxTickDirection(e.target.value)}
+                                            disabled={running}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <button
+                            type='button'
+                            className={`mw-btn ${running ? 'mw-btn--stop' : 'mw-btn--kill'}`}
+                            onClick={running ? stop : start}
+                        >
+                            {running ? (
+                                <>
+                                    <span className='mw-pulse' /> STOP DIFFERS AUTO
+                                </>
+                            ) : (
+                                'RUN DIFFERS AUTO'
+                            )}
+                        </button>
+                    </section>
+                </div>
+
+                {/* Right Column: Recovery Progress + Volatility Streaks + Activity Log */}
+                <div className='at-col'>
+                    {recoveryEnabled && recoveryDisplay.phase !== 'idle' && running && (
+                        <section className='at-card'>
+                            <div className='at-card__header'>
+                                <h3 className='at-card__title'>Recovery Progress</h3>
+                                <span className='at-pill-badge at-pill-badge--amber-soft'>
+                                    {recoveryDisplay.phase.toUpperCase()}
+                                </span>
+                            </div>
+                            <div className='at-vol-row__track' style={{ height: '10px', marginBottom: '12px' }}>
+                                <div
+                                    className='at-vol-row__fill at-vol-row__fill--indigo'
+                                    style={{
+                                        width: `${Math.min(
+                                            (recoveryDisplay.recovered /
+                                                Math.max(recoveryDisplay.loss, 0.01)) *
+                                                100,
+                                            100
+                                        )}%`,
+                                    }}
+                                />
+                            </div>
+                            <div className='at-digit-chips' style={{ marginTop: 0 }}>
+                                <span className='at-digit-chip'>
+                                    Loss: ${recoveryDisplay.loss.toFixed(2)}
+                                </span>
+                                <span className='at-digit-chip'>
+                                    Recovered: ${recoveryDisplay.recovered.toFixed(2)}
+                                </span>
+                                {recoveryDisplay.phase === 'virtual' && (
+                                    <span className='at-digit-chip'>
+                                        Virtual Losses: {recoveryDisplay.virtualLosses}/
+                                        {cfgRef.current.threshold}
+                                    </span>
+                                )}
+                            </div>
+                        </section>
+                    )}
+
+                    <section className='at-card'>
+                        <div className='at-card__header'>
+                            <div>
+                                <h2 className='at-card__title'>Live Volatility Digit Streaks</h2>
+                                <p className='at-card__subtitle'>
+                                    Consecutive identical digits across all 10 Volatility indices
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className='at-vol-list'>
+                            {ALL_SYMBOLS.map(sym => {
+                                const p = symProg[sym];
+                                const maxTarget = cfgRef.current.max || parseInt(maxAppearance) || 3;
+                                const streakPct = p
+                                    ? Math.min((p.streakCount / maxTarget) * 100, 100)
+                                    : 0;
+                                const isReady = p?.status === 'READY';
+                                const isRecovery = p?.status === 'recovery';
+
+                                return (
+                                    <div key={sym} className='at-vol-row'>
+                                        <span className='at-vol-row__sym'>
+                                            {SYMBOL_LABELS[sym]}
+                                        </span>
+                                        <div className='at-vol-row__track'>
+                                            <div
+                                                className={`at-vol-row__fill${
+                                                    isReady ? ' at-vol-row__fill--ready' : ''
+                                                }`}
+                                                style={{ width: `${streakPct}%` }}
+                                            />
+                                        </div>
+                                        <span className='at-vol-row__badge'>
+                                            D{p && p.streakDigit != null ? p.streakDigit : '—'} •{' '}
+                                            {p?.streakCount || 0}/{maxTarget}
+                                        </span>
+                                        <span
+                                            className={`at-pill-badge ${
+                                                isReady
+                                                    ? 'at-pill-badge--rose-soft'
+                                                    : isRecovery
+                                                    ? 'at-pill-badge--amber-soft'
+                                                    : 'at-pill-badge--emerald-soft'
+                                            }`}
+                                        >
+                                            {(p?.status || 'idle').toUpperCase()}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </section>
+
+                    <section className='at-card'>
+                        <div className='at-log-header'>
+                            <h3 className='at-card__title'>Activity Log</h3>
+                        </div>
+                        {logs.length === 0 ? (
+                            <div className='at-log-empty'>
+                                Run Differs Auto to stream live digit streaks and contract settlements.
+                            </div>
+                        ) : (
+                            <div className='at-log-list'>
+                                {logs.map((l, i) => (
+                                    <div
+                                        key={i}
+                                        className={`mw-log-line mw-log-line--${l.type}`}
+                                    >
+                                        <span className='mw-log-time'>{l.time}</span>
+                                        <span className='mw-log-msg'>{l.msg}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                </div>
             </div>
         </div>
     );

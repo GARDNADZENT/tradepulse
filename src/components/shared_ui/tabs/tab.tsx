@@ -49,8 +49,10 @@ const Tab = ({
     const clickTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
     React.useEffect(() => {
-        setActiveLineStyle();
-    }, [count, label, header_content, setActiveLineStyle]);
+        if (is_active) {
+            setActiveLineStyle();
+        }
+    }, [is_active, count, setActiveLineStyle]);
 
     const handleTabClick = (e: React.MouseEvent<HTMLLIElement>) => {
         if (id === 'id-bot-builder') {

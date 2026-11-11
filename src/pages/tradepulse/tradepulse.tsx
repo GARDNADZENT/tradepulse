@@ -1,6 +1,10 @@
 // @ts-nocheck
 import React, { useState, useEffect } from 'react';
-import { TradePulseProvider, useTradePulse } from './TradePulseContext';
+import { observer } from 'mobx-react-lite';
+import { useStore } from '@/hooks/useStore';
+import { useApiBase } from '@/hooks/useApiBase';
+import { TradePulseProvider } from './TradePulseContext';
+import useTradePulseData from './hooks/useTradePulseData';
 import MyJourney from './components/MyJourney';
 import MasterSchedule from './components/MasterSchedule';
 import Performance from './components/Performance';
@@ -8,66 +12,107 @@ import AccountInfo from './components/AccountInfo';
 import { localize } from '@deriv-com/translations';
 import './tradepulse.scss';
 
-const TradePulseApp = () => {
+const TradePulseApp = observer(() => {
     const [activeTab, setActiveTab] = useState('journey');
+    const store = useStore();
+    const { connectionStatus } = useApiBase();
+    const { balance, currency, isVirtual } = useTradePulseData();
 
-    const { isLoggedIn, currentAccount } = useTradePulse();
+    const loginid = store?.client?.loginid || '';
+    const isConnected = connectionStatus === 'opened' || connectionStatus === 'OPENED' || Boolean(loginid);
 
     useEffect(() => {
-        const onHashChange = () => {
+        const syncFromHash = () => {
             const hash = window.location.hash.replace('#', '');
             if (['journey', 'schedule', 'performance', 'account'].includes(hash)) {
                 setActiveTab(hash);
             }
         };
-        window.addEventListener('hashchange', onHashChange);
-        return () => window.removeEventListener('hashchange', onHashChange);
+        syncFromHash();
+        window.addEventListener('hashchange', syncFromHash);
+        return () => window.removeEventListener('hashchange', syncFromHash);
     }, []);
+
+    const handleTabSelect = (tab: string) => {
+        setActiveTab(tab);
+        window.location.hash = tab;
+    };
 
     const renderView = () => {
         switch (activeTab) {
-            case 'schedule': return <MasterSchedule />;
-            case 'performance': return <Performance />;
-            case 'account': return <AccountInfo />;
+            case 'schedule':
+                return <MasterSchedule />;
+            case 'performance':
+                return <Performance />;
+            case 'account':
+                return <AccountInfo />;
             case 'journey':
-            default: return <MyJourney />;
+            default:
+                return <MyJourney />;
         }
     };
 
+    const formattedBalance = `${currency || 'USD'} ${Number(balance || 0).toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })}`;
+
     return (
         <div className='tradepulse'>
-            {/* TradePulse Header */}
-            <header className='tradepulse__header'>
-                <div className='tradepulse__header-inner'>
-                    <div className='tradepulse__logo'>
-                        <div className='tradepulse__logo-icon'>
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-                            </svg>
+            {/* Clean Top Pill Navigation Bar — No Logo, Brand Name, or Tagline */}
+            <header className='tradepulse__topbar'>
+                <div className='tradepulse__topbar-inner'>
+                    <nav className='tradepulse__pills' aria-label='Workspace navigation'>
+                        <button
+                            type='button'
+                            className={`tradepulse__pill${activeTab === 'journey' ? ' tradepulse__pill--active' : ''}`}
+                            onClick={() => handleTabSelect('journey')}
+                        >
+                            {localize('My Journey')}
+                        </button>
+                        <button
+                            type='button'
+                            className={`tradepulse__pill${activeTab === 'schedule' ? ' tradepulse__pill--active' : ''}`}
+                            onClick={() => handleTabSelect('schedule')}
+                        >
+                            {localize('Master Schedule')}
+                        </button>
+                        <button
+                            type='button'
+                            className={`tradepulse__pill${activeTab === 'performance' ? ' tradepulse__pill--active' : ''}`}
+                            onClick={() => handleTabSelect('performance')}
+                        >
+                            {localize('Performance')}
+                        </button>
+                        <button
+                            type='button'
+                            className={`tradepulse__pill${activeTab === 'account' ? ' tradepulse__pill--active' : ''}`}
+                            onClick={() => handleTabSelect('account')}
+                        >
+                            {localize('Account')}
+                        </button>
+                    </nav>
+
+                    <div className='tradepulse__topbar-right'>
+                        <div className={`tradepulse__live-pill${isConnected ? ' tradepulse__live-pill--on' : ''}`}>
+                            <span className='tradepulse__live-pill-dot' />
+                            <span>{isConnected ? localize('Live') : localize('Offline')}</span>
                         </div>
-                        <div className='tradepulse__logo-text'>
-                            <div className='tradepulse__logo-name'>TradePulse</div>
-                            <div className='tradepulse__logo-tag'>Plan. Track. Perform.</div>
-                        </div>
+
+                        {loginid && (
+                            <div className='tradepulse__acct-chip'>
+                                <span className={`tradepulse__acct-type ${!isVirtual ? 'tradepulse__acct-type--real' : 'tradepulse__acct-type--demo'}`}>
+                                    {!isVirtual ? 'REAL' : 'DEMO'}
+                                </span>
+                                <span className='tradepulse__acct-sep'>•</span>
+                                <span className='tradepulse__acct-id mono'>{loginid}</span>
+                                <span className='tradepulse__acct-sep tradepulse__acct-sep--accent'>•</span>
+                                <span className='tradepulse__acct-bal mono'>{formattedBalance}</span>
+                            </div>
+                        )}
                     </div>
                 </div>
             </header>
-
-            {/* Sub Navigation */}
-            <nav className='tradepulse__subnav'>
-                <button className={`tradepulse__subnav-btn${activeTab === 'journey' ? ' tradepulse__subnav-btn--active' : ''}`} onClick={() => { setActiveTab('journey'); window.location.hash = 'journey'; }}>
-                    {localize('My Journey')}
-                </button>
-                <button className={`tradepulse__subnav-btn${activeTab === 'schedule' ? ' tradepulse__subnav-btn--active' : ''}`} onClick={() => { setActiveTab('schedule'); window.location.hash = 'schedule'; }}>
-                    {localize('Master Schedule')}
-                </button>
-                <button className={`tradepulse__subnav-btn${activeTab === 'performance' ? ' tradepulse__subnav-btn--active' : ''}`} onClick={() => { setActiveTab('performance'); window.location.hash = 'performance'; }}>
-                    {localize('Performance')}
-                </button>
-                <button className={`tradepulse__subnav-btn${activeTab === 'account' ? ' tradepulse__subnav-btn--active' : ''}`} onClick={() => { setActiveTab('account'); window.location.hash = 'account'; }}>
-                    {localize('Account')}
-                </button>
-            </nav>
 
             {/* Main Content */}
             <main className='tradepulse__main'>
@@ -75,7 +120,7 @@ const TradePulseApp = () => {
             </main>
         </div>
     );
-};
+});
 
 const TradePulse = () => {
     return (

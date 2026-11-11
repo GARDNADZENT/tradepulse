@@ -5,6 +5,24 @@ import { LogTypes } from '@/external/bot-skeleton';
 import { Localize, localize } from '@deriv-com/translations';
 import { TFormatMessageProps } from '../journal.types';
 
+const formatContractTypeLabel = (contractType?: string, barrier?: number | string | null) => {
+    const map: Record<string, string> = {
+        DIGITOVER: 'Over',
+        DIGITUNDER: 'Under',
+        DIGITMATCH: 'Matches',
+        DIGITDIFF: 'Differs',
+        DIGITEVEN: 'Even',
+        DIGITODD: 'Odd',
+        CALL: 'Rise',
+        PUT: 'Fall',
+    };
+    const label = (contractType && map[contractType]) || contractType || 'Contract';
+    if (barrier !== null && barrier !== undefined && barrier !== '' && !['DIGITEVEN', 'DIGITODD', 'CALL', 'PUT'].includes(contractType || '')) {
+        return `${label} ${barrier}`;
+    }
+    return label;
+};
+
 const FormatMessage = ({ logType, className, extra }: TFormatMessageProps) => {
     const getLogMessage = () => {
         switch (logType) {
@@ -15,12 +33,22 @@ const FormatMessage = ({ logType, className, extra }: TFormatMessageProps) => {
                 return localize('Resale of this contract is not offered.');
             }
             case LogTypes.PURCHASE: {
-                const { transaction_id } = extra;
+                const { longcode, transaction_id } = extra;
+                if (longcode) {
+                    return (
+                        <Localize
+                            i18n_default_text='<0>Bought</0>: {{longcode}}'
+                            values={{ longcode }}
+                            components={[<Text key={0} size='xxs' styles={{ color: '#38bdf8', fontWeight: 600 }} />]}
+                            options={{ interpolation: { escapeValue: false } }}
+                        />
+                    );
+                }
                 return (
                     <Localize
                         i18n_default_text='<0>Bought</0>: Contract purchased (ID: {{transaction_id}})'
                         values={{ transaction_id }}
-                        components={[<Text key={0} size='xxs' styles={{ color: 'var(--status-info)' }} />]}
+                        components={[<Text key={0} size='xxs' styles={{ color: '#38bdf8', fontWeight: 600 }} />]}
                         options={{ interpolation: { escapeValue: false } }}
                     />
                 );
@@ -43,7 +71,7 @@ const FormatMessage = ({ logType, className, extra }: TFormatMessageProps) => {
                         values={{
                             profit: `${formatMoney(currency, profit, true)} ${getCurrencyDisplayCode(currency)}`,
                         }}
-                        components={[<Text key={0} size='xxs' styles={{ color: 'var(--status-success)' }} />]}
+                        components={[<Text key={0} size='xxs' styles={{ color: '#10b981', fontWeight: 700 }} />]}
                     />
                 );
             }
@@ -55,7 +83,7 @@ const FormatMessage = ({ logType, className, extra }: TFormatMessageProps) => {
                         values={{
                             profit: `${formatMoney(currency, profit, true)} ${getCurrencyDisplayCode(currency)}`,
                         }}
-                        components={[<Text key={0} size='xxs' styles={{ color: 'var(--status-danger)' }} />]}
+                        components={[<Text key={0} size='xxs' styles={{ color: '#ef4444', fontWeight: 700 }} />]}
                     />
                 );
             }
@@ -86,25 +114,68 @@ const FormatMessage = ({ logType, className, extra }: TFormatMessageProps) => {
                     );
                 break;
             }
-            case LogTypes.DIGITS_ANALYSIS: {
-                const { condition, digits, result } = extra;
-                const conditionText = condition === 'ALL_EVEN' ? 'all even' : condition === 'ALL_ODD' ? 'all odd' : condition;
-                const resultText = result ? '✅ TRUE' : '❌ FALSE';
-                const resultColor = result ? 'var(--status-success)' : 'var(--status-danger)';
+            case LogTypes.TICK_DIGITS: {
+                const digitsList = Array.isArray(extra?.digits) ? extra.digits : [];
+                const count = extra?.window_size || digitsList.length || 1;
+                if (count <= 1) {
+                    const singleDigit = digitsList.length ? digitsList[digitsList.length - 1] : '-';
+                    return <span className='journal__tick-digits'>{`Last digit: ${singleDigit}`}</span>;
+                }
                 return (
-                    <Localize
-                        i18n_default_text='Last Digits Analysis Condition: <0>{{condition}}</0> Digits: [{{digits}}] Result: <1>{{result}}</1>'
-                        values={{
-                            condition: conditionText,
-                            digits: digits.join(', '),
-                            result: resultText,
-                        }}
-                        components={[
-                            <Text key={0} size='xxs' styles={{ color: 'var(--status-info)' }} />,
-                            <Text key={1} size='xxs' styles={{ color: resultColor }} />,
-                        ]}
-                        options={{ interpolation: { escapeValue: false } }}
-                    />
+                    <span className='journal__tick-digits'>
+                        {`Last ${count} digits: ${digitsList.join(', ')}`}
+                    </span>
+                );
+            }
+            case LogTypes.DIGITS_ANALYSIS: {
+                const { condition, digits = [], result, summary } = extra;
+                const conditionText =
+                    condition === 'ALL_EVEN' ? 'all even' : condition === 'ALL_ODD' ? 'all odd' : condition;
+                const prefix = summary
+                    ? summary
+                    : digits.length <= 1
+                      ? `Last digit: ${digits[0] ?? '-'} (${conditionText}: `
+                      : `Last ${digits.length} digits: ${digits.join(', ')} (${conditionText}: `;
+                return (
+                    <span className='journal__tick-digits'>
+                        {prefix}
+                        <strong style={{ color: result ? '#10b981' : '#f87171' }}>
+                            {result ? 'TRUE' : 'FALSE'}
+                        </strong>
+                        {summary ? '' : ')'}
+                    </span>
+                );
+            }
+            case LogTypes.VIRTUAL_HOOK: {
+                const event = extra?.event;
+                if (event === 'configured') {
+                    return (
+                        <span className='journal__vh-entry journal__vh-entry--info'>
+                            {`[VIRTUAL HOOK] Active · Start: ${extra?.mode || 'VIRTUAL'} · Enter after ${extra?.enter_losses ?? 2} loss(es) · Return after ${extra?.return_wins ?? 1} virtual win(s)`}
+                        </span>
+                    );
+                }
+                if (event === 'entered_virtual') {
+                    return (
+                        <span className='journal__vh-entry journal__vh-entry--warn'>
+                            {`[VIRTUAL HOOK] ${extra?.enter_losses ?? 2} actual losses reached → Entering VIRTUAL mode`}
+                        </span>
+                    );
+                }
+                const contractDesc = formatContractTypeLabel(extra?.contract_type, extra?.barrier);
+                if (extra?.is_win) {
+                    return (
+                        <span className='journal__vh-entry journal__vh-entry--win'>
+                            {`[VIRTUAL] ${contractDesc} → Digit ${extra?.digit ?? '-'} (Virtual WIN ${extra?.win_progress || '1/1'}${
+                                extra?.switched_to_real ? ' → Switching to REAL' : ''
+                            })`}
+                        </span>
+                    );
+                }
+                return (
+                    <span className='journal__vh-entry journal__vh-entry--loss'>
+                        {`[VIRTUAL] ${contractDesc} → Digit ${extra?.digit ?? '-'} (Virtual LOSS — Staying in VIRTUAL)`}
+                    </span>
                 );
             }
             default:

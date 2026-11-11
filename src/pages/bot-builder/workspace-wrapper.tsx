@@ -3,6 +3,7 @@ import { observer } from 'mobx-react-lite';
 import Flyout from '@/components/flyout';
 import { useStore } from '@/hooks/useStore';
 import StopBotModal from '../dashboard/stop-bot-modal';
+import DigitsOverlay from './digits-overlay';
 import Toolbar from './toolbar';
 import Toolbox from './toolbox';
 import './workspace.scss';
@@ -25,6 +26,7 @@ const WorkspaceWrapper = observer(() => {
             <React.Fragment>
                 <Toolbox />
                 <Toolbar />
+                <DigitsOverlay />
                 <Flyout />
                 <StopBotModal />
             </React.Fragment>

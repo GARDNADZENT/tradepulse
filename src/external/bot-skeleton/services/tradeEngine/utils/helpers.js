@@ -5,6 +5,23 @@ import { localize } from '@deriv-com/translations';
 import { observer as globalObserver } from '../../../utils/observer';
 import { error as logError } from './broadcast';
 
+const DIGIT_BARRIER_CONTRACT_TYPES = ['DIGITOVER', 'DIGITUNDER', 'DIGITMATCH', 'DIGITDIFF'];
+const SELECTED_TICK_CONTRACT_TYPES = ['TICKLOW', 'TICKHIGH'];
+const NO_BARRIER_CONTRACT_TYPES = [
+    'DIGITEVEN',
+    'DIGITODD',
+    'CALL',
+    'PUT',
+    'CALLE',
+    'PUTE',
+    'RUNHIGH',
+    'RUNLOW',
+    'RESETCALL',
+    'RESETPUT',
+    'ASIANU',
+    'ASIAND',
+];
+
 export const tradeOptionToProposal = (trade_option, purchase_reference) =>
     trade_option.contractTypes.map(type => {
         const proposal = {
@@ -22,12 +39,12 @@ export const tradeOptionToProposal = (trade_option, purchase_reference) =>
             proposal: 1,
             underlying_symbol: trade_option.symbol,
         };
-        if (trade_option.prediction !== undefined) {
+        if (SELECTED_TICK_CONTRACT_TYPES.includes(type) && trade_option.prediction !== undefined) {
             proposal.selected_tick = trade_option.prediction;
         }
-        if (!['TICKLOW', 'TICKHIGH'].includes(type) && trade_option.prediction !== undefined) {
+        if (DIGIT_BARRIER_CONTRACT_TYPES.includes(type) && trade_option.prediction !== undefined) {
             proposal.barrier = trade_option.prediction;
-        } else if (trade_option.barrierOffset !== undefined) {
+        } else if (!NO_BARRIER_CONTRACT_TYPES.includes(type) && trade_option.barrierOffset !== undefined) {
             proposal.barrier = trade_option.barrierOffset;
         }
         if (trade_option.secondBarrierOffset !== undefined) {
@@ -58,12 +75,12 @@ export const tradeOptionToBuy = (contract_type, trade_option) => {
             underlying_symbol: trade_option.symbol,
         },
     };
-    if (trade_option.prediction !== undefined) {
+    if (SELECTED_TICK_CONTRACT_TYPES.includes(contract_type) && trade_option.prediction !== undefined) {
         buy.parameters.selected_tick = trade_option.prediction;
     }
-    if (!['TICKLOW', 'TICKHIGH'].includes(contract_type) && trade_option.prediction !== undefined) {
+    if (DIGIT_BARRIER_CONTRACT_TYPES.includes(contract_type) && trade_option.prediction !== undefined) {
         buy.parameters.barrier = trade_option.prediction;
-    } else if (trade_option.barrierOffset !== undefined) {
+    } else if (!NO_BARRIER_CONTRACT_TYPES.includes(contract_type) && trade_option.barrierOffset !== undefined) {
         buy.parameters.barrier = trade_option.barrierOffset;
     }
     if (trade_option.secondBarrierOffset !== undefined) {
