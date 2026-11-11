@@ -488,6 +488,20 @@ export function normalizeDerivContractParams(params: {
             const offset = Number.isFinite(numBarrier) && numBarrier !== 0 ? Math.abs(numBarrier) : 0.5;
             return { apiContractType: 'NOTOUCH', duration: Math.max(5, rawDur), durationUnit: 't', barrier: `+${offset}` };
         }
+        case 'RESETCALL':
+        case 'RESETPUT':
+            return {
+                apiContractType: rawType,
+                duration: Math.min(10, Math.max(5, rawDur)),
+                durationUnit: 't',
+            };
+        case 'RUNHIGH':
+        case 'RUNLOW':
+            return {
+                apiContractType: rawType,
+                duration: Math.min(5, Math.max(2, rawDur)),
+                durationUnit: 't',
+            };
         case 'CALL':
         case 'PUT':
         default:
@@ -532,6 +546,14 @@ function buildFallbackContractLongcode(
             return `Win payout if ${marketName} is strictly higher than entry spot at ${duration} ticks after contract start time.`;
         case 'PUT':
             return `Win payout if ${marketName} is strictly lower than entry spot at ${duration} ticks after contract start time.`;
+        case 'RESETCALL':
+            return `Win payout if ${marketName} is strictly higher than either the entry spot or the spot at reset after ${duration} ticks.`;
+        case 'RESETPUT':
+            return `Win payout if ${marketName} is strictly lower than either the entry spot or the spot at reset after ${duration} ticks.`;
+        case 'RUNHIGH':
+            return `Win payout if every consecutive tick of ${marketName} rises across ${duration} ticks.`;
+        case 'RUNLOW':
+            return `Win payout if every consecutive tick of ${marketName} falls across ${duration} ticks.`;
         default:
             return `Win payout on ${marketName} (${apiContractType}) after ${duration} ticks.`;
     }

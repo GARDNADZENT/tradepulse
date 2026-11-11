@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { api_base } from '@/external/bot-skeleton';
 import chart_api from '@/external/bot-skeleton/services/api/chart-api';
 
-export type TabRecordNamespace = 'dtrader' | 'analysis' | 'ai_bots';
+export type TabRecordNamespace = 'dtrader' | 'analysis' | 'ai_bots' | 'tick_pulse';
 
 export interface TabJournalEntry {
     id: string;
@@ -139,6 +139,14 @@ export function formatTabContractShortLabel(contractType: string, barrier?: stri
             return 'Rise';
         case 'PUT':
             return 'Fall';
+        case 'RESETCALL':
+            return 'Reset Call';
+        case 'RESETPUT':
+            return 'Reset Put';
+        case 'RUNHIGH':
+            return 'Only Ups';
+        case 'RUNLOW':
+            return 'Only Downs';
         case 'CALLE':
             return `Higher${b}`;
         case 'PUTE':

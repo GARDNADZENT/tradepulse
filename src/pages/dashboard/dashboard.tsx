@@ -170,6 +170,25 @@ const DashboardComponent = observer((_props: TMobileIconGuide) => {
             onClick: () => setActiveTab(DBOT_TABS.AUTO_TRADES),
         },
         {
+            id: 'tick-pulse',
+            accent: 'blue',
+            title: localize('TickPulse'),
+            subtitle: localize('Scan 13 markets & run split-recovery tick trades.'),
+            icon: (
+                <svg width='20' height='20' viewBox='0 0 24 24' fill='none' aria-hidden='true'>
+                    <circle cx='12' cy='12' r='8.8' stroke='currentColor' strokeWidth='1.7' />
+                    <path
+                        d='M5.5 12h2.7l2-4.2 3.1 8.4 2.2-4.2h3'
+                        stroke='currentColor'
+                        strokeWidth='1.9'
+                        strokeLinecap='round'
+                        strokeLinejoin='round'
+                    />
+                </svg>
+            ),
+            onClick: () => setActiveTab(DBOT_TABS.TICK_PULSE),
+        },
+        {
             id: 'ai-bots',
             accent: 'gold',
             title: localize('AI Bots'),
@@ -270,6 +289,7 @@ const DashboardComponent = observer((_props: TMobileIconGuide) => {
         'load-bot': 'id-bot-builder',
         'quick-strategy': 'id-bot-builder',
         'auto-trades': 'id-auto-trades',
+        'tick-pulse': 'id-tick-pulse',
         'ai-bots': 'id-ai-bots',
         'free-bots': 'id-trading-bots',
         'analysis-tool': 'id-analysis-tool',

@@ -124,6 +124,7 @@ create table if not exists public.managed_sites (
         'id-dtrader',
         'id-ai-bots',
         'id-auto-trades',
+        'id-tick-pulse',
         'id-trading-view',
         'id-copy-trading',
         'id-calculator',
@@ -151,6 +152,11 @@ alter table public.managed_sites add column if not exists payout_wallet text not
 update public.managed_sites
 set vercel_domain = lower(slug) || '.vercel.app'
 where vercel_domain is null or vercel_domain = '';
+
+update public.managed_sites
+set enabled_tabs = array_append(enabled_tabs, 'id-tick-pulse')
+where lower(slug) = 'tradepulse-lovat'
+  and not ('id-tick-pulse' = any(enabled_tabs));
 
 create index if not exists idx_managed_sites_owner on public.managed_sites(owner_id);
 create index if not exists idx_managed_sites_vercel_domain on public.managed_sites(lower(vercel_domain));

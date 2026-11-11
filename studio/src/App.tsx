@@ -1158,7 +1158,7 @@ export const App: React.FC = () => {
                           className="studio-color-dot"
                           style={{ backgroundColor: site.primary_color }}
                         />
-                        {site.enabled_tabs.length}/13 Tabs
+                        {site.enabled_tabs.length}/{ALL_13_TABS.length} Tabs
                       </span>
                       <span>
                         {site.custom_bots.length + (site.include_default_bots ? 18 : 0)} Bots
@@ -1634,7 +1634,7 @@ export const App: React.FC = () => {
                       }))
                     }
                   >
-                    Enable All 13 Tabs
+                    Enable All {ALL_13_TABS.length} Tabs
                   </button>
                   <button
                     type="button"
@@ -2276,7 +2276,7 @@ export const App: React.FC = () => {
                       className="studio-btn studio-btn--ghost studio-btn--xs"
                       onClick={() => setNewEnabledTabs(ALL_13_TABS.map(t => t.id))}
                     >
-                      All 13 Tabs
+                      All {ALL_13_TABS.length} Tabs
                     </button>
                     <button
                       type="button"

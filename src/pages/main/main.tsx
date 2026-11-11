@@ -52,6 +52,7 @@ const CopyTrading = React.lazy(() => import('../copy-trading/copy-trading'));
 const DigitsAnalysis = React.lazy(() => import('../digits-analysis/digits-analysis'));
 const DTrader = React.lazy(() => import('../dtrader'));
 const FreeBots = React.lazy(() => import('../free-bots/free-bots'));
+const TickPulse = React.lazy(() => import('../tick-pulse'));
 const TradePulse = React.lazy(() =>
     import('../tradepulse').then(mod => ({ default: mod.TradePulse }))
 );
@@ -94,6 +95,7 @@ const AppWrapper = observer(() => {
         'dtrader',
         'ai_bots',
         'auto_trades',
+        'tick_pulse',
         'trading_view',
         'copy_trading',
         'calculator',
@@ -124,6 +126,13 @@ const AppWrapper = observer(() => {
 
     const is_preview_mode = window.location.pathname.includes('/preview');
     const GetHashedValue = (tab: number) => {
+        const searchParams = new URLSearchParams(location.search);
+        const sectionParam = (searchParams.get('section') || '').trim().toLowerCase();
+        if (sectionParam) {
+            const normalizedSection = sectionParam.replace(/-/g, '_');
+            const sectionIdx = hash.indexOf(normalizedSection);
+            if (sectionIdx >= 0) return sectionIdx;
+        }
         const tab_value = location.hash?.split('#')[1];
         if (!tab_value) return is_preview_mode ? BOT_BUILDER : tab;
         const idx = hash.indexOf(String(tab_value));
@@ -233,6 +242,7 @@ const AppWrapper = observer(() => {
             void import('../free-bots/free-bots');
             void import('../dtrader');
             void import('../ai-bots');
+            void import('../tick-pulse');
             void import('../analysis-tool');
         };
         const timer = window.setTimeout(idlePreload, 900);
@@ -251,11 +261,18 @@ const AppWrapper = observer(() => {
             init_render.current = false;
         } else {
             const targetHash = hash[active_tab] || hash[0];
-            if (window.location.hash !== `#${targetHash}`) {
+            const searchParams = new URLSearchParams(window.location.search);
+            let nextSearch = window.location.search;
+            if (searchParams.has('section') && searchParams.get('section') !== targetHash) {
+                searchParams.delete('section');
+                const serialized = searchParams.toString();
+                nextSearch = serialized ? `?${serialized}` : '';
+            }
+            if (window.location.hash !== `#${targetHash}` || nextSearch !== window.location.search) {
                 window.history.replaceState(
                     null,
                     '',
-                    `${window.location.pathname}${window.location.search}#${targetHash}`
+                    `${window.location.pathname}${nextSearch}#${targetHash}`
                 );
             }
         }
@@ -476,7 +493,22 @@ const AppWrapper = observer(() => {
                                 <AutoTrades />
                             </div>
 
-                            {/* 7: TradingView */}
+                            {/* 7: TickPulse */}
+                            <div
+                                label={
+                                    <>
+                                        <svg width='15' height='15' viewBox='0 0 24 24' fill='none'>
+                                            <path d='M12 2a10 10 0 1 0 10 10A10.01 10.01 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8.01 8.01 0 0 1-8 8zm-1.1-5.2L8.4 9.6 6.8 13H4.5v-2h1.1l2.8-5.8 2.6 5.4 2.1-3.8 1.8 3.2h4.6v2h-5.8l-.8-1.4-2 3.6z' />
+                                        </svg>
+                                        <Localize i18n_default_text='TickPulse' />
+                                    </>
+                                }
+                                id='id-tick-pulse'
+                            >
+                                <TickPulse />
+                            </div>
+
+                            {/* 8: TradingView */}
                             <div
                                 label={
                                     <>
