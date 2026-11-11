@@ -52,11 +52,9 @@ export interface TenantSiteConfig {
 const TENANT_CACHE_PREFIX = 'tp_tenant_runtime_cache_v1:';
 const STICKY_SITE_SLUG_KEY = 'tp_active_tenant_slug';
 
-const MASTER_UNTENANTED_HOSTS = new Set([
+const DEV_LOCAL_HOSTS = new Set([
     'localhost',
     '127.0.0.1',
-    'tradepulse-lovat.vercel.app',
-    'tradepulse-tracker2.vercel.app',
 ]);
 
 type Listener = (config: TenantSiteConfig | null) => void;
@@ -68,25 +66,12 @@ const notifyListeners = () => {
     listeners.forEach(fn => fn(activeTenantConfig));
 };
 
-const getRegisteredCallbackHostname = (): string => {
-    const raw = (process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI || '').trim();
-    if (!raw || raw === '🔒') return '';
-    try {
-        return new URL(raw).hostname.toLowerCase();
-    } catch {
-        return '';
-    }
-};
-
 export function isMasterUntenantedHost(hostname: string): boolean {
     const lower = (hostname || '').trim().toLowerCase();
     if (!lower) return true;
-    if (MASTER_UNTENANTED_HOSTS.has(lower)) return true;
+    if (DEV_LOCAL_HOSTS.has(lower)) return true;
     if (lower.endsWith('.e2b.app')) return true;
     if (lower.endsWith('.vercel.app') && lower.includes('-git-')) return true;
-
-    const registeredHost = getRegisteredCallbackHostname();
-    if (registeredHost && lower === registeredHost) return true;
 
     return false;
 }

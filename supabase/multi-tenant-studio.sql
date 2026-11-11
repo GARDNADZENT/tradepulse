@@ -164,6 +164,18 @@ create policy "managed_sites_public_read"
     on public.managed_sites for select
     using (true);
 
+create or replace function public.operator_site_count(p_uid uuid)
+returns integer
+language sql
+security definer
+stable
+set search_path = public
+as $$
+    select count(*)::integer
+    from public.managed_sites
+    where owner_id = p_uid;
+$$;
+
 drop policy if exists "managed_sites_operator_insert" on public.managed_sites;
 create policy "managed_sites_operator_insert"
     on public.managed_sites for insert
@@ -172,8 +184,47 @@ create policy "managed_sites_operator_insert"
         or (
             auth.uid() = owner_id
             and status in ('active', 'maintenance')
+            and public.operator_site_count(auth.uid()) < 1
         )
     );
+
+-- Seed flagship https://tradepulse-lovat.vercel.app/ for the super_admin if present
+insert into public.managed_sites (
+    owner_id,
+    owner_email,
+    slug,
+    vercel_domain,
+    vercel_domain_status,
+    domain_status,
+    status,
+    brand_name,
+    tagline,
+    logo_url,
+    primary_color,
+    secondary_color,
+    use_pooled_oauth,
+    commission_share_pct
+)
+select
+    p.id,
+    p.email,
+    'tradepulse-lovat',
+    'tradepulse-lovat.vercel.app',
+    'live',
+    'live',
+    'active',
+    'TradersPulse',
+    'SMART DERIV TOOLS',
+    '/traderpulse-logo.jpg',
+    '#0066FF',
+    '#050914',
+    true,
+    0
+from public.studio_profiles p
+where p.role = 'super_admin'
+order by p.created_at asc
+limit 1
+on conflict (slug) do nothing;
 
 drop policy if exists "managed_sites_operator_or_admin_update" on public.managed_sites;
 create policy "managed_sites_operator_or_admin_update"

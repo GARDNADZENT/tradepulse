@@ -239,6 +239,67 @@ export async function signOutStudio(): Promise<void> {
   }
 }
 
+export const FLAGSHIP_SUPERADMIN_SLUG = 'tradepulse-lovat';
+export const FLAGSHIP_SUPERADMIN_DOMAIN = 'tradepulse-lovat.vercel.app';
+
+async function ensureSuperAdminFlagshipSite(
+  client: SupabaseClient,
+  user: StudioUser,
+  existingRows: any[]
+): Promise<any[]> {
+  const hasFlagship = existingRows.some(
+    (r: any) =>
+      String(r.slug || '').toLowerCase() === FLAGSHIP_SUPERADMIN_SLUG ||
+      String(r.vercel_domain || '').toLowerCase() === FLAGSHIP_SUPERADMIN_DOMAIN
+  );
+  if (hasFlagship) return existingRows;
+
+  const baseFlagship = {
+    owner_id: user.id,
+    owner_email: user.email || '',
+    slug: FLAGSHIP_SUPERADMIN_SLUG,
+    custom_domain: null,
+    domain_status: 'live',
+    status: 'active',
+    brand_name: 'TradersPulse',
+    tagline: 'SMART DERIV TOOLS',
+    logo_url: '/traderpulse-logo.jpg',
+    primary_color: '#0066FF',
+    secondary_color: '#050914',
+    deriv_app_id: '',
+    use_pooled_oauth: true,
+    deriv_referral_link: '',
+    announcement_text: '',
+    enabled_tabs: ALL_13_TABS.map(t => t.id),
+    social_links: {},
+    include_default_bots: true,
+    commission_share_pct: 0,
+  };
+
+  let { data, error } = await client
+    .from('managed_sites')
+    .insert({
+      ...baseFlagship,
+      vercel_domain: FLAGSHIP_SUPERADMIN_DOMAIN,
+      vercel_domain_status: 'live',
+      payout_method: '',
+      payout_wallet: '',
+    })
+    .select('*')
+    .single();
+
+  if (error && isMissingColumnError(error)) {
+    const retry = await client.from('managed_sites').insert(baseFlagship).select('*').single();
+    data = retry.data;
+    error = retry.error;
+  }
+
+  if (!error && data) {
+    return [data, ...existingRows];
+  }
+  return existingRows;
+}
+
 export async function loadManagedSites(user: StudioUser): Promise<ManagedSite[]> {
   const client = requireSupabase();
 
@@ -248,13 +309,18 @@ export async function loadManagedSites(user: StudioUser): Promise<ManagedSite[]>
     .order('created_at', { ascending: false });
 
   if (user.role !== 'super_admin') {
-    query = query.eq('owner_id', user.id);
+    query = query.eq('owner_id', user.id).limit(1);
   }
 
-  const { data: rows, error } = await query;
+  const { data: rawRows, error } = await query;
   if (error) throw error;
 
-  const siteIds = (rows || []).map((r: any) => r.id);
+  let rows = rawRows || [];
+  if (user.role === 'super_admin') {
+    rows = await ensureSuperAdminFlagshipSite(client, user, rows);
+  }
+
+  const siteIds = rows.map((r: any) => r.id);
   const { data: botRows } =
     siteIds.length > 0
       ? await client
@@ -266,15 +332,16 @@ export async function loadManagedSites(user: StudioUser): Promise<ManagedSite[]>
 
   const platform = await fetchPlatformSettings();
 
-  return (rows || []).map((r: any) => {
+  const mapped: ManagedSite[] = rows.map((r: any) => {
     const slug = String(r.slug);
+    const isFlagship = slug.toLowerCase() === FLAGSHIP_SUPERADMIN_SLUG;
     return {
       id: String(r.id),
       owner_id: String(r.owner_id),
       owner_email: String(r.owner_email || ''),
       slug,
       vercel_domain: String(r.vercel_domain || `${slug}.vercel.app`),
-      vercel_domain_status: r.vercel_domain_status || 'pending',
+      vercel_domain_status: isFlagship ? 'live' : r.vercel_domain_status || 'pending',
       custom_domain: String(r.custom_domain || ''),
       domain_status: r.domain_status || 'verify_dns',
       status: r.status || 'active',
@@ -291,7 +358,9 @@ export async function loadManagedSites(user: StudioUser): Promise<ManagedSite[]>
       enabled_tabs: Array.isArray(r.enabled_tabs) ? r.enabled_tabs : ALL_13_TABS.map(t => t.id),
       social_links: r.social_links || {},
       include_default_bots: r.include_default_bots !== false,
-      commission_share_pct: Number(r.commission_share_pct ?? platform.default_commission_pct),
+      commission_share_pct: Number(
+        r.commission_share_pct ?? (isFlagship ? 0 : platform.default_commission_pct)
+      ),
       payout_method: String(r.payout_method || ''),
       payout_wallet: String(r.payout_wallet || ''),
       custom_bots: (botRows || [])
@@ -309,6 +378,16 @@ export async function loadManagedSites(user: StudioUser): Promise<ManagedSite[]>
       updated_at: r.updated_at,
     };
   });
+
+  if (user.role === 'super_admin') {
+    mapped.sort((a, b) => {
+      if (a.slug === FLAGSHIP_SUPERADMIN_SLUG) return -1;
+      if (b.slug === FLAGSHIP_SUPERADMIN_SLUG) return 1;
+      return 0;
+    });
+  }
+
+  return mapped;
 }
 
 export async function persistManagedSite(site: ManagedSite): Promise<ManagedSite> {

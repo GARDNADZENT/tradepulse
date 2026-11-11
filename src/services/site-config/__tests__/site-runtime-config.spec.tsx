@@ -62,12 +62,12 @@ describe('Multi-Tenant Site Runtime Config, OAuth Relay & Commission Filter', ()
         expect(document.getElementById('tp-tenant-tabs-css')).toBeNull();
     });
 
-    it('treats <slug>.vercel.app sites as active tenant hosts while preserving master hosts', () => {
+    it('treats <slug>.vercel.app sites (including flagship tradepulse-lovat.vercel.app) as managed hosts while preserving local/git-preview hosts', () => {
+        expect(isMasterUntenantedHost('tradepulse-lovat.vercel.app')).toBe(false);
         expect(isMasterUntenantedHost('apex-quant.vercel.app')).toBe(false);
         expect(isMasterUntenantedHost('nairobipips.vercel.app')).toBe(false);
         expect(isMasterUntenantedHost('mybrand.site')).toBe(false);
 
-        expect(isMasterUntenantedHost('tradepulse-lovat.vercel.app')).toBe(true);
         expect(isMasterUntenantedHost('localhost')).toBe(true);
         expect(isMasterUntenantedHost('4003-sandbox.e2b.app')).toBe(true);
         expect(isMasterUntenantedHost('tradepulse-git-arena-user.vercel.app')).toBe(true);

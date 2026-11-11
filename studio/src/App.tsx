@@ -21,6 +21,7 @@ import {
   DEFAULT_PLATFORM_SETTINGS,
   deleteManagedSite,
   fetchPlatformSettings,
+  FLAGSHIP_SUPERADMIN_SLUG,
   getInitialStudioSession,
   isSupabaseConfigured,
   loadCommissionLedger,
@@ -352,6 +353,10 @@ export const App: React.FC = () => {
   };
 
   const openCreateWizard = () => {
+    if (user && user.role !== 'super_admin' && sites.length >= 1) {
+      showToast('Your operator account already has an active trading site.');
+      return;
+    }
     setWizardStep(1);
     setNewBrandName('');
     setNewTagline('SMART DERIV TOOLS');
@@ -906,6 +911,7 @@ export const App: React.FC = () => {
     );
   }
 
+  const canCreateMoreSites = user.role === 'super_admin' || sites.length === 0;
   const previewIframeUrl = selectedSite ? buildPreviewTenantUrl(selectedSite) : '';
   const openExternalTenantUrl = selectedSite ? buildLiveTenantUrl(selectedSite) : '#';
   const selectedSiteStats = selectedSite
@@ -938,7 +944,9 @@ export const App: React.FC = () => {
             onClick={() => handleSidebarNav('sites')}
           >
             <span className="studio-nav-item__dot" />
-            <span>Sites ({sites.length})</span>
+            <span>
+              {user.role === 'super_admin' ? `All Sites (${sites.length})` : 'My Trading Site'}
+            </span>
           </button>
           <button
             type="button"
@@ -1039,13 +1047,15 @@ export const App: React.FC = () => {
             >
               Refresh Ledger
             </button>
-            <button
-              type="button"
-              className="studio-btn studio-btn--primary"
-              onClick={openCreateWizard}
-            >
-              + Create New Site
-            </button>
+            {canCreateMoreSites && (
+              <button
+                type="button"
+                className="studio-btn studio-btn--primary"
+                onClick={openCreateWizard}
+              >
+                {user.role === 'super_admin' ? '+ Create New Site' : '+ Create My Trading Site'}
+              </button>
+            )}
           </div>
         </header>
 
@@ -1057,36 +1067,45 @@ export const App: React.FC = () => {
             <h2>
               {user.role === 'super_admin'
                 ? `All Platform Sites (${sites.length})`
-                : `Your Managed Sites (${sites.length})`}
+                : 'Your Trading Site'}
             </h2>
-            {sites.length > 0 && <span>Each site gets its own dedicated .vercel.app URL</span>}
+            {sites.length > 0 && (
+              <span>
+                {user.role === 'super_admin'
+                  ? 'Super-Admin view: Flagship + all tenant sites'
+                  : 'Your dedicated .vercel.app trading platform'}
+              </span>
+            )}
           </div>
 
           {sites.length === 0 ? (
             <div className="studio-empty-state">
-              <h3>No trading sites created yet</h3>
+              <h3>No trading site created yet</h3>
               <p>
-                Click <strong>+ Create New Site</strong> to choose your <code>.vercel.app</code> URL,
-                logo, colors, 13 feature tabs, XML bots, and commission payout wallet.
+                Click <strong>+ Create My Trading Site</strong> to choose your{' '}
+                <code>.vercel.app</code> URL, logo, colors, 13 feature tabs, XML bots, and
+                commission payout wallet.
               </p>
               <button
                 type="button"
                 className="studio-btn studio-btn--primary"
                 onClick={openCreateWizard}
               >
-                + Create Your First Site
+                + Create My Trading Site
               </button>
             </div>
           ) : (
             <div className="studio-sites-grid">
               {sites.map(site => {
                 const isSelected = selectedSite?.id === site.id;
+                const isFlagship = site.slug === FLAGSHIP_SUPERADMIN_SLUG;
                 const stats = siteStatsMap.get(site.id);
                 const publicHost =
                   site.custom_domain && site.domain_status === 'live'
                     ? site.custom_domain
                     : site.vercel_domain || `${site.slug}.vercel.app`;
                 const isUrlLive =
+                  isFlagship ||
                   (site.custom_domain && site.domain_status === 'live') ||
                   site.vercel_domain_status === 'live';
                 const badgeLabel =
@@ -1094,6 +1113,8 @@ export const App: React.FC = () => {
                     ? 'SUSPENDED'
                     : site.status === 'maintenance'
                     ? 'MAINTENANCE'
+                    : isFlagship
+                    ? 'SUPER-ADMIN MAIN'
                     : isUrlLive
                     ? 'LIVE SSL'
                     : 'PENDING URL';
@@ -1120,7 +1141,12 @@ export const App: React.FC = () => {
                         />
                         <div>
                           <strong>{publicHost}</strong>
-                          <span>{site.brand_name}</span>
+                          <span>
+                            {site.brand_name}
+                            {user.role === 'super_admin' && site.owner_email
+                              ? ` · ${site.owner_email}`
+                              : ''}
+                          </span>
                         </div>
                       </div>
                       <span className={`studio-status-pill ${badgeClass}`}>{badgeLabel}</span>
@@ -1137,7 +1163,11 @@ export const App: React.FC = () => {
                       <span>
                         {site.custom_bots.length + (site.include_default_bots ? 18 : 0)} Bots
                       </span>
-                      <span>{formatUsd(stats?.unpaidOperator || 0)} Unpaid</span>
+                      <span>
+                        {isFlagship
+                          ? `${formatUsd(stats?.adminNet || 0)} Net`
+                          : `${formatUsd(stats?.unpaidOperator || 0)} Unpaid`}
+                      </span>
                     </div>
                   </button>
                 );
@@ -1264,9 +1294,13 @@ export const App: React.FC = () => {
                         paidOperator: 0,
                         adminNet: 0,
                       };
+                      const isFlagshipOrAdminSite =
+                        s.slug === FLAGSHIP_SUPERADMIN_SLUG || s.owner_id === user.id;
                       const siteUrl = buildLiveTenantUrl(s);
-                      const hasUnpaid = st.unpaidOperator > 0;
-                      const walletDisplay = s.payout_wallet
+                      const hasUnpaid = !isFlagshipOrAdminSite && st.unpaidOperator > 0;
+                      const walletDisplay = isFlagshipOrAdminSite
+                        ? 'Super-Admin Direct (100% Net)'
+                        : s.payout_wallet
                         ? `${s.payout_method ? `${s.payout_method}: ` : ''}${s.payout_wallet}`
                         : 'Not set yet';
 
@@ -1287,16 +1321,30 @@ export const App: React.FC = () => {
                           <td>{walletDisplay}</td>
                           <td>{st.tradesCount}</td>
                           <td>
-                            <strong>{formatUsd(st.unpaidOperator)}</strong>
-                            {st.paidOperator > 0 && (
-                              <div className="studio-muted">Paid: {formatUsd(st.paidOperator)}</div>
+                            {isFlagshipOrAdminSite ? (
+                              <span className="studio-muted">
+                                Net: {formatUsd(st.adminNet)}
+                              </span>
+                            ) : (
+                              <>
+                                <strong>{formatUsd(st.unpaidOperator)}</strong>
+                                {st.paidOperator > 0 && (
+                                  <div className="studio-muted">
+                                    Paid: {formatUsd(st.paidOperator)}
+                                  </div>
+                                )}
+                              </>
                             )}
                           </td>
                           <td>
                             <span
                               className={`studio-status-pill ${hasUnpaid ? 'is-warn' : 'is-live'}`}
                             >
-                              {hasUnpaid ? 'UNPAID' : 'PAID'}
+                              {isFlagshipOrAdminSite
+                                ? 'MAIN SITE'
+                                : hasUnpaid
+                                ? 'UNPAID'
+                                : 'PAID'}
                             </span>
                           </td>
                           <td>
@@ -1311,18 +1359,20 @@ export const App: React.FC = () => {
                                   {markingPaidSiteId === s.id ? 'Saving…' : 'Mark Paid'}
                                 </button>
                               )}
-                              <button
-                                type="button"
-                                className="studio-btn studio-btn--ghost studio-btn--xs"
-                                onClick={() =>
-                                  void handleAdminStatusChange(
-                                    s,
-                                    s.status === 'suspended' ? 'active' : 'suspended'
-                                  )
-                                }
-                              >
-                                {s.status === 'suspended' ? 'Activate' : 'Suspend'}
-                              </button>
+                              {s.slug !== FLAGSHIP_SUPERADMIN_SLUG && (
+                                <button
+                                  type="button"
+                                  className="studio-btn studio-btn--ghost studio-btn--xs"
+                                  onClick={() =>
+                                    void handleAdminStatusChange(
+                                      s,
+                                      s.status === 'suspended' ? 'active' : 'suspended'
+                                    )
+                                  }
+                                >
+                                  {s.status === 'suspended' ? 'Activate' : 'Suspend'}
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1371,13 +1421,15 @@ export const App: React.FC = () => {
                 </p>
               </div>
               <div className="studio-panel__header-btns">
-                <button
-                  type="button"
-                  className="studio-btn studio-btn--danger studio-btn--sm"
-                  onClick={handleDeleteCurrentSite}
-                >
-                  Delete Site
-                </button>
+                {selectedSite.slug !== FLAGSHIP_SUPERADMIN_SLUG && (
+                  <button
+                    type="button"
+                    className="studio-btn studio-btn--danger studio-btn--sm"
+                    onClick={handleDeleteCurrentSite}
+                  >
+                    Delete Site
+                  </button>
+                )}
                 <button
                   type="button"
                   className="studio-btn studio-btn--primary"
