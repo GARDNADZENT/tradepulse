@@ -210,8 +210,10 @@ create policy "managed_site_bots_owner_or_admin_write"
 -- 4. Platform-Wide Super-Admin Settings (Pooled Deriv OAuth App IDs & Default Commission)
 create table if not exists public.studio_platform_settings (
     id integer primary key default 1 check (id = 1),
-    pooled_deriv_app_id text not null default '36544',
+    pooled_deriv_app_id text not null default '',
     default_commission_share_pct numeric not null default 20,
+    base_domain text not null default 'traderspulse.site',
+    allow_public_signups boolean not null default true,
     tenant_template_base_url text not null default '',
     updated_at timestamptz not null default now()
 );
@@ -229,8 +231,8 @@ create policy "studio_platform_settings_admin_write"
     using (public.is_studio_super_admin())
     with check (public.is_studio_super_admin());
 
-insert into public.studio_platform_settings (id, pooled_deriv_app_id, default_commission_share_pct)
-values (1, '36544', 20)
+insert into public.studio_platform_settings (id, pooled_deriv_app_id, default_commission_share_pct, base_domain, allow_public_signups)
+values (1, '', 20, 'traderspulse.site', true)
 on conflict (id) do nothing;
 
 -- 5. Supabase Storage Bucket for Tenant Logos & Bot XML Assets

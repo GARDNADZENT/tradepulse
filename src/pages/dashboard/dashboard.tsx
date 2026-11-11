@@ -271,7 +271,7 @@ const DashboardComponent = observer((_props: TMobileIconGuide) => {
         'quick-strategy': 'id-bot-builder',
         'auto-trades': 'id-auto-trades',
         'ai-bots': 'id-ai-bots',
-        'free-bots': 'id-free-bots',
+        'free-bots': 'id-trading-bots',
         'analysis-tool': 'id-analysis-tool',
         dtrader: 'id-dtrader',
         'google-drive': 'id-bot-builder',

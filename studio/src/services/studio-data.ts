@@ -26,7 +26,7 @@ const DEFAULT_REFERRAL =
   'https://track.deriv.com/_1mHiO0UpCX6NhxmBqQyZL2Nd7ZgqdRLk/1/';
 
 export const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = {
-  pooled_deriv_app_id: process.env.STUDIO_POOLED_DERIV_APP_ID || '36544',
+  pooled_deriv_app_id: process.env.STUDIO_POOLED_DERIV_APP_ID || '',
   default_commission_pct: 20,
   base_domain: process.env.STUDIO_BASE_DOMAIN || 'traderspulse.site',
   allow_public_signups: true,
@@ -93,7 +93,7 @@ const SEED_SANDBOX_SITES: ManagedSite[] = [
     enabled_tabs: [
       'id-dbot-dashboard',
       'id-bot-builder',
-      'id-free-bots',
+      'id-trading-bots',
       'id-ai-bots',
       'id-analysis-tool',
       'id-dtrader',
@@ -162,8 +162,8 @@ export async function fetchPlatformSettings(): Promise<PlatformSettings> {
     .maybeSingle();
   if (!data) return DEFAULT_PLATFORM_SETTINGS;
   return {
-    pooled_deriv_app_id: String(data.pooled_deriv_app_id || '36544'),
-    default_commission_pct: Number(data.default_commission_pct ?? 20),
+    pooled_deriv_app_id: String(data.pooled_deriv_app_id || DEFAULT_PLATFORM_SETTINGS.pooled_deriv_app_id || ''),
+    default_commission_pct: Number(data.default_commission_share_pct ?? data.default_commission_pct ?? 20),
     base_domain: String(data.base_domain || 'traderspulse.site'),
     allow_public_signups: data.allow_public_signups !== false,
   };
@@ -177,7 +177,7 @@ export async function savePlatformSettings(next: PlatformSettings): Promise<void
   await studioSupabase.from('studio_platform_settings').upsert({
     id: 1,
     pooled_deriv_app_id: next.pooled_deriv_app_id,
-    default_commission_pct: next.default_commission_pct,
+    default_commission_share_pct: next.default_commission_pct,
     base_domain: next.base_domain,
     allow_public_signups: next.allow_public_signups,
   });
@@ -545,16 +545,16 @@ export function createBlankManagedSite(
 ): ManagedSite {
   const tabsByPreset: Record<'full' | 'bots_only' | 'pro_desk', string[]> = {
     full: ALL_13_TABS.map(t => t.id),
-    bots_only: ['id-dbot-dashboard', 'id-bot-builder', 'id-free-bots', 'id-ai-bots', 'id-tutorials'],
+    bots_only: ['id-dbot-dashboard', 'id-bot-builder', 'id-ai-developer', 'id-trading-bots', 'id-ai-bots'],
     pro_desk: [
       'id-dbot-dashboard',
       'id-ai-bots',
-      'id-charts',
+      'id-trading-view',
       'id-analysis-tool',
-      'id-signals',
+      'id-digits-analysis',
       'id-dtrader',
-      'id-edge-finder',
       'id-copy-trading',
+      'id-tradepulse',
     ],
   };
 

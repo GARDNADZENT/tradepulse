@@ -74,17 +74,17 @@ export interface FeatureTabMeta {
 export const ALL_13_TABS: FeatureTabMeta[] = [
   { id: 'id-dbot-dashboard', index: 0, label: 'Dashboard', badge: 'Core', description: 'Welcome hero, quick launch tiles & reviews' },
   { id: 'id-bot-builder', index: 1, label: 'Bot Builder', badge: 'Blockly', description: 'Visual XML Blockly strategy builder & RunPanel' },
-  { id: 'id-free-bots', index: 2, label: 'Free Bots', badge: 'Catalog', description: '18 built-in bots + your uploaded XML strategies' },
-  { id: 'id-ai-bots', index: 3, label: 'AI Bots', badge: 'Scanner', description: '7 AI strategies + live in-page AI Bot Scanner' },
-  { id: 'id-charts', index: 4, label: 'Charts', badge: 'SmartCharts', description: 'Real-time Deriv synthetic & forex charts' },
-  { id: 'id-tutorials', index: 5, label: 'Tutorials', badge: 'Docs', description: 'Video & step-by-step trading guides' },
-  { id: 'id-analysis-tool', index: 6, label: 'Analysis Tool', badge: 'Digits', description: 'Even/Odd, Over/Under & Rise/Fall live execution' },
-  { id: 'id-signals', index: 7, label: 'Signals', badge: 'Live', description: 'Automated synthetic index signal scanner' },
-  { id: 'id-dtrader', index: 8, label: 'DTrader', badge: 'Manual', description: 'Instant Accumulators, Digits & Options trading' },
-  { id: 'id-edge-finder', index: 9, label: 'Edge Finder', badge: 'Quant', description: 'Statistical volatility & digit streak scanner' },
-  { id: 'id-tradepulse', index: 10, label: 'TradePulse', badge: 'Risk', description: 'Compounding plan, risk calculator & analytics' },
-  { id: 'id-auto-trades', index: 11, label: 'Auto Trades', badge: 'Multi-Rule', description: 'Automated multi-condition trigger engine' },
-  { id: 'id-copy-trading', index: 12, label: 'Copy Trading', badge: 'V2+V3', description: 'Master-to-follower real-time trade mirroring' },
+  { id: 'id-ai-developer', index: 2, label: 'AI Developer', badge: 'GenAI', description: 'Generate & customize Blockly strategies with AI' },
+  { id: 'id-trading-bots', index: 3, label: 'Free Bots', badge: 'Catalog', description: '18 built-in bots + your uploaded XML strategies' },
+  { id: 'id-dtrader', index: 4, label: 'DTrader', badge: 'Manual', description: 'Instant Accumulators, Digits & Options trading' },
+  { id: 'id-ai-bots', index: 5, label: 'AI Bots', badge: 'Scanner', description: '7 AI strategies + live in-page AI Bot Scanner' },
+  { id: 'id-auto-trades', index: 6, label: 'Auto Trades', badge: 'Multi-Rule', description: 'Automated multi-condition trigger engine' },
+  { id: 'id-trading-view', index: 7, label: 'TradingView', badge: 'Charts', description: 'Real-time Deriv synthetic & forex charts' },
+  { id: 'id-copy-trading', index: 8, label: 'Copy Trading', badge: 'V2+V3', description: 'Master-to-follower real-time trade mirroring' },
+  { id: 'id-calculator', index: 9, label: 'Risk Calculator', badge: 'Risk', description: 'Martingale & compounding stake planner' },
+  { id: 'id-analysis-tool', index: 10, label: 'Analysis Tool', badge: 'Digits', description: 'Even/Odd, Over/Under & Rise/Fall live execution' },
+  { id: 'id-digits-analysis', index: 11, label: 'Digits Analysis', badge: 'Quant', description: 'Statistical volatility & digit streak heatmap' },
+  { id: 'id-tradepulse', index: 12, label: 'TradePulse', badge: 'Suite', description: 'Compounding plan, master schedule & analytics' },
 ];
 
 export const COLOR_SWATCHES = [

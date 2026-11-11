@@ -203,7 +203,10 @@ export const generateOAuthURL = async (prompt?: string): Promise<string> => {
         if (prompt === 'registration') {
             return getTenantReferralLink();
         }
-        const redirectUri = sanitizeEnvValue(process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI) || window.location.origin;
+        const hasCustomTenantAppId = Boolean(sanitizeEnvValue(getActiveTenantConfig()?.deriv_app_id));
+        const redirectUri = hasCustomTenantAppId
+            ? window.location.origin
+            : sanitizeEnvValue(process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI) || window.location.origin;
         const clientId = getAppId();
         if (!clientId) return '';
 

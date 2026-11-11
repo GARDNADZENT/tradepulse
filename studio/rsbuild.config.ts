@@ -30,7 +30,13 @@ export default defineConfig({
           )
         ),
         STUDIO_TENANT_RUNTIME_URL: JSON.stringify(cleanEnv(process.env.STUDIO_TENANT_RUNTIME_URL)),
-        STUDIO_POOLED_DERIV_APP_ID: JSON.stringify(cleanEnv(process.env.STUDIO_POOLED_DERIV_APP_ID) || '36544'),
+        STUDIO_POOLED_DERIV_APP_ID: JSON.stringify(
+          cleanEnv(
+            process.env.STUDIO_POOLED_DERIV_APP_ID ||
+              process.env.NEXT_PUBLIC_DERIV_APP_ID ||
+              process.env.DERIV_APP_ID
+          )
+        ),
         STUDIO_BASE_DOMAIN: JSON.stringify(cleanEnv(process.env.STUDIO_BASE_DOMAIN) || 'traderspulse.site'),
       },
     },

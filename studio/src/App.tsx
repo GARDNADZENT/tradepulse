@@ -813,7 +813,7 @@ export const App: React.FC = () => {
               </div>
               <div className="studio-kpi">
                 <span>Pooled Deriv App ID</span>
-                <strong>#{platformSettings.pooled_deriv_app_id}</strong>
+                <strong>{platformSettings.pooled_deriv_app_id || 'Inherited (Env)'}</strong>
               </div>
             </div>
 
@@ -1151,9 +1151,9 @@ export const App: React.FC = () => {
                         enabled_tabs: [
                           'id-dbot-dashboard',
                           'id-bot-builder',
-                          'id-free-bots',
+                          'id-ai-developer',
+                          'id-trading-bots',
                           'id-ai-bots',
-                          'id-tutorials',
                         ],
                       }))
                     }
@@ -1169,9 +1169,9 @@ export const App: React.FC = () => {
                         enabled_tabs: [
                           'id-dbot-dashboard',
                           'id-ai-bots',
-                          'id-charts',
+                          'id-trading-view',
                           'id-analysis-tool',
-                          'id-signals',
+                          'id-digits-analysis',
                           'id-dtrader',
                           'id-copy-trading',
                         ],

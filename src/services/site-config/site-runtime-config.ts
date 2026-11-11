@@ -275,7 +275,7 @@ async function fetchSupabaseTenantSite(
             secondary_color: String(siteRow.secondary_color || '#050914'),
             deriv_app_id: String(siteRow.deriv_app_id || ''),
             use_pooled_oauth: Boolean(siteRow.use_pooled_oauth),
-            pooled_deriv_app_id: String(platformRow?.pooled_deriv_app_id || '36544'),
+            pooled_deriv_app_id: String(platformRow?.pooled_deriv_app_id || ''),
             deriv_referral_link: String(siteRow.deriv_referral_link || ''),
             announcement_text: String(siteRow.announcement_text || ''),
             enabled_tabs: Array.isArray(siteRow.enabled_tabs) ? siteRow.enabled_tabs : TAB_IDS,
