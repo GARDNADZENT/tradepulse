@@ -148,9 +148,11 @@ export function formatTabContractShortLabel(contractType: string, barrier?: stri
         case 'RUNLOW':
             return 'Only Downs';
         case 'CALLE':
-            return `Higher${b}`;
+            return barrier ? `Higher${b}` : 'Rise =';
         case 'PUTE':
-            return `Lower${b}`;
+            return barrier ? `Lower${b}` : 'Fall =';
+        case 'ACCU':
+            return 'Accumulator';
         case 'ONETOUCH':
             return `Touch${b}`;
         case 'NOTOUCH':
