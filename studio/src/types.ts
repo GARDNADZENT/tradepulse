@@ -59,6 +59,7 @@ export interface PlatformSettings {
   default_commission_pct: number;
   base_domain: string;
   allow_public_signups: boolean;
+  tenant_template_base_url: string;
 }
 
 export interface FeatureTabMeta {

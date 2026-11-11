@@ -10,6 +10,7 @@ import {
 } from './types';
 import {
   buildLiveTenantUrl,
+  buildPreviewTenantUrl,
   connectedSupabaseHost,
   createBlankManagedSite,
   DEFAULT_PLATFORM_SETTINGS,
@@ -649,8 +650,12 @@ export const App: React.FC = () => {
     );
   }
 
-  const previewIframeUrl = selectedSite ? buildLiveTenantUrl(selectedSite) : '';
-  const openExternalTenantUrl = selectedSite ? buildLiveTenantUrl(selectedSite) : '#';
+  const previewIframeUrl = selectedSite
+    ? buildPreviewTenantUrl(selectedSite, platformSettings)
+    : '';
+  const openExternalTenantUrl = selectedSite
+    ? buildLiveTenantUrl(selectedSite, platformSettings)
+    : '#';
 
   // =========================================================================
   // AUTHENTICATED SITE STUDIO CONTROL PLANE
@@ -902,7 +907,18 @@ export const App: React.FC = () => {
               </div>
             </div>
 
-            <div className="studio-form-grid studio-form-grid--3">
+            <div className="studio-form-grid">
+              <label className="studio-field">
+                <span>Tenant Template Runtime URL (Cloned Base App)</span>
+                <input
+                  type="url"
+                  value={platformSettings.tenant_template_base_url}
+                  onChange={e =>
+                    setPlatformSettings(p => ({ ...p, tenant_template_base_url: e.target.value }))
+                  }
+                  placeholder="https://tradepulse-lovat.vercel.app"
+                />
+              </label>
               <label className="studio-field">
                 <span>Pooled Instant Deriv OAuth App ID</span>
                 <input

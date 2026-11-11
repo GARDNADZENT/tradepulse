@@ -34,11 +34,15 @@ if (typeof window !== 'undefined') {
   } catch {}
 }
 
+export const DEFAULT_TENANT_TEMPLATE_URL = 'https://tradepulse-lovat.vercel.app';
+
 export const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = {
   pooled_deriv_app_id: process.env.STUDIO_POOLED_DERIV_APP_ID || '',
   default_commission_pct: 20,
   base_domain: process.env.STUDIO_BASE_DOMAIN || 'traderspulse.site',
   allow_public_signups: true,
+  tenant_template_base_url:
+    (process.env.STUDIO_TENANT_RUNTIME_URL || '').trim() || DEFAULT_TENANT_TEMPLATE_URL,
 };
 
 function requireSupabase(): SupabaseClient {
@@ -67,6 +71,9 @@ export async function fetchPlatformSettings(): Promise<PlatformSettings> {
     ),
     base_domain: String(data.base_domain || DEFAULT_PLATFORM_SETTINGS.base_domain),
     allow_public_signups: data.allow_public_signups !== false,
+    tenant_template_base_url: String(
+      data.tenant_template_base_url || DEFAULT_PLATFORM_SETTINGS.tenant_template_base_url
+    ).replace(/\/$/, ''),
   };
 }
 
@@ -78,6 +85,9 @@ export async function savePlatformSettings(next: PlatformSettings): Promise<void
     default_commission_share_pct: next.default_commission_pct,
     base_domain: next.base_domain,
     allow_public_signups: next.allow_public_signups,
+    tenant_template_base_url: (
+      next.tenant_template_base_url || DEFAULT_TENANT_TEMPLATE_URL
+    ).replace(/\/$/, ''),
   });
   if (error) throw error;
 }
@@ -175,6 +185,28 @@ export async function resendConfirmationEmail(email: string): Promise<void> {
 
 export async function signInWithGoogleOAuth(): Promise<void> {
   const client = requireSupabase();
+
+  // Pre-flight check against Supabase Auth settings so clicking Google before
+  // enabling the Google provider in Supabase never navigates to raw 400 JSON.
+  try {
+    const settingsResp = await fetch(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/settings`, {
+      headers: { apikey: supabaseKey },
+    });
+    if (settingsResp.ok) {
+      const settings = await settingsResp.json();
+      if (settings?.external && settings.external.google === false) {
+        const callbackUrl = `${supabaseUrl.replace(/\/$/, '')}/auth/v1/callback`;
+        throw new Error(
+          `Google Sign-In is not enabled in your Supabase project yet. Enable it in Supabase Dashboard → Authentication → Providers → Google (Callback URL: ${callbackUrl}), or sign in with Email & Password below.`
+        );
+      }
+    }
+  } catch (err: any) {
+    if (err?.message?.includes('Google Sign-In is not enabled')) {
+      throw err;
+    }
+  }
+
   const { error } = await client.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo: window.location.origin },
@@ -341,28 +373,39 @@ export async function uploadLogoAsset(file: File, userId: string): Promise<strin
   return data.publicUrl;
 }
 
-export function resolveTenantRuntimeBaseUrl(): string {
+export function resolveTenantRuntimeBaseUrl(platform?: PlatformSettings): string {
   const configured = (process.env.STUDIO_TENANT_RUNTIME_URL || '').trim();
   if (configured) return configured.replace(/\/$/, '');
 
-  if (typeof window === 'undefined') return 'http://localhost:4003';
-  const { protocol, hostname } = window.location;
+  if (typeof window !== 'undefined') {
+    const { protocol, hostname } = window.location;
 
-  const e2bMatch = hostname.match(/^4004-(.+)\.e2b\.app$/i);
-  if (e2bMatch) {
-    return `${protocol}//4003-${e2bMatch[1]}.e2b.app`;
+    const e2bMatch = hostname.match(/^4004-(.+)\.e2b\.app$/i);
+    if (e2bMatch) {
+      return `${protocol}//4003-${e2bMatch[1]}.e2b.app`;
+    }
+
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return `${protocol}//${hostname}:4003`;
+    }
   }
 
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return `${protocol}//${hostname}:4003`;
-  }
+  const platformTemplate = (platform?.tenant_template_base_url || '').trim();
+  if (platformTemplate) return platformTemplate.replace(/\/$/, '');
 
-  return `${protocol}//${hostname}`;
+  return DEFAULT_TENANT_TEMPLATE_URL;
 }
 
-export function buildLiveTenantUrl(site: ManagedSite): string {
-  const base = resolveTenantRuntimeBaseUrl();
+export function buildPreviewTenantUrl(site: ManagedSite, platform?: PlatformSettings): string {
+  const base = resolveTenantRuntimeBaseUrl(platform);
   return `${base}/?site=${encodeURIComponent(site.slug)}`;
+}
+
+export function buildLiveTenantUrl(site: ManagedSite, platform?: PlatformSettings): string {
+  if (site.custom_domain && site.domain_status === 'live') {
+    return `https://${site.custom_domain.replace(/^https?:\/\//, '').replace(/\/$/, '')}`;
+  }
+  return buildPreviewTenantUrl(site, platform);
 }
 
 export function createBlankManagedSite(

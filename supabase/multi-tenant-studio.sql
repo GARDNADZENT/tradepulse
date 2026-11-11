@@ -230,7 +230,7 @@ create table if not exists public.studio_platform_settings (
     default_commission_share_pct numeric not null default 20,
     base_domain text not null default 'traderspulse.site',
     allow_public_signups boolean not null default true,
-    tenant_template_base_url text not null default '',
+    tenant_template_base_url text not null default 'https://tradepulse-lovat.vercel.app',
     updated_at timestamptz not null default now()
 );
 
@@ -247,9 +247,28 @@ create policy "studio_platform_settings_admin_write"
     using (public.is_studio_super_admin())
     with check (public.is_studio_super_admin());
 
-insert into public.studio_platform_settings (id, pooled_deriv_app_id, default_commission_share_pct, base_domain, allow_public_signups)
-values (1, '', 20, 'traderspulse.site', true)
-on conflict (id) do nothing;
+insert into public.studio_platform_settings (
+    id,
+    pooled_deriv_app_id,
+    default_commission_share_pct,
+    base_domain,
+    allow_public_signups,
+    tenant_template_base_url
+)
+values (
+    1,
+    '',
+    20,
+    'traderspulse.site',
+    true,
+    'https://tradepulse-lovat.vercel.app'
+)
+on conflict (id) do update
+set tenant_template_base_url = case
+    when public.studio_platform_settings.tenant_template_base_url = ''
+        then excluded.tenant_template_base_url
+    else public.studio_platform_settings.tenant_template_base_url
+end;
 
 -- 5. Supabase Storage Bucket & Policies for Tenant Logos (`studio-assets`)
 insert into storage.buckets (id, name, public)

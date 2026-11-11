@@ -51,8 +51,17 @@ export default defineConfig({
         GD_CLIENT_ID: JSON.stringify(cleanEnv(process.env.GD_CLIENT_ID)),
         GD_APP_ID: JSON.stringify(cleanEnv(process.env.GD_APP_ID)),
         GD_API_KEY: JSON.stringify(cleanEnv(process.env.GD_API_KEY)),
-        SUPABASE_URL: JSON.stringify(cleanEnv(process.env.SUPABASE_URL)),
-        SUPABASE_PUBLISHABLE_KEY: JSON.stringify(cleanEnv(process.env.SUPABASE_PUBLISHABLE_KEY)),
+        SUPABASE_URL: JSON.stringify(
+          cleanEnv(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)
+        ),
+        SUPABASE_PUBLISHABLE_KEY: JSON.stringify(
+          cleanEnv(
+            process.env.SUPABASE_PUBLISHABLE_KEY ||
+              process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+              process.env.SUPABASE_ANON_KEY ||
+              process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+          )
+        ),
       },
     },
     alias: {
