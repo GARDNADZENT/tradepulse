@@ -5,9 +5,6 @@
  *   - VERCEL_API_TOKEN: Vercel Personal/Team Access Token
  *   - VERCEL_TENANT_PROJECT_ID: Project ID or name of the deployed TradersPulse Tenant Runtime
  *   - VERCEL_TEAM_ID: (Optional) Vercel Team ID (`team_...`)
- *
- * When VERCEL_API_TOKEN is not configured yet, returns realistic DNS instructions
- * (`A @ -> 76.76.21.21` / `CNAME -> cname.vercel-dns.com`) so operators can test locally.
  */
 
 const FORBIDDEN_TRADEMARKS = ['deriv', 'binary'];
@@ -20,7 +17,7 @@ function validateDomainName(rawDomain) {
     .replace(/\/.*$/, '');
 
   if (!cleaned || !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(cleaned)) {
-    return { valid: false, domain: cleaned, error: 'Enter a valid domain name (e.g. alphadigits.site or app.mybrand.com).' };
+    return { valid: false, domain: cleaned, error: 'Enter a valid domain name (e.g. mybrand.site or app.mybrand.com).' };
   }
 
   for (const word of FORBIDDEN_TRADEMARKS) {
@@ -66,18 +63,12 @@ module.exports = async function handler(req, res) {
   const dnsRecords = buildDnsRecords(domain);
 
   if (!token || !projectId) {
-    const action = req.body?.action || req.method;
-    const simulatedVerified = action === 'verify';
-    return res.status(200).json({
-      ok: true,
-      simulated: true,
+    return res.status(503).json({
+      ok: false,
       domain,
-      verified: simulatedVerified,
-      domain_status: simulatedVerified ? 'live' : 'verify_dns',
       dns_records: dnsRecords,
-      message: simulatedVerified
-        ? 'Domain verified & Let’s Encrypt SSL active (Sandbox simulation — add VERCEL_API_TOKEN on Vercel for live edge provisioning).'
-        : 'Point these DNS records at your registrar, then click Verify DNS & Issue SSL.',
+      error:
+        'Missing VERCEL_API_TOKEN or VERCEL_TENANT_PROJECT_ID in your Studio Vercel Environment Variables. Add both and redeploy to attach and verify custom domains.',
     });
   }
 
@@ -102,6 +93,7 @@ module.exports = async function handler(req, res) {
         domain_status: verified ? 'live' : 'verify_dns',
         dns_records: dnsRecords,
         vercel: data,
+        error: !verifyResp.ok ? data?.error?.message || 'DNS verification pending' : undefined,
       });
     }
 

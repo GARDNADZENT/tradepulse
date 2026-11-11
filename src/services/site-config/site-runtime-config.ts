@@ -44,7 +44,6 @@ export interface TenantSiteConfig {
     custom_bots: TenantCustomBot[];
 }
 
-const LOCAL_STUDIO_STORAGE_KEY = 'tp_studio_published_sites_v1';
 const TENANT_CACHE_PREFIX = 'tp_tenant_runtime_cache_v1:';
 const STICKY_SITE_SLUG_KEY = 'tp_active_tenant_slug';
 
@@ -184,23 +183,6 @@ const resolveRequestedTenantKey = (): { slug: string | null; hostname: string } 
     };
 };
 
-const readLocalStudioSite = (slug: string | null, hostname: string): TenantSiteConfig | null => {
-    try {
-        const raw = localStorage.getItem(LOCAL_STUDIO_STORAGE_KEY);
-        if (!raw) return null;
-        const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) return null;
-        const match = parsed.find((s: TenantSiteConfig) => {
-            if (slug && s.slug?.toLowerCase() === slug) return true;
-            if (hostname && s.custom_domain && s.custom_domain.toLowerCase() === hostname) return true;
-            return false;
-        });
-        return match || null;
-    } catch {
-        return null;
-    }
-};
-
 async function fetchSupabaseTenantSite(
     slug: string | null,
     hostname: string
@@ -311,34 +293,12 @@ async function fetchSupabaseTenantSite(
 export async function initializeTenantRuntime(): Promise<void> {
     if (typeof window === 'undefined') return;
 
-    // 0. Cross-origin Studio handoff via URL hash (#tp_site=<base64url JSON>) for instant local/sandbox preview
-    if (window.location.hash && window.location.hash.includes('tp_site=')) {
-        try {
-            const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-            const encoded = hashParams.get('tp_site');
-            if (encoded) {
-                const jsonStr = decodeURIComponent(escape(window.atob(encoded)));
-                const importedSite = JSON.parse(jsonStr) as TenantSiteConfig;
-                if (importedSite && importedSite.slug) {
-                    const existingRaw = localStorage.getItem(LOCAL_STUDIO_STORAGE_KEY);
-                    const existingList: TenantSiteConfig[] = existingRaw ? JSON.parse(existingRaw) : [];
-                    const merged = [
-                        importedSite,
-                        ...existingList.filter(s => s.slug !== importedSite.slug),
-                    ];
-                    localStorage.setItem(LOCAL_STUDIO_STORAGE_KEY, JSON.stringify(merged));
-                    setActiveTenantConfig(importedSite);
-                    window.history.replaceState(
-                        null,
-                        '',
-                        window.location.pathname + window.location.search
-                    );
-                }
-            }
-        } catch {}
-    }
+    // Purge any legacy local sandbox store from earlier sessions
+    try {
+        localStorage.removeItem('tp_studio_published_sites_v1');
+    } catch {}
 
-    // 1. Live Studio iframe preview listener (`postMessage` + `BroadcastChannel`)
+    // 1. Live Studio iframe preview listener (`postMessage`)
     window.addEventListener('message', (event: MessageEvent) => {
         const data = event.data;
         if (data && typeof data === 'object' && data.type === 'TP_STUDIO_PREVIEW_SYNC') {
@@ -355,33 +315,10 @@ export async function initializeTenantRuntime(): Promise<void> {
         } catch {}
     }
 
-    if (typeof BroadcastChannel !== 'undefined') {
-        try {
-            const channel = new BroadcastChannel('tp_studio_live_sync');
-            channel.onmessage = evt => {
-                const { slug, hostname } = resolveRequestedTenantKey();
-                const updatedSites: TenantSiteConfig[] = Array.isArray(evt.data?.sites)
-                    ? evt.data.sites
-                    : [];
-                const matched = updatedSites.find(
-                    s =>
-                        (slug && s.slug?.toLowerCase() === slug) ||
-                        (hostname && s.custom_domain?.toLowerCase() === hostname)
-                );
-                if (matched) {
-                    setActiveTenantConfig(matched);
-                }
-            };
-        } catch {}
-    }
-
     const { slug, hostname } = resolveRequestedTenantKey();
 
-    // 2. Instant zero-flicker hydration from local Studio store or cached Supabase config
-    const localMatch = readLocalStudioSite(slug, hostname);
-    if (localMatch) {
-        setActiveTenantConfig(localMatch);
-    } else if (slug || hostname) {
+    // 2. Instant zero-flicker hydration from cached Supabase config
+    if (slug || hostname) {
         try {
             const cachedRaw = localStorage.getItem(`${TENANT_CACHE_PREFIX}${slug || hostname}`);
             if (cachedRaw) {

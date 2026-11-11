@@ -5,9 +5,7 @@ import {
   ManagedBotItem,
   ManagedSite,
   PlatformSettings,
-  SAMPLE_UPLOADED_BOT_XML,
   SOCIAL_FIELDS,
-  StudioRole,
   StudioUser,
 } from './types';
 import {
@@ -24,7 +22,7 @@ import {
   signInWithEmail,
   signInWithGoogleOAuth,
   signOutStudio,
-  switchSandboxRole,
+  studioSupabase,
   uploadLogoAsset,
 } from './services/studio-data';
 
@@ -48,6 +46,7 @@ export const App: React.FC = () => {
   const [authPassword, setAuthPassword] = useState('');
   const [authName, setAuthName] = useState('');
   const [authError, setAuthError] = useState('');
+  const [authInfo, setAuthInfo] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
 
   // Studio workspace state
@@ -79,9 +78,7 @@ export const App: React.FC = () => {
   const [newSlug, setNewSlug] = useState('');
   const [newDomain, setNewDomain] = useState('');
   const [newColor, setNewColor] = useState('#0066FF');
-  const [newReferral, setNewReferral] = useState(
-    'https://track.deriv.com/_1mHiO0UpCX6NhxmBqQyZL2Nd7ZgqdRLk/1/'
-  );
+  const [newReferral, setNewReferral] = useState('');
   const [newPreset, setNewPreset] = useState<'full' | 'bots_only' | 'pro_desk'>('full');
   const [createError, setCreateError] = useState('');
 
@@ -89,7 +86,7 @@ export const App: React.FC = () => {
     setToast(msg);
     setTimeout(() => {
       setToast(prev => (prev === msg ? '' : prev));
-    }, 3400);
+    }, 3600);
   }, []);
 
   const hydrateWorkspace = useCallback(async (sessionUser: StudioUser) => {
@@ -109,19 +106,48 @@ export const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    let mounted = true;
+
     (async () => {
       try {
+        if (!isSupabaseConfigured) {
+          return;
+        }
         const sessionUser = await getInitialStudioSession();
-        if (sessionUser) {
+        if (mounted && sessionUser) {
           setUser(sessionUser);
           await hydrateWorkspace(sessionUser);
         }
       } catch (err) {
         console.error('[SiteStudio] Session init failed:', err);
       } finally {
-        setBooting(false);
+        if (mounted) setBooting(false);
       }
     })();
+
+    const sub = studioSupabase?.auth.onAuthStateChange(async (_event, session) => {
+      if (!mounted) return;
+      if (!session?.user) {
+        setUser(null);
+        setSites([]);
+        setSelectedSiteId('');
+        return;
+      }
+      try {
+        const refreshed = await getInitialStudioSession();
+        if (mounted && refreshed) {
+          setUser(refreshed);
+          await hydrateWorkspace(refreshed);
+        }
+      } catch (err) {
+        console.error('[SiteStudio] Auth state refresh failed:', err);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      sub?.data.subscription.unsubscribe();
+    };
   }, [hydrateWorkspace]);
 
   const selectedSite = useMemo(
@@ -129,7 +155,6 @@ export const App: React.FC = () => {
     [sites, selectedSiteId]
   );
 
-  // Real-time postMessage sync into the live TradersPulse tenant iframe
   const pushLivePreviewToIframe = useCallback((site: ManagedSite | null) => {
     if (!site || !iframeRef.current?.contentWindow) return;
     try {
@@ -181,12 +206,31 @@ export const App: React.FC = () => {
     try {
       const saved = await persistManagedSite(selectedSite);
       setSites(prev => prev.map(s => (s.id === selectedSite.id ? saved : s)));
+      setSelectedSiteId(saved.id);
       pushLivePreviewToIframe(saved);
       showToast(`Published "${saved.brand_name}" live to ${saved.custom_domain || `?site=${saved.slug}`}`);
     } catch (err: any) {
       showToast(`Save error: ${err?.message || 'Unable to publish changes'}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteCurrentSite = async () => {
+    if (!selectedSite) return;
+    const confirmed = window.confirm(
+      `Delete "${selectedSite.brand_name}" (${selectedSite.custom_domain || selectedSite.slug}) permanently?`
+    );
+    if (!confirmed) return;
+
+    try {
+      await deleteManagedSite(selectedSite.id);
+      const remaining = sites.filter(s => s.id !== selectedSite.id);
+      setSites(remaining);
+      setSelectedSiteId(remaining[0]?.id || '');
+      showToast(`Deleted "${selectedSite.brand_name}".`);
+    } catch (err: any) {
+      showToast(`Delete failed: ${err?.message || 'Unable to delete site'}`);
     }
   };
 
@@ -213,7 +257,7 @@ export const App: React.FC = () => {
     }
 
     if (sites.some(s => s.slug.toLowerCase() === cleanSlug)) {
-      setCreateError(`Slug "${cleanSlug}" is already taken. Choose another slug.`);
+      setCreateError(`Slug "${cleanSlug}" is already in your workspace. Choose another slug.`);
       return;
     }
 
@@ -237,9 +281,10 @@ export const App: React.FC = () => {
       setNewBrandName('');
       setNewSlug('');
       setNewDomain('');
+      setNewReferral('');
       setActiveSidebar('branding');
       setActiveTab('branding');
-      showToast(`Created "${created.brand_name}" — ready to customize!`);
+      showToast(`Created "${created.brand_name}" in Supabase!`);
     } catch (err: any) {
       setCreateError(err?.message || 'Failed to create site.');
     }
@@ -252,7 +297,7 @@ export const App: React.FC = () => {
     try {
       const url = await uploadLogoAsset(file, user.id);
       updateSelectedSite(s => ({ ...s, logo_url: url }));
-      showToast('Brand logo updated in live preview.');
+      showToast('Uploaded logo to studio-assets — click "Publish Changes Live" to save.');
     } catch (err: any) {
       showToast(err?.message || 'Logo upload failed');
     }
@@ -292,27 +337,11 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleAddSampleBot = () => {
-    if (!selectedSite) return;
-    const sampleBot: ManagedBotItem = {
-      id: `bot-${Date.now()}`,
-      name: `${selectedSite.brand_name} Even/Odd Sniper`,
-      strategy: '1s Digit Parity Engine',
-      description: 'Ready-to-run 1-tick Even/Odd synthetic index bot.',
-      categories: ['special', 'turbo-ai'],
-      xml_content: SAMPLE_UPLOADED_BOT_XML,
-      sort_order: selectedSite.custom_bots.length + 1,
-      is_active: true,
-    };
-    updateSelectedSite(s => ({ ...s, custom_bots: [sampleBot, ...s.custom_bots] }));
-    showToast('Added sample XML bot to site catalog.');
-  };
-
   const handleDomainAction = async (action: 'attach' | 'verify') => {
     if (!selectedSite) return;
     const domain = selectedSite.custom_domain.trim().toLowerCase();
     if (!domain) {
-      setDomainFeedback('Enter a custom domain first (e.g. alphadigits.site).');
+      setDomainFeedback('Enter a custom domain first (e.g. mybrand.site).');
       return;
     }
     if (domain.includes('deriv') || domain.includes('binary')) {
@@ -330,90 +359,64 @@ export const App: React.FC = () => {
       });
 
       const contentType = resp.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        const data = await resp.json();
-        if (!resp.ok || !data.ok) {
-          setDomainFeedback(data.error || 'Domain provisioning failed.');
-        } else {
-          if (Array.isArray(data.dns_records)) setDnsRecords(data.dns_records);
-          const nextStatus = data.domain_status || (action === 'verify' ? 'live' : 'verify_dns');
-          const updated = { ...selectedSite, custom_domain: domain, domain_status: nextStatus };
-          const saved = await persistManagedSite(updated);
-          setSites(prev => prev.map(s => (s.id === saved.id ? saved : s)));
-          setDomainFeedback(data.message || 'Domain updated.');
-          showToast(action === 'verify' ? `${domain} SSL is LIVE!` : `Attached ${domain} — configure DNS records.`);
-        }
-      } else {
-        // Dev server fallback when `/api/domains` serverless function isn't mounted locally
-        const isApex = domain.split('.').length === 2;
-        setDnsRecords(
-          isApex
-            ? [
-                { type: 'A', host: '@', value: '76.76.21.21', ttl: 'Auto' },
-                { type: 'CNAME', host: 'www', value: 'cname.vercel-dns.com', ttl: 'Auto' },
-              ]
-            : [{ type: 'CNAME', host: domain.split('.')[0], value: 'cname.vercel-dns.com', ttl: 'Auto' }]
-        );
-        const nextStatus: ManagedSite['domain_status'] = action === 'verify' ? 'live' : 'verify_dns';
-        const saved = await persistManagedSite({
-          ...selectedSite,
-          custom_domain: domain,
-          domain_status: nextStatus,
-        });
-        setSites(prev => prev.map(s => (s.id === saved.id ? saved : s)));
+      if (!contentType.includes('application/json')) {
         setDomainFeedback(
-          action === 'verify'
-            ? `SSL certificate provisioned for ${domain} (Deploy studio/ to Vercel with VERCEL_API_TOKEN for live edge binding).`
-            : `DNS records generated for ${domain}. Add them at your registrar, then click Verify DNS & Issue SSL.`
+          'The /api/domains Vercel serverless endpoint is only active on your deployed Vercel Studio project.'
         );
+        return;
       }
-    } catch {
-      const nextStatus: ManagedSite['domain_status'] = action === 'verify' ? 'live' : 'verify_dns';
-      const saved = await persistManagedSite({
-        ...selectedSite,
-        custom_domain: domain,
-        domain_status: nextStatus,
-      });
+
+      const data = await resp.json();
+      if (Array.isArray(data.dns_records)) {
+        setDnsRecords(data.dns_records);
+      }
+      if (!resp.ok || !data.ok) {
+        setDomainFeedback(data.error || 'Domain provisioning failed.');
+        return;
+      }
+
+      const nextStatus = data.domain_status || (action === 'verify' ? 'live' : 'verify_dns');
+      const updated = { ...selectedSite, custom_domain: domain, domain_status: nextStatus };
+      const saved = await persistManagedSite(updated);
       setSites(prev => prev.map(s => (s.id === saved.id ? saved : s)));
       setDomainFeedback(
-        action === 'verify' ? `${domain} marked LIVE SSL.` : `DNS records ready for ${domain}.`
+        action === 'verify' && data.verified
+          ? `${domain} verified & Let’s Encrypt SSL is LIVE!`
+          : `Attached ${domain} — configure the DNS records below at your registrar, then click Verify DNS.`
       );
+      showToast(
+        action === 'verify' && data.verified
+          ? `${domain} SSL is LIVE!`
+          : `Attached ${domain} to Vercel edge.`
+      );
+    } catch (err: any) {
+      setDomainFeedback(err?.message || 'Unable to reach /api/domains.');
     } finally {
       setDomainBusy(false);
     }
-  };
-
-  const handleToggleRoleSandbox = async (nextRole: StudioRole) => {
-    if (!user) return;
-    const updatedUser = switchSandboxRole(user, nextRole);
-    setUser(updatedUser);
-    await hydrateWorkspace(updatedUser);
-    if (nextRole !== 'super_admin' && activeSidebar === 'superadmin') {
-      setActiveSidebar('sites');
-    }
-    showToast(
-      nextRole === 'super_admin'
-        ? 'Switched to Super-Admin view (seeing all operators & suspension controls)'
-        : 'Switched to Operator view (isolated to your own sites via RLS)'
-    );
   };
 
   const handleAdminStatusChange = async (
     targetSite: ManagedSite,
     nextStatus: ManagedSite['status']
   ) => {
-    const updated = { ...targetSite, status: nextStatus };
-    const saved = await persistManagedSite(updated);
-    setSites(prev => prev.map(s => (s.id === saved.id ? saved : s)));
-    if (selectedSite?.id === saved.id) {
-      pushLivePreviewToIframe(saved);
+    try {
+      const updated = { ...targetSite, status: nextStatus };
+      const saved = await persistManagedSite(updated);
+      setSites(prev => prev.map(s => (s.id === saved.id ? saved : s)));
+      if (selectedSite?.id === saved.id) {
+        pushLivePreviewToIframe(saved);
+      }
+      showToast(`${saved.brand_name} status set to ${nextStatus.toUpperCase()}`);
+    } catch (err: any) {
+      showToast(`Status update failed: ${err?.message || 'Error'}`);
     }
-    showToast(`${saved.brand_name} status set to ${nextStatus.toUpperCase()}`);
   };
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
+    setAuthInfo('');
     setAuthBusy(true);
     try {
       const loggedIn = await signInWithEmail(
@@ -425,7 +428,13 @@ export const App: React.FC = () => {
       setUser(loggedIn);
       await hydrateWorkspace(loggedIn);
     } catch (err: any) {
-      setAuthError(err?.message || 'Authentication failed.');
+      const message = err?.message || 'Authentication failed.';
+      if (message.toLowerCase().includes('confirm')) {
+        setAuthInfo(message);
+        setAuthMode('signin');
+      } else {
+        setAuthError(message);
+      }
     } finally {
       setAuthBusy(false);
     }
@@ -435,7 +444,38 @@ export const App: React.FC = () => {
     return (
       <div className="studio-boot">
         <img src="/traderpulse-logo.jpg" alt="TradersPulse" className="studio-boot__logo" />
-        <span>Loading Site Studio Control Plane…</span>
+        <span>Connecting to Site Studio Control Plane…</span>
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // REQUIRED CLOUD CONFIGURATION GATE (NO MOCK FALLBACK)
+  // =========================================================================
+  if (!isSupabaseConfigured) {
+    return (
+      <div className="studio-auth">
+        <div className="studio-auth__card">
+          <div className="studio-auth__brand">
+            <img src="/traderpulse-logo.jpg" alt="TradersPulse" className="studio-auth__logo" />
+            <div>
+              <div className="studio-auth__wordmark">TRADERSPULSE</div>
+              <span className="studio-auth__pill">SITE STUDIO · CLOUD SETUP</span>
+            </div>
+          </div>
+
+          <h1 className="studio-auth__title">Connect Supabase Environment</h1>
+          <p className="studio-auth__sub">
+            Add these environment variables in your Vercel Studio project (
+            <strong>Settings → Environment Variables</strong>) and trigger a <strong>Redeploy</strong>:
+          </p>
+
+          <div className="studio-callout">
+            <code>SUPABASE_URL</code>
+            <code>SUPABASE_PUBLISHABLE_KEY</code>
+            <code>STUDIO_TENANT_RUNTIME_URL</code>
+          </div>
+        </div>
       </div>
     );
   }
@@ -465,7 +505,14 @@ export const App: React.FC = () => {
           <button
             type="button"
             className="studio-btn studio-btn--google"
-            onClick={() => void signInWithGoogleOAuth()}
+            onClick={async () => {
+              setAuthError('');
+              try {
+                await signInWithGoogleOAuth();
+              } catch (err: any) {
+                setAuthError(err?.message || 'Google sign-in failed.');
+              }
+            }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
               <path
@@ -500,7 +547,7 @@ export const App: React.FC = () => {
                   type="text"
                   value={authName}
                   onChange={e => setAuthName(e.target.value)}
-                  placeholder="e.g. AlphaDigits Partners"
+                  placeholder="e.g. Apex Trading Desk"
                   required
                 />
               </label>
@@ -511,7 +558,7 @@ export const App: React.FC = () => {
                 type="email"
                 value={authEmail}
                 onChange={e => setAuthEmail(e.target.value)}
-                placeholder="operator@yourdomain.com"
+                placeholder="you@yourdomain.com"
                 required
               />
             </label>
@@ -526,6 +573,7 @@ export const App: React.FC = () => {
               />
             </label>
 
+            {authInfo && <div className="studio-toast">{authInfo}</div>}
             {authError && <div className="studio-alert studio-alert--error">{authError}</div>}
 
             <button
@@ -563,8 +611,8 @@ export const App: React.FC = () => {
     );
   }
 
-  const previewIframeUrl = selectedSite ? buildLiveTenantUrl(selectedSite, false) : '';
-  const openExternalTenantUrl = selectedSite ? buildLiveTenantUrl(selectedSite, true) : '#';
+  const previewIframeUrl = selectedSite ? buildLiveTenantUrl(selectedSite) : '';
+  const openExternalTenantUrl = selectedSite ? buildLiveTenantUrl(selectedSite) : '#';
 
   // =========================================================================
   // AUTHENTICATED SITE STUDIO CONTROL PLANE
@@ -672,37 +720,15 @@ export const App: React.FC = () => {
 
       {/* CENTER MAIN WORKSPACE */}
       <main className="studio-main">
-        {/* TOP HEADER BAR */}
         <header className="studio-topbar">
           <div>
             <h1 className="studio-topbar__heading">Multi-Site Control Plane</h1>
             <p className="studio-topbar__sub">
-              {isSupabaseConfigured
-                ? 'Connected to Supabase Multi-Tenant Cloud + RLS'
-                : 'Interactive SaaS Workspace · Instant Live Sync Active'}
+              Connected to Supabase Multi-Tenant Cloud · Row-Level Security Active
             </p>
           </div>
 
           <div className="studio-topbar__actions">
-            {!isSupabaseConfigured && (
-              <div className="studio-role-toggle" title="Preview Operator RLS vs Super-Admin Governance">
-                <button
-                  type="button"
-                  className={user.role === 'operator' ? 'is-active' : ''}
-                  onClick={() => void handleToggleRoleSandbox('operator')}
-                >
-                  Operator View
-                </button>
-                <button
-                  type="button"
-                  className={user.role === 'super_admin' ? 'is-active' : ''}
-                  onClick={() => void handleToggleRoleSandbox('super_admin')}
-                >
-                  Super-Admin
-                </button>
-              </div>
-            )}
-
             <button
               type="button"
               className="studio-btn studio-btn--primary"
@@ -723,66 +749,85 @@ export const App: React.FC = () => {
                 ? `All Platform Sites (${sites.length})`
                 : `Your Managed Sites (${sites.length})`}
             </h2>
-            <span>Click any site card to edit &amp; live-preview</span>
+            {sites.length > 0 && <span>Click any site card to edit &amp; live-preview</span>}
           </div>
 
-          <div className="studio-sites-grid">
-            {sites.map(site => {
-              const isSelected = selectedSite?.id === site.id;
-              const badgeLabel =
-                site.status === 'suspended'
-                  ? 'SUSPENDED'
-                  : site.status === 'maintenance'
-                  ? 'MAINTENANCE'
-                  : site.domain_status === 'live'
-                  ? 'LIVE SSL'
-                  : 'VERIFY DNS';
-              const badgeClass =
-                site.status === 'suspended'
-                  ? 'is-danger'
-                  : site.status === 'maintenance' || site.domain_status !== 'live'
-                  ? 'is-warn'
-                  : 'is-live';
+          {sites.length === 0 ? (
+            <div className="studio-empty-state">
+              <h3>No trading sites created yet</h3>
+              <p>
+                Click <strong>+ Create New Site</strong> to launch your first white-label Deriv
+                trading platform with your own brand, 13 feature tabs, custom XML bots, and domain.
+              </p>
+              <button
+                type="button"
+                className="studio-btn studio-btn--primary"
+                onClick={() => setIsCreateOpen(true)}
+              >
+                + Create Your First Site
+              </button>
+            </div>
+          ) : (
+            <div className="studio-sites-grid">
+              {sites.map(site => {
+                const isSelected = selectedSite?.id === site.id;
+                const badgeLabel =
+                  site.status === 'suspended'
+                    ? 'SUSPENDED'
+                    : site.status === 'maintenance'
+                    ? 'MAINTENANCE'
+                    : site.domain_status === 'live'
+                    ? 'LIVE SSL'
+                    : 'VERIFY DNS';
+                const badgeClass =
+                  site.status === 'suspended'
+                    ? 'is-danger'
+                    : site.status === 'maintenance' || site.domain_status !== 'live'
+                    ? 'is-warn'
+                    : 'is-live';
 
-              return (
-                <button
-                  key={site.id}
-                  type="button"
-                  className={`studio-site-card ${isSelected ? 'is-selected' : ''}`}
-                  onClick={() => setSelectedSiteId(site.id)}
-                >
-                  <div className="studio-site-card__top">
-                    <div className="studio-site-card__identity">
-                      <img
-                        src={site.logo_url || '/traderpulse-logo.jpg'}
-                        alt={site.brand_name}
-                        className="studio-site-card__logo"
-                      />
-                      <div>
-                        <strong>{site.custom_domain || `${site.slug}.${platformSettings.base_domain}`}</strong>
-                        <span>{site.brand_name}</span>
+                return (
+                  <button
+                    key={site.id}
+                    type="button"
+                    className={`studio-site-card ${isSelected ? 'is-selected' : ''}`}
+                    onClick={() => setSelectedSiteId(site.id)}
+                  >
+                    <div className="studio-site-card__top">
+                      <div className="studio-site-card__identity">
+                        <img
+                          src={site.logo_url || '/traderpulse-logo.jpg'}
+                          alt={site.brand_name}
+                          className="studio-site-card__logo"
+                        />
+                        <div>
+                          <strong>
+                            {site.custom_domain || `${site.slug}.${platformSettings.base_domain}`}
+                          </strong>
+                          <span>{site.brand_name}</span>
+                        </div>
                       </div>
+                      <span className={`studio-status-pill ${badgeClass}`}>{badgeLabel}</span>
                     </div>
-                    <span className={`studio-status-pill ${badgeClass}`}>{badgeLabel}</span>
-                  </div>
 
-                  <div className="studio-site-card__meta">
-                    <span>
-                      <i
-                        className="studio-color-dot"
-                        style={{ backgroundColor: site.primary_color }}
-                      />
-                      {site.primary_color}
-                    </span>
-                    <span>{site.enabled_tabs.length}/13 Tabs</span>
-                    <span>
-                      {site.custom_bots.length + (site.include_default_bots ? 18 : 0)} Bots
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+                    <div className="studio-site-card__meta">
+                      <span>
+                        <i
+                          className="studio-color-dot"
+                          style={{ backgroundColor: site.primary_color }}
+                        />
+                        {site.primary_color}
+                      </span>
+                      <span>{site.enabled_tabs.length}/13 Tabs</span>
+                      <span>
+                        {site.custom_bots.length + (site.include_default_bots ? 18 : 0)} Bots
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         {/* SUPER-ADMIN GOVERNANCE PANEL OR SITE CONFIGURATOR */}
@@ -805,7 +850,9 @@ export const App: React.FC = () => {
               </div>
               <div className="studio-kpi">
                 <span>Active Live SSL</span>
-                <strong>{sites.filter(s => s.status === 'active' && s.domain_status === 'live').length}</strong>
+                <strong>
+                  {sites.filter(s => s.status === 'active' && s.domain_status === 'live').length}
+                </strong>
               </div>
               <div className="studio-kpi">
                 <span>Default Rev-Share</span>
@@ -826,6 +873,7 @@ export const App: React.FC = () => {
                   onChange={e =>
                     setPlatformSettings(p => ({ ...p, pooled_deriv_app_id: e.target.value }))
                   }
+                  placeholder="Leave blank to inherit NEXT_PUBLIC_DERIV_APP_ID"
                 />
               </label>
               <label className="studio-field">
@@ -858,79 +906,85 @@ export const App: React.FC = () => {
                 type="button"
                 className="studio-btn studio-btn--primary"
                 onClick={async () => {
-                  await savePlatformSettings(platformSettings);
-                  showToast('Saved global platform governance settings.');
+                  try {
+                    await savePlatformSettings(platformSettings);
+                    showToast('Saved global platform governance settings.');
+                  } catch (err: any) {
+                    showToast(`Save failed: ${err?.message || 'Error'}`);
+                  }
                 }}
               >
                 Save Global Platform Settings
               </button>
             </div>
 
-            <div className="studio-admin-table-wrap">
-              <table className="studio-admin-table">
-                <thead>
-                  <tr>
-                    <th>Tenant Site</th>
-                    <th>Operator</th>
-                    <th>OAuth Mode</th>
-                    <th>Rev Share</th>
-                    <th>Status</th>
-                    <th>Governance Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sites.map(s => (
-                    <tr key={s.id}>
-                      <td>
-                        <strong>{s.brand_name}</strong>
-                        <div className="studio-muted">{s.custom_domain || `?site=${s.slug}`}</div>
-                      </td>
-                      <td>{s.owner_email || s.owner_id}</td>
-                      <td>{s.deriv_app_id ? `Custom (#${s.deriv_app_id})` : 'Pooled Instant'}</td>
-                      <td>{s.commission_share_pct}%</td>
-                      <td>
-                        <span
-                          className={`studio-status-pill ${
-                            s.status === 'active'
-                              ? 'is-live'
-                              : s.status === 'maintenance'
-                              ? 'is-warn'
-                              : 'is-danger'
-                          }`}
-                        >
-                          {s.status.toUpperCase()}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="studio-table-btns">
-                          <button
-                            type="button"
-                            className="studio-btn studio-btn--ghost studio-btn--xs"
-                            onClick={() => void handleAdminStatusChange(s, 'active')}
-                          >
-                            Activate
-                          </button>
-                          <button
-                            type="button"
-                            className="studio-btn studio-btn--ghost studio-btn--xs"
-                            onClick={() => void handleAdminStatusChange(s, 'maintenance')}
-                          >
-                            Maintenance
-                          </button>
-                          <button
-                            type="button"
-                            className="studio-btn studio-btn--danger studio-btn--xs"
-                            onClick={() => void handleAdminStatusChange(s, 'suspended')}
-                          >
-                            Suspend
-                          </button>
-                        </div>
-                      </td>
+            {sites.length > 0 && (
+              <div className="studio-admin-table-wrap">
+                <table className="studio-admin-table">
+                  <thead>
+                    <tr>
+                      <th>Tenant Site</th>
+                      <th>Operator</th>
+                      <th>OAuth Mode</th>
+                      <th>Rev Share</th>
+                      <th>Status</th>
+                      <th>Governance Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {sites.map(s => (
+                      <tr key={s.id}>
+                        <td>
+                          <strong>{s.brand_name}</strong>
+                          <div className="studio-muted">{s.custom_domain || `?site=${s.slug}`}</div>
+                        </td>
+                        <td>{s.owner_email || s.owner_id}</td>
+                        <td>{s.deriv_app_id ? `Custom (#${s.deriv_app_id})` : 'Pooled Instant'}</td>
+                        <td>{s.commission_share_pct}%</td>
+                        <td>
+                          <span
+                            className={`studio-status-pill ${
+                              s.status === 'active'
+                                ? 'is-live'
+                                : s.status === 'maintenance'
+                                ? 'is-warn'
+                                : 'is-danger'
+                            }`}
+                          >
+                            {s.status.toUpperCase()}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="studio-table-btns">
+                            <button
+                              type="button"
+                              className="studio-btn studio-btn--ghost studio-btn--xs"
+                              onClick={() => void handleAdminStatusChange(s, 'active')}
+                            >
+                              Activate
+                            </button>
+                            <button
+                              type="button"
+                              className="studio-btn studio-btn--ghost studio-btn--xs"
+                              onClick={() => void handleAdminStatusChange(s, 'maintenance')}
+                            >
+                              Maintenance
+                            </button>
+                            <button
+                              type="button"
+                              className="studio-btn studio-btn--danger studio-btn--xs"
+                              onClick={() => void handleAdminStatusChange(s, 'suspended')}
+                            >
+                              Suspend
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         ) : selectedSite ? (
           <section className="studio-panel">
@@ -948,6 +1002,13 @@ export const App: React.FC = () => {
                 </p>
               </div>
               <div className="studio-panel__header-btns">
+                <button
+                  type="button"
+                  className="studio-btn studio-btn--danger studio-btn--sm"
+                  onClick={handleDeleteCurrentSite}
+                >
+                  Delete Site
+                </button>
                 <button
                   type="button"
                   className="studio-btn studio-btn--primary"
@@ -996,7 +1057,7 @@ export const App: React.FC = () => {
                       onChange={e =>
                         updateSelectedSite(s => ({ ...s, brand_name: e.target.value }))
                       }
-                      placeholder="e.g. AlphaDigits Pro"
+                      placeholder="e.g. My Brand Trading"
                     />
                   </label>
 
@@ -1020,8 +1081,8 @@ export const App: React.FC = () => {
                   <div className="studio-logo-box__controls">
                     <strong>Platform Logo &amp; Favicon</strong>
                     <span>
-                      Upload PNG/JPG/WebP (syncs to header, login card &amp; browser tab) or paste
-                      an image URL.
+                      Upload PNG/JPG/WebP to Supabase Storage (<code>studio-assets</code>) or reset
+                      to default logo.
                     </span>
                     <div className="studio-logo-box__row">
                       <input
@@ -1237,9 +1298,8 @@ export const App: React.FC = () => {
                     <span className="studio-status-pill is-live">INSTANT ZERO-SETUP</span>
                     <strong>Tier 1: Pooled Platform OAuth</strong>
                     <p>
-                      Traders log in immediately using our pre-approved Deriv OAuth App ID (#
-                      {platformSettings.pooled_deriv_app_id}) + PAT Login while crediting your
-                      Deriv Affiliate referral link.
+                      Traders log in immediately using the platform Deriv OAuth App ID + PAT Login
+                      while crediting your Deriv Affiliate referral link.
                     </p>
                   </button>
 
@@ -1293,7 +1353,7 @@ export const App: React.FC = () => {
                 </div>
 
                 <div className="studio-callout">
-                  <strong>Required OAuth Redirect URI on api.deriv.com:</strong>
+                  <strong>Required OAuth Redirect URI on api.deriv.com (for Tier 2):</strong>
                   <code>
                     https://
                     {selectedSite.custom_domain ||
@@ -1326,13 +1386,6 @@ export const App: React.FC = () => {
                     />
                     <button
                       type="button"
-                      className="studio-btn studio-btn--ghost studio-btn--sm"
-                      onClick={handleAddSampleBot}
-                    >
-                      + Add Sample Bot
-                    </button>
-                    <button
-                      type="button"
                       className="studio-btn studio-btn--primary studio-btn--sm"
                       onClick={() => botXmlInputRef.current?.click()}
                     >
@@ -1357,8 +1410,8 @@ export const App: React.FC = () => {
 
                 {selectedSite.custom_bots.length === 0 ? (
                   <div className="studio-empty-bots">
-                    No custom XML bots uploaded yet. Click <strong>Upload .XML Bot File</strong> or{' '}
-                    <strong>+ Add Sample Bot</strong> above.
+                    No custom XML bots uploaded yet. Click <strong>Upload .XML Bot File</strong>{' '}
+                    above to add strategies from your device.
                   </div>
                 ) : (
                   <div className="studio-bots-list">
@@ -1423,13 +1476,13 @@ export const App: React.FC = () => {
                       onChange={e =>
                         updateSelectedSite(s => ({ ...s, custom_domain: e.target.value }))
                       }
-                      placeholder="e.g. alphadigits.site or trade.myagency.com"
+                      placeholder="e.g. mybrand.site or trade.myagency.com"
                     />
                   </label>
 
                   <label className="studio-field">
                     <span>Instant Tenant Slug URL (No DNS Needed)</span>
-                    <input type="text" readOnly value={openExternalTenantUrl.split('#')[0]} />
+                    <input type="text" readOnly value={openExternalTenantUrl} />
                   </label>
                 </div>
 
@@ -1440,7 +1493,7 @@ export const App: React.FC = () => {
                     disabled={domainBusy}
                     onClick={() => void handleDomainAction('attach')}
                   >
-                    1. Attach Domain to Edge
+                    1. Attach Domain to Vercel Edge
                   </button>
                   <button
                     type="button"
@@ -1539,28 +1592,30 @@ export const App: React.FC = () => {
               onLoad={() => pushLivePreviewToIframe(selectedSite)}
             />
           ) : (
-            <div className="studio-preview__empty">Create or select a site to preview</div>
+            <div className="studio-preview__empty">Create a site to launch live preview</div>
           )}
         </div>
 
-        <div className="studio-preview__bottom">
-          <a
-            href={openExternalTenantUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="studio-btn studio-btn--ghost studio-btn--full"
-          >
-            Open Live Tenant Site ↗
-          </a>
-          <button
-            type="button"
-            className="studio-btn studio-btn--emerald studio-btn--full"
-            onClick={handlePublishChanges}
-            disabled={saving || !selectedSite}
-          >
-            {saving ? 'Publishing…' : 'Publish Changes Live'}
-          </button>
-        </div>
+        {selectedSite && (
+          <div className="studio-preview__bottom">
+            <a
+              href={openExternalTenantUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="studio-btn studio-btn--ghost studio-btn--full"
+            >
+              Open Live Tenant Site ↗
+            </a>
+            <button
+              type="button"
+              className="studio-btn studio-btn--emerald studio-btn--full"
+              onClick={handlePublishChanges}
+              disabled={saving}
+            >
+              {saving ? 'Publishing…' : 'Publish Changes Live'}
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* + CREATE NEW SITE MODAL */}
@@ -1596,7 +1651,7 @@ export const App: React.FC = () => {
                         );
                       }
                     }}
-                    placeholder="e.g. Nakuru Quant Traders"
+                    placeholder="e.g. Apex Quant Traders"
                     required
                   />
                 </label>
@@ -1607,7 +1662,7 @@ export const App: React.FC = () => {
                     type="text"
                     value={newSlug}
                     onChange={e => setNewSlug(e.target.value)}
-                    placeholder="e.g. nakuruquant"
+                    placeholder="e.g. apexquant"
                     required
                   />
                 </label>
@@ -1620,7 +1675,7 @@ export const App: React.FC = () => {
                     type="text"
                     value={newDomain}
                     onChange={e => setNewDomain(e.target.value)}
-                    placeholder="e.g. nakuruquant.site"
+                    placeholder="e.g. apexquant.site"
                   />
                 </label>
 
@@ -1638,7 +1693,7 @@ export const App: React.FC = () => {
               </div>
 
               <label className="studio-field">
-                <span>Deriv Affiliate Referral Link</span>
+                <span>Deriv Affiliate Referral Link (Optional)</span>
                 <input
                   type="url"
                   value={newReferral}

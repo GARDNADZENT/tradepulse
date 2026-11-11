@@ -366,28 +366,39 @@ body,
   }
 }
 
-.studio-role-toggle {
-  display: inline-flex;
+.studio-empty-state {
   background: #0b101d;
-  border: 1px solid #1e293b;
-  border-radius: 9px;
-  padding: 3px;
+  border: 1px dashed #25344f;
+  border-radius: 14px;
+  padding: 28px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
 
-  button {
-    background: transparent;
-    border: none;
-    color: #94a3b8;
-    font-size: 11.5px;
-    font-weight: 700;
-    padding: 6px 10px;
-    border-radius: 6px;
-    cursor: pointer;
-
-    &.is-active {
-      background: #172554;
-      color: #60a5fa;
-    }
+  h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 800;
+    color: #f8fafc;
   }
+
+  p {
+    margin: 0 0 6px;
+    max-width: 480px;
+    font-size: 13px;
+    line-height: 1.55;
+    color: #94a3b8;
+  }
+}
+
+.studio-preview__empty {
+  margin: auto;
+  padding: 24px;
+  text-align: center;
+  font-size: 13px;
+  color: #64748b;
 }
 
 .studio-toast {
