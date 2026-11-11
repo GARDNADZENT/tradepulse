@@ -77,9 +77,14 @@ export async function fetchPlatformSettings(): Promise<PlatformSettings> {
   };
 }
 
+const isMissingColumnError = (err: any): boolean => {
+  const msg = String(err?.message || '').toLowerCase();
+  return err?.code === 'PGRST204' || msg.includes('schema cache') || msg.includes('column');
+};
+
 export async function savePlatformSettings(next: PlatformSettings): Promise<void> {
   const client = requireSupabase();
-  const { error } = await client.from('studio_platform_settings').upsert({
+  const fullPayload = {
     id: 1,
     pooled_deriv_app_id: next.pooled_deriv_app_id.trim(),
     platform_markup_pct: Number(next.platform_markup_pct || 2.0),
@@ -87,7 +92,20 @@ export async function savePlatformSettings(next: PlatformSettings): Promise<void
     base_domain: next.base_domain.trim() || 'vercel.app',
     allow_public_signups: next.allow_public_signups,
     oauth_callback_hub_url: next.oauth_callback_hub_url.trim(),
-  });
+  };
+
+  const { error } = await client.from('studio_platform_settings').upsert(fullPayload);
+  if (error && isMissingColumnError(error)) {
+    const { error: fallbackErr } = await client.from('studio_platform_settings').upsert({
+      id: 1,
+      pooled_deriv_app_id: next.pooled_deriv_app_id.trim(),
+      default_commission_share_pct: Number(next.default_commission_pct || 50),
+      base_domain: next.base_domain.trim() || 'vercel.app',
+      allow_public_signups: next.allow_public_signups,
+    });
+    if (fallbackErr) throw fallbackErr;
+    return;
+  }
   if (error) throw error;
 }
 
@@ -299,10 +317,8 @@ export async function persistManagedSite(site: ManagedSite): Promise<ManagedSite
   const cleanSlug = site.slug.toLowerCase().trim();
   const vercelDomain = (site.vercel_domain || `${cleanSlug}.vercel.app`).toLowerCase().trim();
 
-  const payload = {
+  const basePayload = {
     slug: cleanSlug,
-    vercel_domain: vercelDomain,
-    vercel_domain_status: site.vercel_domain_status || 'pending',
     custom_domain: site.custom_domain.trim().toLowerCase() || null,
     domain_status: site.domain_status,
     status: site.status,
@@ -319,25 +335,46 @@ export async function persistManagedSite(site: ManagedSite): Promise<ManagedSite
     social_links: site.social_links,
     include_default_bots: site.include_default_bots,
     commission_share_pct: site.commission_share_pct,
-    payout_method: site.payout_method.trim(),
-    payout_wallet: site.payout_wallet.trim(),
     updated_at: new Date().toISOString(),
   };
 
+  const extendedPayload = {
+    ...basePayload,
+    vercel_domain: vercelDomain,
+    vercel_domain_status: site.vercel_domain_status || 'pending',
+    payout_method: site.payout_method.trim(),
+    payout_wallet: site.payout_wallet.trim(),
+  };
+
   let savedSiteId = site.id;
-  let updatedAt = payload.updated_at;
+  let updatedAt = basePayload.updated_at;
 
   if (site.id.startsWith('new-')) {
-    const { data, error } = await client
+    let { data, error } = await client
       .from('managed_sites')
-      .insert({ ...payload, owner_id: site.owner_id, owner_email: site.owner_email || '' })
+      .insert({ ...extendedPayload, owner_id: site.owner_id, owner_email: site.owner_email || '' })
       .select('*')
       .single();
+
+    if (error && isMissingColumnError(error)) {
+      const retry = await client
+        .from('managed_sites')
+        .insert({ ...basePayload, owner_id: site.owner_id, owner_email: site.owner_email || '' })
+        .select('*')
+        .single();
+      data = retry.data;
+      error = retry.error;
+    }
+
     if (error) throw error;
     savedSiteId = String(data.id);
     updatedAt = data.updated_at;
   } else {
-    const { error } = await client.from('managed_sites').update(payload).eq('id', site.id);
+    let { error } = await client.from('managed_sites').update(extendedPayload).eq('id', site.id);
+    if (error && isMissingColumnError(error)) {
+      const retry = await client.from('managed_sites').update(basePayload).eq('id', site.id);
+      error = retry.error;
+    }
     if (error) throw error;
   }
 
