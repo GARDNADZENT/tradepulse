@@ -1,7 +1,9 @@
 import React from 'react';
 import { act, render, screen } from '@testing-library/react';
 import SiteRuntimeGate from '@/components/site-runtime-gate/SiteRuntimeGate';
+import { generateOAuthURL } from '@/components/shared/utils/config/config';
 import { DERIV_CREATE_ACCOUNT_URL } from '@/constants/social-links';
+import { recordTenantRealBuyEvent } from '../site-commission-tracker';
 import {
     getActiveTenantConfig,
     getTenantBrandName,
@@ -9,17 +11,20 @@ import {
     getTenantReferralLink,
     getTenantTagline,
     initializeTenantRuntime,
+    isMasterUntenantedHost,
     setActiveTenantConfig,
     TenantSiteConfig,
 } from '../site-runtime-config';
 
 const MOCK_SITE: TenantSiteConfig = {
     id: 'site-test-1',
-    slug: 'alphadigits',
-    custom_domain: 'alphadigits.site',
+    owner_id: 'owner-uuid-1',
+    slug: 'apex-quant',
+    vercel_domain: 'apex-quant.vercel.app',
+    custom_domain: '',
     domain_status: 'live',
     status: 'active',
-    brand_name: 'AlphaDigits Pro',
+    brand_name: 'Apex Quant Pro',
     tagline: 'ALGO DIGITS DESK',
     logo_url: '/traderpulse-logo.jpg',
     primary_color: '#10B981',
@@ -27,17 +32,19 @@ const MOCK_SITE: TenantSiteConfig = {
     deriv_app_id: '',
     use_pooled_oauth: true,
     pooled_deriv_app_id: '36544',
+    oauth_callback_hub_url: 'https://tradepulse-lovat.vercel.app/callback',
     deriv_referral_link: 'https://track.deriv.com/_alpha_partner/1/',
-    announcement_text: 'Welcome to AlphaDigits Live Desk',
-    enabled_tabs: ['id-dbot-dashboard', 'id-bot-builder', 'id-free-bots'],
+    announcement_text: 'Welcome to Apex Quant Live Desk',
+    enabled_tabs: ['id-dbot-dashboard', 'id-bot-builder', 'id-trading-bots'],
     social_links: {
-        telegram: 'https://t.me/alphadigits',
+        telegram: 'https://t.me/apexquant',
     },
     include_default_bots: true,
+    commission_share_pct: 50,
     custom_bots: [],
 };
 
-describe('Multi-Tenant Site Runtime Config & Gate', () => {
+describe('Multi-Tenant Site Runtime Config, OAuth Relay & Commission Filter', () => {
     afterEach(() => {
         act(() => {
             setActiveTenantConfig(null);
@@ -55,14 +62,25 @@ describe('Multi-Tenant Site Runtime Config & Gate', () => {
         expect(document.getElementById('tp-tenant-tabs-css')).toBeNull();
     });
 
+    it('treats <slug>.vercel.app sites (including flagship tradepulse-lovat.vercel.app) as managed hosts while preserving local/git-preview hosts', () => {
+        expect(isMasterUntenantedHost('tradepulse-lovat.vercel.app')).toBe(false);
+        expect(isMasterUntenantedHost('apex-quant.vercel.app')).toBe(false);
+        expect(isMasterUntenantedHost('nairobipips.vercel.app')).toBe(false);
+        expect(isMasterUntenantedHost('mybrand.site')).toBe(false);
+
+        expect(isMasterUntenantedHost('localhost')).toBe(true);
+        expect(isMasterUntenantedHost('4003-sandbox.e2b.app')).toBe(true);
+        expect(isMasterUntenantedHost('tradepulse-git-arena-user.vercel.app')).toBe(true);
+    });
+
     it('hydrates CSS variables, document title, pooled OAuth app_id, referral link, and tab visibility CSS without unmounting DOM indices', () => {
         setActiveTenantConfig(MOCK_SITE);
 
-        expect(getTenantBrandName()).toBe('AlphaDigits Pro');
+        expect(getTenantBrandName()).toBe('Apex Quant Pro');
         expect(getTenantTagline()).toBe('ALGO DIGITS DESK');
         expect(getTenantDerivAppId()).toBe('36544');
         expect(getTenantReferralLink()).toBe('https://track.deriv.com/_alpha_partner/1/');
-        expect(document.title).toBe('AlphaDigits Pro');
+        expect(document.title).toBe('Apex Quant Pro');
 
         const tabStyle = document.getElementById('tp-tenant-tabs-css');
         expect(tabStyle).not.toBeNull();
@@ -70,13 +88,24 @@ describe('Multi-Tenant Site Runtime Config & Gate', () => {
         expect(tabStyle?.textContent).not.toContain('#id-dbot-dashboard');
     });
 
-    it('prefers dedicated custom deriv_app_id over pooled_deriv_app_id when configured', () => {
-        setActiveTenantConfig({
-            ...MOCK_SITE,
-            deriv_app_id: '62819',
-            use_pooled_oauth: false,
+    it('routes OAuth login through Central OAuth Callback Relay when tenant origin differs from Callback Hub', async () => {
+        setActiveTenantConfig(MOCK_SITE);
+        // jsdom default origin is http://localhost, which differs from https://tradepulse-lovat.vercel.app
+        const oauthUrl = await generateOAuthURL();
+        expect(oauthUrl).toContain('https://tradepulse-lovat.vercel.app/callback?');
+        expect(oauthUrl).toContain('tp_relay_start=1');
+        expect(oauthUrl).toContain('tenant_slug=apex-quant');
+    });
+
+    it('ignores Demo (VRTC) accounts in real-trade commission tracker', async () => {
+        setActiveTenantConfig(MOCK_SITE);
+        const recordedDemo = await recordTenantRealBuyEvent({
+            contractId: '99112233',
+            stakeAmount: 25,
+            loginid: 'VRTC987654',
+            currency: 'USD',
         });
-        expect(getTenantDerivAppId()).toBe('62819');
+        expect(recordedDemo).toBe(false);
     });
 
     it('accepts live TP_STUDIO_PREVIEW_SYNC postMessage updates from Site Studio', async () => {
@@ -108,7 +137,7 @@ describe('Multi-Tenant Site Runtime Config & Gate', () => {
         );
 
         expect(screen.getByTestId('app-content')).toBeInTheDocument();
-        expect(screen.getByText('Welcome to AlphaDigits Live Desk')).toBeInTheDocument();
+        expect(screen.getByText('Welcome to Apex Quant Live Desk')).toBeInTheDocument();
 
         act(() => {
             setActiveTenantConfig({

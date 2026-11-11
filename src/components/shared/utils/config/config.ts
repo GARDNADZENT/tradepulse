@@ -203,10 +203,37 @@ export const generateOAuthURL = async (prompt?: string): Promise<string> => {
         if (prompt === 'registration') {
             return getTenantReferralLink();
         }
-        const hasCustomTenantAppId = Boolean(sanitizeEnvValue(getActiveTenantConfig()?.deriv_app_id));
-        const redirectUri = hasCustomTenantAppId
-            ? window.location.origin
-            : sanitizeEnvValue(process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI) || window.location.origin;
+        const activeTenant = getActiveTenantConfig();
+        const hasCustomTenantAppId = Boolean(
+            activeTenant && !activeTenant.use_pooled_oauth && sanitizeEnvValue(activeTenant.deriv_app_id)
+        );
+        const registeredRedirectUri =
+            sanitizeEnvValue(activeTenant?.oauth_callback_hub_url) ||
+            sanitizeEnvValue(process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI) ||
+            window.location.origin;
+
+        // Central OAuth Callback Relay: when a trader logs in from a created site
+        // (e.g. https://apex-quant.vercel.app) that differs from the registered
+        // Deriv Callback Hub origin, bounce seamlessly through /callback on the
+        // registered Callback Hub so all tenant sites share ONE Deriv App ID + Callback URL.
+        if (!hasCustomTenantAppId && typeof window !== 'undefined') {
+            try {
+                const hubOrigin = new URL(registeredRedirectUri).origin;
+                if (hubOrigin && hubOrigin !== window.location.origin) {
+                    const relayUrl = new URL('/callback', hubOrigin);
+                    relayUrl.searchParams.set('tp_relay_start', '1');
+                    relayUrl.searchParams.set('return_to', window.location.origin);
+                    if (activeTenant?.slug) {
+                        relayUrl.searchParams.set('tenant_slug', activeTenant.slug);
+                    }
+                    return relayUrl.toString();
+                }
+            } catch {
+                // Fall back to direct flow if registeredRedirectUri is relative/malformed
+            }
+        }
+
+        const redirectUri = hasCustomTenantAppId ? window.location.origin : registeredRedirectUri;
         const clientId = getAppId();
         if (!clientId) return '';
 

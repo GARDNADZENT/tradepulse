@@ -5,7 +5,6 @@ export interface StudioUser {
   email: string;
   display_name: string;
   role: StudioRole;
-  is_sandbox?: boolean;
 }
 
 export type SocialPlatformKey =
@@ -17,6 +16,14 @@ export type SocialPlatformKey =
   | 'twitter'
   | 'facebook'
   | 'discord';
+
+export type PayoutMethodOption =
+  | 'M-Pesa'
+  | 'USDT (TRC20)'
+  | 'Deriv CR'
+  | 'PayPal'
+  | 'Bank Transfer'
+  | '';
 
 export interface ManagedBotItem {
   id: string;
@@ -34,6 +41,8 @@ export interface ManagedSite {
   owner_id: string;
   owner_email?: string;
   slug: string;
+  vercel_domain: string;
+  vercel_domain_status: 'live' | 'pending' | 'manual';
   custom_domain: string;
   domain_status: 'live' | 'verify_dns' | 'ssl_pending';
   status: 'active' | 'maintenance' | 'suspended';
@@ -51,16 +60,55 @@ export interface ManagedSite {
   social_links: Partial<Record<SocialPlatformKey, string>>;
   include_default_bots: boolean;
   commission_share_pct: number;
-  monthly_volume_usd?: number;
+  payout_method: string;
+  payout_wallet: string;
   custom_bots: ManagedBotItem[];
   updated_at?: string;
 }
 
 export interface PlatformSettings {
   pooled_deriv_app_id: string;
+  platform_markup_pct: number;
   default_commission_pct: number;
   base_domain: string;
   allow_public_signups: boolean;
+  oauth_callback_hub_url: string;
+}
+
+export interface CommissionRecord {
+  id: string;
+  site_id: string;
+  owner_id: string;
+  site_slug: string;
+  contract_id: string;
+  transaction_id: string;
+  trader_loginid: string;
+  currency: string;
+  contract_type: string;
+  symbol: string;
+  stake_amount: number;
+  markup_pct: number;
+  operator_share_pct: number;
+  gross_markup_usd: number;
+  operator_commission_usd: number;
+  admin_net_usd: number;
+  payout_status: 'unpaid' | 'paid';
+  payout_id?: string | null;
+  created_at: string;
+}
+
+export interface PayoutRecord {
+  id: string;
+  site_id: string;
+  owner_id: string;
+  owner_email: string;
+  site_url: string;
+  payout_method: string;
+  payout_wallet: string;
+  amount_usd: number;
+  trades_count: number;
+  reference_note: string;
+  paid_at: string;
 }
 
 export interface FeatureTabMeta {
@@ -96,6 +144,14 @@ export const COLOR_SWATCHES = [
   { label: 'Crimson Edge', hex: '#EF4444' },
 ];
 
+export const PAYOUT_METHODS: PayoutMethodOption[] = [
+  'M-Pesa',
+  'USDT (TRC20)',
+  'Deriv CR',
+  'PayPal',
+  'Bank Transfer',
+];
+
 export const SOCIAL_FIELDS: Array<{ id: SocialPlatformKey; label: string; placeholder: string }> = [
   { id: 'whatsapp', label: 'WhatsApp Channel / Group', placeholder: 'https://whatsapp.com/channel/...' },
   { id: 'telegram', label: 'Telegram Channel', placeholder: 'https://t.me/yourchannel' },
@@ -106,72 +162,3 @@ export const SOCIAL_FIELDS: Array<{ id: SocialPlatformKey; label: string; placeh
   { id: 'facebook', label: 'Facebook Page', placeholder: 'https://facebook.com/yourpage' },
   { id: 'discord', label: 'Discord Invite', placeholder: 'https://discord.gg/yourinvite' },
 ];
-
-export const SAMPLE_UPLOADED_BOT_XML = `<xml xmlns="https://developers.google.com/blockly/xml" is_dbot="true" collection="false">
-  <variables>
-    <variable id="stake_var">Initial Stake</variable>
-  </variables>
-  <block type="trade_definition" id="td_root" deletable="false" x="0" y="0">
-    <statement name="TRADE_OPTIONS">
-      <block type="trade_definition_market" id="td_mkt" deletable="false" movable="false">
-        <field name="MARKET_LIST">synthetic_index</field>
-        <field name="SUBMARKET_LIST">random_index</field>
-        <field name="SYMBOL_LIST">1HZ100V</field>
-        <next>
-          <block type="trade_definition_tradetype" id="td_type" deletable="false" movable="false">
-            <field name="TRADETYPECAT_LIST">digits</field>
-            <field name="TRADETYPE_LIST">evenodd</field>
-            <next>
-              <block type="trade_definition_contracttype" id="td_ct" deletable="false" movable="false">
-                <field name="TYPE_LIST">both</field>
-                <next>
-                  <block type="trade_definition_candleinterval" id="td_ci" deletable="false" movable="false">
-                    <field name="CANDLEINTERVAL_LIST">60</field>
-                    <next>
-                      <block type="trade_definition_restartbuysell" id="td_rbs" deletable="false" movable="false">
-                        <field name="TIME_MACHINE_ENABLED">FALSE</field>
-                        <next>
-                          <block type="trade_definition_restartonerror" id="td_roe" deletable="false" movable="false">
-                            <field name="RESTARTONERROR">TRUE</field>
-                          </block>
-                        </next>
-                      </block>
-                    </next>
-                  </block>
-                </next>
-              </block>
-            </next>
-          </block>
-        </next>
-      </block>
-    </statement>
-    <statement name="INITIALIZATION">
-      <block type="variables_set" id="init_stake">
-        <field name="VAR" id="stake_var">Initial Stake</field>
-        <value name="VALUE">
-          <block type="math_number" id="num_1"><field name="NUM">1</field></block>
-        </value>
-      </block>
-    </statement>
-    <statement name="SUBMARKET">
-      <block type="trade_definition_tradeoptions" id="td_opts">
-        <mutation xmlns="http://www.w3.org/1999/xhtml" has_first_barrier="false" has_second_barrier="false" has_prediction="false"></mutation>
-        <field name="DURATIONTYPE_LIST">t</field>
-        <value name="DURATION">
-          <shadow type="math_number_positive" id="dur_1"><field name="NUM">1</field></shadow>
-        </value>
-        <value name="AMOUNT">
-          <shadow type="math_number_positive" id="amt_1"><field name="NUM">1</field></shadow>
-          <block type="variables_get" id="get_stake"><field name="VAR" id="stake_var">Initial Stake</field></block>
-        </value>
-      </block>
-    </statement>
-  </block>
-  <block type="before_purchase" id="bp_root" deletable="false" x="0" y="420">
-    <statement name="BEFOREPURCHASE_STACK">
-      <block type="purchase" id="buy_even">
-        <field name="PURCHASE_LIST">DIGITEVEN</field>
-      </block>
-    </statement>
-  </block>
-</xml>`;
