@@ -565,3 +565,54 @@ export function checkTickPulseEntryCondition(params: {
 
     return true;
 }
+
+export function selectBestReadyTickPulseMarket(params: {
+    getTicks: (symbol: string) => { t: number; price: number }[];
+    getPipSize: (symbol: string) => number;
+    contractKey: TickPulseContractKey;
+    prediction: number;
+    condition: TickPulseEntryCondition;
+    lastTradedEpochs?: Record<string, number>;
+    pinnedSymbol?: string | null;
+}): { ranking: TickPulseMarketRanking; latestEpoch: number } | null {
+    const ranked = rankTickPulseMarkets({
+        getTicks: params.getTicks,
+        getPipSize: params.getPipSize,
+        contractKey: params.contractKey,
+        prediction: params.prediction,
+    });
+
+    const candidates = params.pinnedSymbol
+        ? ranked.filter(r => r.symbol === params.pinnedSymbol)
+        : ranked;
+
+    for (const candidate of candidates) {
+        const rawTicks = params.getTicks(candidate.symbol);
+        if (!rawTicks.length) continue;
+
+        const latestEpoch = rawTicks[rawTicks.length - 1]?.t ?? 0;
+        if (
+            latestEpoch &&
+            params.lastTradedEpochs &&
+            params.lastTradedEpochs[candidate.symbol] === latestEpoch
+        ) {
+            continue;
+        }
+
+        const pipSize = params.getPipSize(candidate.symbol);
+        const conditionMet = checkTickPulseEntryCondition({
+            condition: params.condition,
+            contractKey: params.contractKey,
+            prediction: params.prediction,
+            rawTicks,
+            pipSize,
+        });
+
+        if (conditionMet) {
+            return { ranking: candidate, latestEpoch };
+        }
+    }
+
+    return null;
+}
+

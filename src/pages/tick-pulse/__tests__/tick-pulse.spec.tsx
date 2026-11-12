@@ -1,6 +1,6 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { normalizeDerivContractParams } from '@/utils/ai-bot-xml-builder';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { executeLiveDerivTrade, normalizeDerivContractParams } from '@/utils/ai-bot-xml-builder';
 import TickPulse from '../tick-pulse';
 import {
     checkTickPulseEntryCondition,
@@ -10,10 +10,21 @@ import {
     estimateNetProfitRatio,
     rankTickPulseMarkets,
     resolveTickPulseOrderSpec,
+    selectBestReadyTickPulseMarket,
     settleTickPulseRecoveryState,
     TICKPULSE_CONTRACTS,
     TICKPULSE_MARKETS,
 } from '../tick-pulse-engine';
+
+const mockExecuteLiveDerivTrade = jest.fn();
+
+jest.mock('@/utils/ai-bot-xml-builder', () => {
+    const actual = jest.requireActual('@/utils/ai-bot-xml-builder');
+    return {
+        ...actual,
+        executeLiveDerivTrade: (...args: any[]) => mockExecuteLiveDerivTrade(...args),
+    };
+});
 
 jest.mock('@/hooks/useStore', () => ({
     useStore: () => ({
@@ -47,31 +58,54 @@ jest.mock('@/external/bot-skeleton/services/api/chart-api', () => ({
     default: { api: null },
 }));
 
+const mockSubscribedLists: string[][] = [];
+let tickListeners: Array<(ev: any) => void> = [];
+
 jest.mock('@/lib/deriv/tick-bus', () => {
-    const sampleTicks = Array.from({ length: 40 }, (_, i) => ({
-        t: 1700000000000 + i * 1000,
-        price: 100 + ((i * 7 + 3) % 10) / 100,
-    }));
     return {
         derivBus: {
-            getTicks: (sym: string) =>
-                sym === '1HZ75V'
-                    ? Array.from({ length: 40 }, (_, i) => ({
-                          t: 1700000000000 + i * 1000,
-                          price: 250 + 0.08, // last digit 8 -> strong Over 2 hit rate
-                      }))
-                    : sampleTicks,
+            getTicks: (sym: string) => {
+                if (sym === '1HZ75V') {
+                    // Last digit 9 (odd, > 2) -> 100% Over 2, 0% Even
+                    return Array.from({ length: 40 }, (_, i) => ({
+                        t: 1700000000000 + i * 1000,
+                        price: 250.09,
+                    }));
+                }
+                if (sym === '1HZ10V') {
+                    // Last digit 2 (even, <= 2) -> 0% Over 2, 100% Even!
+                    return Array.from({ length: 40 }, (_, i) => ({
+                        t: 1700000000500 + i * 1000,
+                        price: 120.02,
+                    }));
+                }
+                return Array.from({ length: 40 }, (_, i) => ({
+                    t: 1700000000200 + i * 1000,
+                    price: 100 + ((i * 7 + 1) % 10) / 100,
+                }));
+            },
             getPipSize: () => 2,
             onHistory: () => () => {},
-            onTick: () => () => {},
-            subscribe: () => () => {},
+            onTick: (fn: (ev: any) => void) => {
+                tickListeners.push(fn);
+                return () => {
+                    tickListeners = tickListeners.filter(x => x !== fn);
+                };
+            },
+            subscribe: (symbols: string[]) => {
+                mockSubscribedLists.push(symbols);
+                return () => {};
+            },
         },
     };
 });
 
-describe('TickPulse Engine & UI', () => {
+describe('TickPulse Engine, Live 13-Market Radar & Auto-Best-Market Trading', () => {
     beforeEach(() => {
         window.localStorage.clear();
+        mockExecuteLiveDerivTrade.mockReset();
+        mockSubscribedLists.length = 0;
+        tickListeners = [];
     });
 
     it('defines all 10 TickPulse contracts and all 13 Volatility markets', () => {
@@ -88,6 +122,7 @@ describe('TickPulse Engine & UI', () => {
             'Only Downs',
         ]);
         expect(TICKPULSE_MARKETS).toHaveLength(13);
+        expect(executeLiveDerivTrade).toBeDefined();
     });
 
     it('normalizes special TickPulse contracts (RESETCALL, RESETPUT, RUNHIGH, RUNLOW) safely for Deriv WS', () => {
@@ -120,10 +155,9 @@ describe('TickPulse Engine & UI', () => {
     });
 
     it('calculates Split-2 recovery stakes and resets back to Before loss after 2 recovery wins', () => {
-        const evenRatio = estimateNetProfitRatio('EVEN', 4); // ~0.961
+        const evenRatio = estimateNetProfitRatio('EVEN', 4);
         let state = createInitialRecoveryState(2);
 
-        // Initial stake before loss = $1.00
         expect(
             computeNextTickPulseStake({
                 initialStake: 1,
@@ -132,7 +166,6 @@ describe('TickPulse Engine & UI', () => {
             })
         ).toBe(1);
 
-        // Lose -$1.00 on Before-loss trade -> enters Split 1/2 recovery
         state = settleTickPulseRecoveryState({
             prev: state,
             profit: -1,
@@ -142,7 +175,6 @@ describe('TickPulse Engine & UI', () => {
         expect(state.unrecoveredLoss).toBe(1);
         expect(state.remainingSplits).toBe(2);
 
-        // Split 1/2 stake needs to recover $0.50 at ~0.961 net ratio -> $0.53
         const split1Stake = computeNextTickPulseStake({
             initialStake: 1,
             recoveryState: state,
@@ -150,7 +182,6 @@ describe('TickPulse Engine & UI', () => {
         });
         expect(split1Stake).toBe(0.53);
 
-        // Win +$0.51 on Split 1/2 -> remaining unrecovered loss $0.49, 1 split left
         state = settleTickPulseRecoveryState({
             prev: state,
             profit: 0.51,
@@ -167,7 +198,6 @@ describe('TickPulse Engine & UI', () => {
         });
         expect(split2Stake).toBe(0.51);
 
-        // Win +$0.49 on Split 2/2 -> fully recovered, back to Before-loss mode!
         state = settleTickPulseRecoveryState({
             prev: state,
             profit: 0.49,
@@ -178,25 +208,39 @@ describe('TickPulse Engine & UI', () => {
         expect(state.remainingSplits).toBe(2);
     });
 
-    it('ranks the market with the strongest empirical hit rate #1 and evaluates entry conditions', () => {
-        const ranked = rankTickPulseMarkets({
+    it('ranks all 13 markets and selects the #1 ready market dynamically per contract', () => {
+        const rankedOver = rankTickPulseMarkets({
             getTicks: s =>
                 s === '1HZ75V'
-                    ? Array.from({ length: 40 }, (_, i) => ({ t: i * 1000, price: 250.08 }))
-                    : Array.from({ length: 40 }, (_, i) => ({ t: i * 1000, price: 100.01 })),
+                    ? Array.from({ length: 40 }, (_, i) => ({ t: i * 1000, price: 250.09 }))
+                    : Array.from({ length: 40 }, (_, i) => ({ t: i * 1000, price: 100.02 })),
             getPipSize: () => 2,
             contractKey: 'OVER',
             prediction: 2,
         });
 
-        expect(ranked[0].symbol).toBe('1HZ75V');
-        expect(ranked[0].hitRatePct).toBe(100);
+        expect(rankedOver[0].symbol).toBe('1HZ75V');
+        expect(rankedOver[0].hitRatePct).toBe(100);
+
+        const chosenEven = selectBestReadyTickPulseMarket({
+            getTicks: s =>
+                s === '1HZ10V'
+                    ? Array.from({ length: 40 }, (_, i) => ({ t: 1000 + i * 1000, price: 120.02 }))
+                    : Array.from({ length: 40 }, (_, i) => ({ t: 1000 + i * 1000, price: 250.09 })),
+            getPipSize: () => 2,
+            contractKey: 'EVEN',
+            prediction: 4,
+            condition: 'NONE',
+        });
+
+        expect(chosenEven?.ranking.symbol).toBe('1HZ10V');
+        expect(chosenEven?.ranking.hitRatePct).toBe(100);
 
         const opposite2Ticks = [
             { t: 1, price: 100.08 },
             { t: 2, price: 100.07 },
-            { t: 3, price: 100.01 }, // <= 2 (opposite)
-            { t: 4, price: 100.02 }, // <= 2 (opposite)
+            { t: 3, price: 100.01 },
+            { t: 4, price: 100.02 },
         ];
         expect(
             checkTickPulseEntryCondition({
@@ -209,31 +253,66 @@ describe('TickPulse Engine & UI', () => {
         ).toBe(true);
     });
 
-    it('renders TickPulse UI cleanly with TradersPulse branding, 10 contracts, splits, and Find Best Market', () => {
+    it('subscribes to all 13 markets, renders the Live 13-Market Radar, and auto-switches to the #1 market per trade', async () => {
+        const tradeCallbacks: Array<(poc: any, isTerminal: boolean) => void> = [];
+        mockExecuteLiveDerivTrade.mockImplementation(async (params: any) => {
+            tradeCallbacks.push(params.onContractUpdate);
+            return {
+                contractId: 9000 + tradeCallbacks.length,
+                buyPrice: params.stake,
+                longcode: `${params.contractType} on ${params.symbol}`,
+            };
+        });
+
         render(<TickPulse />);
 
-        expect(screen.getByTestId('tickpulse-page')).toBeInTheDocument();
-        expect(screen.getByText('TradersPulse')).toBeInTheDocument();
+        // Verifies simultaneous subscription to all 13 Volatility symbols
+        expect(mockSubscribedLists[0]).toHaveLength(13);
+        expect(screen.getByTestId('tickpulse-live-radar')).toBeInTheDocument();
+        expect(screen.getByText('★ BEST TARGET')).toBeInTheDocument();
         expect(screen.getByTestId('tickpulse-markets-ticks')).toHaveTextContent('13 / 40');
 
-        // Switch Before loss to Only Ups and After loss to Reset Call
-        fireEvent.click(screen.getByTestId('before-contract-ONLY_UPS'));
-        fireEvent.click(screen.getByTestId('after-contract-RESET_CALL'));
-        fireEvent.click(screen.getByTestId('tickpulse-split-3'));
+        // Start Auto-Trading Best Market (Default: Before = Over 2, After = Even)
+        await act(async () => {
+            fireEvent.click(screen.getByTestId('tickpulse-load-and-run'));
+        });
 
-        expect(screen.getByText('Before: Only Ups')).toBeInTheDocument();
-        expect(screen.getByText('After: Reset Call')).toBeInTheDocument();
+        // Trade 1 automatically picks #1 Over-2 market: 1HZ75V
+        await waitFor(() => {
+            expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1);
+        });
+        expect(mockExecuteLiveDerivTrade.mock.calls[0][0]).toMatchObject({
+            symbol: '1HZ75V',
+            contractType: 'DIGITOVER',
+            barrier: 2,
+            stake: 1,
+        });
 
-        // Click Find Best Market
-        fireEvent.click(screen.getByTestId('tickpulse-find-best-market'));
-        expect(screen.getByTestId('tickpulse-status-banner').textContent).toContain('Best Market:');
+        // Settle Trade 1 as a -$1.00 loss -> TickPulse enters After-loss Split 1/2 (Even)
+        // and dynamically switches to #1 Even market: 1HZ10V!
+        await act(async () => {
+            tradeCallbacks[0](
+                {
+                    contract_id: 9001,
+                    profit: -1,
+                    buy_price: 1,
+                    currency: 'USD',
+                },
+                true
+            );
+            await new Promise(r => setTimeout(r, 220));
+        });
 
-        // Switch to Trade history sub-tab
-        fireEvent.click(screen.getByText('Trade history'));
-        expect(screen.getByTestId('tickpulse-history-panel')).toBeInTheDocument();
+        await waitFor(() => {
+            expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(2);
+        });
+        expect(mockExecuteLiveDerivTrade.mock.calls[1][0]).toMatchObject({
+            symbol: '1HZ10V',
+            contractType: 'DIGITEVEN',
+            stake: 0.53,
+        });
 
         // Ensure zero external brand leakage
-        const fullHtml = document.body.innerHTML;
-        expect(fullHtml).not.toMatch(/Risk Managers|Makoti|Duke/i);
+        expect(document.body.innerHTML).not.toMatch(/Risk Managers|Makoti|Duke/i);
     });
 });
