@@ -170,9 +170,16 @@ export default class TradeEngine extends Balance(Purchase(Sell(OpenContract(Prop
                 const data = msg?.data;
                 if (!data) return;
                 if (data.msg_type === 'transaction' && data.transaction.action === 'sell') {
+                    const soldContractId = data.transaction.contract_id;
                     this.transaction_recovery_timeout = setTimeout(() => {
+                        if (this.expectedHedgeIds && this.expectedHedgeIds.has(soldContractId)) {
+                            doUntilDone(() => {
+                                api_base.api.send({ proposal_open_contract: 1, contract_id: soldContractId });
+                            }, ['PriceMoved']);
+                            return;
+                        }
                         const { contract } = this.data;
-                        const is_same_contract = contract.contract_id === data.transaction.contract_id;
+                        const is_same_contract = contract.contract_id === soldContractId;
                         const is_open_contract = contract.status === 'open';
                         if (is_same_contract && is_open_contract) {
                             doUntilDone(() => {

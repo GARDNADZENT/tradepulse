@@ -901,4 +901,77 @@ getGenerator().forBlock.ai_purchase_barrier = block => {
     return `Bot.purchase('${contractType}', ${predExpr});\n`;
 };
 
+window.Blockly.Blocks.purchase_hedge = {
+    init() {
+        this.jsonInit({
+            message0: localize('Purchase Hedge: %1 %2 + %3 %4', {
+                '%1': '%1',
+                '%2': '%2',
+                '%3': '%3',
+                '%4': '%4',
+            }),
+            args0: [
+                {
+                    type: 'field_dropdown',
+                    name: 'PURCHASE_LIST_1',
+                    options: [
+                        [localize('Over'), 'DIGITOVER'],
+                        [localize('Under'), 'DIGITUNDER'],
+                        [localize('Matches'), 'DIGITMATCH'],
+                        [localize('Differs'), 'DIGITDIFF'],
+                        [localize('Even'), 'DIGITEVEN'],
+                        [localize('Odd'), 'DIGITODD'],
+                        [localize('Rise'), 'CALL'],
+                        [localize('Fall'), 'PUT'],
+                    ],
+                },
+                {
+                    type: 'input_value',
+                    name: 'PREDICTION_1',
+                    check: 'Number',
+                },
+                {
+                    type: 'field_dropdown',
+                    name: 'PURCHASE_LIST_2',
+                    options: [
+                        [localize('Under'), 'DIGITUNDER'],
+                        [localize('Over'), 'DIGITOVER'],
+                        [localize('Matches'), 'DIGITMATCH'],
+                        [localize('Differs'), 'DIGITDIFF'],
+                        [localize('Even'), 'DIGITEVEN'],
+                        [localize('Odd'), 'DIGITODD'],
+                        [localize('Rise'), 'CALL'],
+                        [localize('Fall'), 'PUT'],
+                    ],
+                },
+                {
+                    type: 'input_value',
+                    name: 'PREDICTION_2',
+                    check: 'Number',
+                },
+            ],
+            previousStatement: null,
+            nextStatement: null,
+            colour: window.Blockly.Colours.Special1.colour,
+            colourSecondary: window.Blockly.Colours.Special1.colourSecondary,
+            colourTertiary: window.Blockly.Colours.Special1.colourTertiary,
+            tooltip: localize('Purchases two contracts simultaneously on the exact same tick (e.g. Over 4 + Under 5)'),
+            category: window.Blockly.Categories.Before_Purchase,
+        });
+    },
+    customContextMenu(menu) {
+        modifyContextMenu(menu);
+    },
+    restricted_parents: ['before_purchase'],
+};
+
+getGenerator().forBlock.purchase_hedge = block => {
+    const ct1 = block.getFieldValue('PURCHASE_LIST_1') || 'DIGITOVER';
+    const p1 = getGenerator().valueToCode(block, 'PREDICTION_1', getGenerator().ORDER_ATOMIC) || '4';
+    const ct2 = block.getFieldValue('PURCHASE_LIST_2') || 'DIGITUNDER';
+    const p2 = getGenerator().valueToCode(block, 'PREDICTION_2', getGenerator().ORDER_ATOMIC) || '5';
+    return `Bot.purchaseHedge('${ct1}', ${p1}, '${ct2}', ${p2});\n`;
+};
+
+
 

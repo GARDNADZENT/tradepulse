@@ -1,0 +1,210 @@
+<xml xmlns="https://developers.google.com/blockly/xml" is_dbot="true" collection="false">
+  <variables>
+    <variable id="tp_hedge_stake">Stake</variable>
+    <variable id="tp_hedge_over_pred">Over Prediction</variable>
+    <variable id="tp_hedge_under_pred">Under Prediction</variable>
+    <variable id="tp_hedge_tp">Expected Profit</variable>
+    <variable id="tp_hedge_sl">Stop Loss</variable>
+  </variables>
+  <block type="trade_definition" id="tp_hedge_root" deletable="false" x="0" y="60">
+    <statement name="TRADE_OPTIONS">
+      <block type="trade_definition_market" id="tp_hedge_market" deletable="false" movable="false">
+        <field name="MARKET_LIST">synthetic_index</field>
+        <field name="SUBMARKET_LIST">continuous_indices</field>
+        <field name="SYMBOL_LIST">1HZ100V</field>
+        <field name="ALTERNATE_MARKETS">FALSE</field>
+        <field name="ALTERNATE_EVERY">1</field>
+        <next>
+          <block type="trade_definition_tradetype" id="tp_hedge_tradetype" deletable="false" movable="false">
+            <field name="TRADETYPECAT_LIST">digits</field>
+            <field name="TRADETYPE_LIST">overunder</field>
+            <next>
+              <block type="trade_definition_contracttype" id="tp_hedge_contracttype" deletable="false" movable="false">
+                <field name="TYPE_LIST">both</field>
+                <next>
+                  <block type="trade_definition_candleinterval" id="tp_hedge_candle" collapsed="true" deletable="false" movable="false">
+                    <field name="CANDLEINTERVAL_LIST">60</field>
+                    <next>
+                      <block type="trade_definition_restartbuysell" id="tp_hedge_restartbs" collapsed="true" deletable="false" movable="false">
+                        <field name="TIME_MACHINE_ENABLED">FALSE</field>
+                        <next>
+                          <block type="trade_definition_restartonerror" id="tp_hedge_restarterr" collapsed="true" deletable="false" movable="false">
+                            <field name="RESTARTONERROR">TRUE</field>
+                          </block>
+                        </next>
+                      </block>
+                    </next>
+                  </block>
+                </next>
+              </block>
+            </next>
+          </block>
+        </next>
+      </block>
+    </statement>
+    <statement name="INITIALIZATION">
+      <block type="variables_set" id="tp_set_stake">
+        <field name="VAR" id="tp_hedge_stake">Stake</field>
+        <value name="VALUE">
+          <block type="math_number" id="tp_num_stake">
+            <field name="NUM">1</field>
+          </block>
+        </value>
+        <next>
+          <block type="variables_set" id="tp_set_over">
+            <field name="VAR" id="tp_hedge_over_pred">Over Prediction</field>
+            <value name="VALUE">
+              <block type="math_number" id="tp_num_over">
+                <field name="NUM">4</field>
+              </block>
+            </value>
+            <next>
+              <block type="variables_set" id="tp_set_under">
+                <field name="VAR" id="tp_hedge_under_pred">Under Prediction</field>
+                <value name="VALUE">
+                  <block type="math_number" id="tp_num_under">
+                    <field name="NUM">5</field>
+                  </block>
+                </value>
+                <next>
+                  <block type="variables_set" id="tp_set_tp">
+                    <field name="VAR" id="tp_hedge_tp">Expected Profit</field>
+                    <value name="VALUE">
+                      <block type="math_number" id="tp_num_tp">
+                        <field name="NUM">20</field>
+                      </block>
+                    </value>
+                    <next>
+                      <block type="variables_set" id="tp_set_sl">
+                        <field name="VAR" id="tp_hedge_sl">Stop Loss</field>
+                        <value name="VALUE">
+                          <block type="math_number" id="tp_num_sl">
+                            <field name="NUM">50</field>
+                          </block>
+                        </value>
+                      </block>
+                    </next>
+                  </block>
+                </next>
+              </block>
+            </next>
+          </block>
+        </next>
+      </block>
+    </statement>
+    <statement name="SUBMARKET">
+      <block type="trade_definition_tradeoptions" id="tp_hedge_options">
+        <mutation xmlns="http://www.w3.org/1999/xhtml" has_first_barrier="false" has_second_barrier="false" has_prediction="true"></mutation>
+        <field name="DURATIONTYPE_LIST">t</field>
+        <field name="TRADE_EACH_TICK">FALSE</field>
+        <value name="DURATION">
+          <shadow type="math_number" id="tp_dur_shadow">
+            <field name="NUM">1</field>
+          </shadow>
+        </value>
+        <value name="AMOUNT">
+          <shadow type="math_number" id="tp_amt_shadow">
+            <field name="NUM">1</field>
+          </shadow>
+          <block type="variables_get" id="tp_get_stake">
+            <field name="VAR" id="tp_hedge_stake">Stake</field>
+          </block>
+        </value>
+        <value name="PREDICTION">
+          <shadow type="math_number_positive" id="tp_pred_shadow">
+            <field name="NUM">4</field>
+          </shadow>
+          <block type="variables_get" id="tp_get_over_opt">
+            <field name="VAR" id="tp_hedge_over_pred">Over Prediction</field>
+          </block>
+        </value>
+      </block>
+    </statement>
+  </block>
+  <block type="before_purchase" id="tp_hedge_before" deletable="false" x="0" y="640">
+    <statement name="BEFOREPURCHASE_STACK">
+      <block type="purchase_hedge" id="tp_hedge_purchase_block">
+        <field name="PURCHASE_LIST_1">DIGITOVER</field>
+        <field name="PURCHASE_LIST_2">DIGITUNDER</field>
+        <value name="PREDICTION_1">
+          <shadow type="math_number" id="tp_sh_p1">
+            <field name="NUM">4</field>
+          </shadow>
+          <block type="variables_get" id="tp_get_p1">
+            <field name="VAR" id="tp_hedge_over_pred">Over Prediction</field>
+          </block>
+        </value>
+        <value name="PREDICTION_2">
+          <shadow type="math_number" id="tp_sh_p2">
+            <field name="NUM">5</field>
+          </shadow>
+          <block type="variables_get" id="tp_get_p2">
+            <field name="VAR" id="tp_hedge_under_pred">Under Prediction</field>
+          </block>
+        </value>
+      </block>
+    </statement>
+  </block>
+  <block type="after_purchase" id="tp_hedge_after" x="780" y="60">
+    <statement name="AFTERPURCHASE_STACK">
+      <block type="controls_if" id="tp_hedge_tp_sl_if">
+        <mutation xmlns="http://www.w3.org/1999/xhtml" elseif="1" else="1"></mutation>
+        <value name="IF0">
+          <block type="logic_compare" id="tp_cmp_tp">
+            <field name="OP">GTE</field>
+            <value name="A">
+              <block type="total_profit" id="tp_tot_prof_1"></block>
+            </value>
+            <value name="B">
+              <block type="variables_get" id="tp_get_tp">
+                <field name="VAR" id="tp_hedge_tp">Expected Profit</field>
+              </block>
+            </value>
+          </block>
+        </value>
+        <statement name="DO0">
+          <block type="text_print" id="tp_print_tp">
+            <value name="TEXT">
+              <shadow type="text" id="tp_txt_tp">
+                <field name="TEXT">Target Profit Reached — Under 5 Over 4 Hedge Stopped.</field>
+              </shadow>
+            </value>
+          </block>
+        </statement>
+        <value name="IF1">
+          <block type="logic_compare" id="tp_cmp_sl">
+            <field name="OP">LTE</field>
+            <value name="A">
+              <block type="total_profit" id="tp_tot_prof_2"></block>
+            </value>
+            <value name="B">
+              <block type="math_single" id="tp_neg_sl">
+                <field name="OP">NEG</field>
+                <value name="NUM">
+                  <shadow type="math_number" id="tp_sh_sl">
+                    <field name="NUM">50</field>
+                  </shadow>
+                  <block type="variables_get" id="tp_get_sl">
+                    <field name="VAR" id="tp_hedge_sl">Stop Loss</field>
+                  </block>
+                </value>
+              </block>
+            </value>
+          </block>
+        </value>
+        <statement name="DO1">
+          <block type="text_print" id="tp_print_sl">
+            <value name="TEXT">
+              <shadow type="text" id="tp_txt_sl">
+                <field name="TEXT">Stop Loss Reached — Under 5 Over 4 Hedge Stopped.</field>
+              </shadow>
+            </value>
+          </block>
+        </statement>
+        <statement name="ELSE">
+          <block type="trade_again" id="tp_hedge_again"></block>
+        </statement>
+      </block>
+    </statement>
+  </block>
+</xml>
