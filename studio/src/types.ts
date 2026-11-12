@@ -127,12 +127,13 @@ export const ALL_13_TABS: FeatureTabMeta[] = [
   { id: 'id-dtrader', index: 4, label: 'DTrader', badge: 'Manual', description: 'Instant Accumulators, Digits & Options trading' },
   { id: 'id-ai-bots', index: 5, label: 'AI Bots', badge: 'Scanner', description: '7 AI strategies + live in-page AI Bot Scanner' },
   { id: 'id-auto-trades', index: 6, label: 'Auto Trades', badge: 'Multi-Rule', description: 'Automated multi-condition trigger engine' },
-  { id: 'id-trading-view', index: 7, label: 'TradingView', badge: 'Charts', description: 'Real-time Deriv synthetic & forex charts' },
-  { id: 'id-copy-trading', index: 8, label: 'Copy Trading', badge: 'V2+V3', description: 'Master-to-follower real-time trade mirroring' },
-  { id: 'id-calculator', index: 9, label: 'Risk Calculator', badge: 'Risk', description: 'Martingale & compounding stake planner' },
-  { id: 'id-analysis-tool', index: 10, label: 'Analysis Tool', badge: 'Digits', description: 'Even/Odd, Over/Under & Rise/Fall live execution' },
-  { id: 'id-digits-analysis', index: 11, label: 'Digits Analysis', badge: 'Quant', description: 'Statistical volatility & digit streak heatmap' },
-  { id: 'id-tradepulse', index: 12, label: 'TradePulse', badge: 'Suite', description: 'Compounding plan, master schedule & analytics' },
+  { id: 'id-tick-pulse', index: 7, label: 'TickPulse', badge: 'Split-Rec', description: '13-market scanner with Before/After loss & Split-1/2/3 recovery' },
+  { id: 'id-trading-view', index: 8, label: 'TradingView', badge: 'Charts', description: 'Real-time Deriv synthetic & forex charts' },
+  { id: 'id-copy-trading', index: 9, label: 'Copy Trading', badge: 'V2+V3', description: 'Master-to-follower real-time trade mirroring' },
+  { id: 'id-calculator', index: 10, label: 'Risk Calculator', badge: 'Risk', description: 'Martingale & compounding stake planner' },
+  { id: 'id-analysis-tool', index: 11, label: 'Analysis Tool', badge: 'Digits', description: 'Even/Odd, Over/Under & Rise/Fall live execution' },
+  { id: 'id-digits-analysis', index: 12, label: 'Digits Analysis', badge: 'Quant', description: 'Statistical volatility & digit streak heatmap' },
+  { id: 'id-tradepulse', index: 13, label: 'TradePulse', badge: 'Suite', description: 'Compounding plan, master schedule & analytics' },
 ];
 
 export const COLOR_SWATCHES = [

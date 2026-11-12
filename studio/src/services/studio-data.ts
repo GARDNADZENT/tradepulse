@@ -355,7 +355,16 @@ export async function loadManagedSites(user: StudioUser): Promise<ManagedSite[]>
       pooled_deriv_app_id: platform.pooled_deriv_app_id,
       deriv_referral_link: String(r.deriv_referral_link || ''),
       announcement_text: String(r.announcement_text || ''),
-      enabled_tabs: Array.isArray(r.enabled_tabs) ? r.enabled_tabs : ALL_13_TABS.map(t => t.id),
+      enabled_tabs: (() => {
+        const allIds = ALL_13_TABS.map(t => t.id);
+        if (!Array.isArray(r.enabled_tabs) || r.enabled_tabs.length === 0) return allIds;
+        const legacyIds = allIds.filter(id => id !== 'id-tick-pulse');
+        const hasAllLegacy = legacyIds.every(id => r.enabled_tabs.includes(id));
+        if ((isFlagship || hasAllLegacy) && !r.enabled_tabs.includes('id-tick-pulse')) {
+          return Array.from(new Set([...r.enabled_tabs, 'id-tick-pulse']));
+        }
+        return r.enabled_tabs;
+      })(),
       social_links: r.social_links || {},
       include_default_bots: r.include_default_bots !== false,
       commission_share_pct: Number(

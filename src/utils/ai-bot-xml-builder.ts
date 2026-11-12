@@ -448,13 +448,17 @@ export function extractDerivApiError(err: any, fallback = 'Purchase failed — p
 export function normalizeDerivContractParams(params: {
     contractType: string;
     duration?: number;
+    durationUnit?: 't' | 'm';
     barrier?: number | string;
-}): { apiContractType: string; duration: number; durationUnit: 't'; barrier?: string } {
+}): { apiContractType: string; duration: number; durationUnit: 't' | 'm'; barrier?: string } {
     const rawType = String(params.contractType || 'DIGITOVER').toUpperCase();
     const rawDur = Math.max(1, Math.round(Number(params.duration) || 1));
+    const reqUnit: 't' | 'm' = params.durationUnit === 'm' ? 'm' : 't';
     const numBarrier = Number(params.barrier);
 
     switch (rawType) {
+        case 'ACCU':
+            return { apiContractType: 'ACCU', duration: 0, durationUnit: 't' };
         case 'DIGITOVER': {
             const b = Number.isFinite(numBarrier) ? Math.min(8, Math.max(0, Math.round(numBarrier))) : 3;
             return { apiContractType: 'DIGITOVER', duration: Math.min(10, rawDur), durationUnit: 't', barrier: String(b) };
@@ -473,25 +477,54 @@ export function normalizeDerivContractParams(params: {
             return { apiContractType: rawType, duration: Math.min(10, rawDur), durationUnit: 't' };
         case 'HIGHER': {
             const offset = Number.isFinite(numBarrier) && numBarrier !== 0 ? Math.abs(numBarrier) : 0.1;
-            return { apiContractType: 'CALL', duration: Math.max(5, rawDur), durationUnit: 't', barrier: `+${offset}` };
+            const dur = reqUnit === 'm' ? Math.max(1, rawDur) : Math.max(5, rawDur);
+            return { apiContractType: 'CALL', duration: dur, durationUnit: reqUnit, barrier: `+${offset}` };
         }
         case 'LOWER': {
             const offset = Number.isFinite(numBarrier) && numBarrier !== 0 ? Math.abs(numBarrier) : 0.1;
-            return { apiContractType: 'PUT', duration: Math.max(5, rawDur), durationUnit: 't', barrier: `-${offset}` };
+            const dur = reqUnit === 'm' ? Math.max(1, rawDur) : Math.max(5, rawDur);
+            return { apiContractType: 'PUT', duration: dur, durationUnit: reqUnit, barrier: `-${offset}` };
         }
         case 'TOUCH':
         case 'ONETOUCH': {
             const offset = Number.isFinite(numBarrier) && numBarrier !== 0 ? Math.abs(numBarrier) : 0.5;
-            return { apiContractType: 'ONETOUCH', duration: Math.max(5, rawDur), durationUnit: 't', barrier: `+${offset}` };
+            const dur = reqUnit === 'm' ? Math.max(1, rawDur) : Math.max(5, rawDur);
+            return { apiContractType: 'ONETOUCH', duration: dur, durationUnit: reqUnit, barrier: `+${offset}` };
         }
         case 'NOTOUCH': {
             const offset = Number.isFinite(numBarrier) && numBarrier !== 0 ? Math.abs(numBarrier) : 0.5;
-            return { apiContractType: 'NOTOUCH', duration: Math.max(5, rawDur), durationUnit: 't', barrier: `+${offset}` };
+            const dur = reqUnit === 'm' ? Math.max(1, rawDur) : Math.max(5, rawDur);
+            return { apiContractType: 'NOTOUCH', duration: dur, durationUnit: reqUnit, barrier: `+${offset}` };
         }
+        case 'RESETCALL':
+        case 'RESETPUT':
+            return {
+                apiContractType: rawType,
+                duration: reqUnit === 'm' ? Math.max(1, rawDur) : Math.min(10, Math.max(5, rawDur)),
+                durationUnit: reqUnit,
+            };
+        case 'RUNHIGH':
+        case 'RUNLOW':
+            return {
+                apiContractType: rawType,
+                duration: Math.min(5, Math.max(2, rawDur)),
+                durationUnit: 't',
+            };
+        case 'CALLE':
+        case 'PUTE':
+            return {
+                apiContractType: rawType,
+                duration: reqUnit === 'm' ? Math.max(1, rawDur) : Math.min(10, rawDur),
+                durationUnit: reqUnit,
+            };
         case 'CALL':
         case 'PUT':
         default:
-            return { apiContractType: rawType === 'PUT' ? 'PUT' : 'CALL', duration: rawDur, durationUnit: 't' };
+            return {
+                apiContractType: rawType === 'PUT' ? 'PUT' : 'CALL',
+                duration: reqUnit === 'm' ? Math.max(1, rawDur) : rawDur,
+                durationUnit: reqUnit,
+            };
     }
 }
 
@@ -532,6 +565,14 @@ function buildFallbackContractLongcode(
             return `Win payout if ${marketName} is strictly higher than entry spot at ${duration} ticks after contract start time.`;
         case 'PUT':
             return `Win payout if ${marketName} is strictly lower than entry spot at ${duration} ticks after contract start time.`;
+        case 'RESETCALL':
+            return `Win payout if ${marketName} is strictly higher than either the entry spot or the spot at reset after ${duration} ticks.`;
+        case 'RESETPUT':
+            return `Win payout if ${marketName} is strictly lower than either the entry spot or the spot at reset after ${duration} ticks.`;
+        case 'RUNHIGH':
+            return `Win payout if every consecutive tick of ${marketName} rises across ${duration} ticks.`;
+        case 'RUNLOW':
+            return `Win payout if every consecutive tick of ${marketName} falls across ${duration} ticks.`;
         default:
             return `Win payout on ${marketName} (${apiContractType}) after ${duration} ticks.`;
     }
@@ -548,8 +589,12 @@ export async function executeLiveDerivTrade(params: {
     symbol: string;
     contractType: string;
     stake: number;
+    basis?: 'stake' | 'payout';
     duration?: number;
+    durationUnit?: 't' | 'm';
     barrier?: number | string;
+    growthRate?: number;
+    takeProfit?: number;
     currency?: string;
     tabNamespace?: TabRecordNamespace;
     stores?: LiveTradeRecordingStores;
@@ -568,18 +613,36 @@ export async function executeLiveDerivTrade(params: {
     }
 
     const stakeAmount = Math.max(0.35, Number(params.stake) || 1);
+    const activeBasis: 'stake' | 'payout' = params.basis === 'payout' ? 'payout' : 'stake';
     const activeCurrency =
         params.currency || (api_base?.account_info as any)?.currency || 'USD';
     const spec = normalizeDerivContractParams({
         contractType: params.contractType,
         duration: params.duration,
+        durationUnit: params.durationUnit,
         barrier: params.barrier,
     });
 
     const buildParameters = (useUnderlyingSymbol: boolean) => {
+        if (spec.apiContractType === 'ACCU') {
+            const p: Record<string, any> = {
+                amount: stakeAmount,
+                basis: 'stake',
+                contract_type: 'ACCU',
+                currency: activeCurrency,
+                growth_rate: Math.min(0.05, Math.max(0.01, Number(params.growthRate) || 0.03)),
+            };
+            if (useUnderlyingSymbol) p.underlying_symbol = params.symbol;
+            else p.symbol = params.symbol;
+            if (params.takeProfit && Number(params.takeProfit) > 0) {
+                p.limit_order = { take_profit: Number(params.takeProfit) };
+            }
+            return p;
+        }
+
         const p: Record<string, any> = {
             amount: stakeAmount,
-            basis: 'stake',
+            basis: activeBasis,
             contract_type: spec.apiContractType,
             currency: activeCurrency,
             duration: spec.duration,
