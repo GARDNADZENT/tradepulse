@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { observer } from 'mobx-react-lite';
 import { api_base } from '@/external/bot-skeleton';
 import chart_api from '@/external/bot-skeleton/services/api/chart-api';
+import { autoDockRunPanel, triggerTpSlModal } from '@/components/tp-sl-modal';
 import { useStore } from '@/hooks/useStore';
 import { derivBus } from '@/lib/deriv/tick-bus';
 import { getTenantBrandName, subscribeActiveTenantConfig } from '@/services/site-config/site-runtime-config';
@@ -535,6 +536,12 @@ const TickPulse: React.FC = observer(() => {
                 stopEngine(
                     `Take profit reached: +${nextPL.toFixed(2)} ${cfg.currency} (last trade on ${marketLabel})`
                 );
+                triggerTpSlModal({
+                    type: 'tp',
+                    amount: nextPL,
+                    currency: cfg.currency,
+                    source: 'tickpulse',
+                });
                 return;
             }
 
@@ -546,6 +553,12 @@ const TickPulse: React.FC = observer(() => {
                     `Stop loss reached: ${nextPL.toFixed(2)} ${cfg.currency} (last trade on ${marketLabel})`,
                     true
                 );
+                triggerTpSlModal({
+                    type: 'sl',
+                    amount: nextPL,
+                    currency: cfg.currency,
+                    source: 'tickpulse',
+                });
                 return;
             }
 
@@ -672,6 +685,7 @@ const TickPulse: React.FC = observer(() => {
         runningRef.current = true;
         setIsRunning(true);
         setHasErrorBanner(false);
+        autoDockRunPanel(run_panel, 1);
 
         const targetName = effectiveTargetMarket?.label || 'All 13 Volatility Markets';
         setStatusMessage(

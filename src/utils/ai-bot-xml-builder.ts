@@ -5,6 +5,7 @@ import {
     TabRecordNamespace,
 } from '@/components/tab-trade-record/tab-trade-store';
 import { DBOT_TABS } from '@/constants/bot-contents';
+import { autoDockRunPanel, triggerTpSlModal } from '@/components/tp-sl-modal';
 import { api_base, LogTypes } from '@/external/bot-skeleton';
 import chart_api from '@/external/bot-skeleton/services/api/chart-api';
 import { getSymbolDisplayNameSync } from '@/utils/symbol-display-name';
@@ -757,9 +758,7 @@ export async function executeLiveDerivTrade(params: {
             if (!run_panel.run_id) {
                 run_panel.run_id = `manual-${Date.now()}`;
             }
-            if (run_panel.active_index === 0) {
-                run_panel.setActiveTabIndex?.(2);
-            }
+            autoDockRunPanel(run_panel, 1);
         }
 
         if (journal?.onLogSuccess) {
@@ -846,6 +845,21 @@ export async function executeLiveDerivTrade(params: {
 
                 const finalProfit = Number(poc.profit ?? 0);
                 const resolvedCurrency = poc.currency || activeCurrency;
+
+                if (
+                    shouldLogSettlement &&
+                    params.takeProfit &&
+                    Number(params.takeProfit) > 0 &&
+                    finalProfit >= Number(params.takeProfit) * 0.95 &&
+                    finalProfit > 0
+                ) {
+                    triggerTpSlModal({
+                        type: 'tp',
+                        amount: finalProfit,
+                        currency: resolvedCurrency,
+                        source: 'limit-order',
+                    });
+                }
 
                 if (tabStore) {
                     const resolvedStatus = isTerminal

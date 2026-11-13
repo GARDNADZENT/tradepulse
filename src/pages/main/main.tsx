@@ -38,6 +38,7 @@ import {
 import { Localize, localize } from '@deriv-com/translations';
 import { useDevice } from '@deriv-com/ui';
 import RunPanel from '../../components/run-panel';
+import { TpSlResultModal } from '../../components/tp-sl-modal';
 import ChartModal from '../chart/chart-modal';
 import Dashboard from '../dashboard';
 import RunStrategy from '../dashboard/run-strategy';
@@ -349,6 +350,7 @@ const AppWrapper = observer(() => {
 
     const isExecSurface = [BOT_BUILDER, FREE_BOTS].includes(active_tab);
     const isExecScrollTab = active_tab === FREE_BOTS;
+    const isDockablePageTab = ![BOT_BUILDER, DBOT_TABS.DTRADER, DBOT_TABS.ANALYSIS_TOOL].includes(active_tab);
 
     return (
         <React.Fragment>
@@ -356,7 +358,7 @@ const AppWrapper = observer(() => {
                 className={classNames('main', {
                     'main--has-exec-dock': isExecSurface,
                     'main--exec-scroll-tab': isExecScrollTab,
-                    'main--drawer-open': isExecScrollTab && is_drawer_open && isDesktop,
+                    'main--drawer-open': isDockablePageTab && is_drawer_open && isDesktop,
                     'main--full-page-tab': !isExecSurface,
                 })}
             >
@@ -629,6 +631,7 @@ const AppWrapper = observer(() => {
                 </DesktopWrapper>
             )}
             {(!is_open || isDesktop) && <RunPanel />}
+            <TpSlResultModal />
 
             <Dialog
                 cancel_button_text={cancel_button_text || localize('Cancel')}

@@ -801,6 +801,7 @@ export default observer(function DTrader() {
         buyInFlightRef.current = true;
         setBuyingLeg(leg.key);
         setMessage('');
+        setRecordOpen(true);
 
         const safeAmt = Math.max(0.35, Number(amount) || 1);
         const tpNum = Number(accuTakeProfit);

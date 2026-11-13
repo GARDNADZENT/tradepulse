@@ -214,6 +214,8 @@ const AnalysisTool = observer(() => {
         if (!intelligence) return;
         setBusy(true);
         setTradeFeedback(null);
+        setRecordOpen(true);
+        setRecordTab('transactions');
         try {
             const activeCurr = client?.currency || 'USD';
             const res = await executeLiveDerivTrade({
