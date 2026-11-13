@@ -916,7 +916,6 @@ export default observer(function DTrader() {
                 growthRate,
                 takeProfit: tpOrder,
                 currency: activeCurrency,
-                tabNamespace: 'dtrader',
                 stores: { journal, transactions, summary_card, run_panel },
                 onContractUpdate: (pc, isTerminal) => {
                     const st = String(pc.status || (pc.is_sold ? 'sold' : 'open'));
@@ -1150,6 +1149,9 @@ export default observer(function DTrader() {
         currentAutoStakeRef.current = baseStake;
         autoRunningRef.current = true;
         setAutoRunning(true);
+        if (run_panel) {
+            run_panel.run_id = `dtrader-auto-${Date.now()}`;
+        }
         autoDockRunPanel(run_panel, 1);
         setStatusLine('Running AUTO (Adaptive)…');
         setStatusTone('running');

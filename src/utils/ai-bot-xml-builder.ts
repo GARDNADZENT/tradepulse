@@ -708,23 +708,23 @@ export async function executeLiveDerivTrade(params: {
     const shortLabel = formatTabContractShortLabel(spec.apiContractType, spec.barrier);
     const createdAtMs = Date.now();
 
-    // Prevent app-content.jsx recoverPendingContracts from pulling tab-scoped manual trades into Bot Builder's global RunPanel
-    if (tabStore) {
-        runInAction(() => {
-            if (
-                Array.isArray(transactions?.recovered_transactions) &&
-                !transactions.recovered_transactions.includes(contractId)
-            ) {
-                transactions.recovered_transactions.push(contractId);
-            }
-            if (
-                Array.isArray(transactions?.recovered_completed_transactions) &&
-                !transactions.recovered_completed_transactions.includes(contractId)
-            ) {
-                transactions.recovered_completed_transactions.push(contractId);
-            }
-        });
+    // Mark contract as handled so app-content.jsx recoverPendingContracts does not duplicate it
+    runInAction(() => {
+        if (
+            Array.isArray(transactions?.recovered_transactions) &&
+            !transactions.recovered_transactions.includes(contractId)
+        ) {
+            transactions.recovered_transactions.push(contractId);
+        }
+        if (
+            Array.isArray(transactions?.recovered_completed_transactions) &&
+            !transactions.recovered_completed_transactions.includes(contractId)
+        ) {
+            transactions.recovered_completed_transactions.push(contractId);
+        }
+    });
 
+    if (tabStore) {
         tabStore.appendJournal({
             type: 'purchase',
             message: `Bought: ${resolvedLongcode}`,
@@ -753,23 +753,23 @@ export async function executeLiveDerivTrade(params: {
             status: 'open',
             isCompleted: false,
         });
-    } else {
-        if (run_panel) {
-            if (!run_panel.run_id) {
-                run_panel.run_id = `manual-${Date.now()}`;
-            }
-            autoDockRunPanel(run_panel, 1);
-        }
+    }
 
-        if (journal?.onLogSuccess) {
-            journal.onLogSuccess({
-                log_type: LogTypes.PURCHASE,
-                extra: {
-                    longcode: resolvedLongcode,
-                    transaction_id: buyTxId,
-                },
-            });
+    if (run_panel) {
+        if (!run_panel.run_id) {
+            run_panel.run_id = `manual-${Date.now()}`;
         }
+        autoDockRunPanel(run_panel, 1);
+    }
+
+    if (journal?.onLogSuccess) {
+        journal.onLogSuccess({
+            log_type: LogTypes.PURCHASE,
+            extra: {
+                longcode: resolvedLongcode,
+                transaction_id: buyTxId,
+            },
+        });
     }
 
     const baseContractRecord: Record<string, any> = {
@@ -793,10 +793,8 @@ export async function executeLiveDerivTrade(params: {
         is_completed: false,
     };
 
-    if (!tabStore) {
-        transactions?.onBotContractEvent?.(baseContractRecord);
-        summary_card?.onBotContractEvent?.(baseContractRecord);
-    }
+    transactions?.onBotContractEvent?.(baseContractRecord);
+    summary_card?.onBotContractEvent?.(baseContractRecord);
 
     if (transport?.onMessage) {
         let settledOnce = false;
@@ -909,42 +907,44 @@ export async function executeLiveDerivTrade(params: {
                         });
                         unsubMsg?.();
                     }
-                } else {
-                    const mergedRecord: Record<string, any> = {
-                        ...baseContractRecord,
-                        ...poc,
-                        contract_id: contractId,
-                        underlying: poc.underlying || params.symbol,
-                        underlying_symbol: poc.underlying_symbol || poc.underlying || params.symbol,
-                        display_name: poc.display_name || marketDisplayName,
-                        contract_type: poc.contract_type || spec.apiContractType,
-                        longcode: poc.longcode || resolvedLongcode,
-                        buy_price: Number(poc.buy_price ?? buyPrice),
-                        bid_price: Number(poc.bid_price ?? buyPrice),
-                        payout: Number(poc.payout ?? payout),
-                        profit: finalProfit,
-                        currency: resolvedCurrency,
-                        entry_spot: entrySpot,
-                        exit_spot: exitSpot,
-                        transaction_ids: {
-                            buy: poc.transaction_ids?.buy ?? buyTxId,
-                            ...(poc.transaction_ids?.sell ? { sell: poc.transaction_ids.sell } : {}),
+                }
+
+                const mergedRecord: Record<string, any> = {
+                    ...baseContractRecord,
+                    ...poc,
+                    contract_id: contractId,
+                    underlying: poc.underlying || params.symbol,
+                    underlying_symbol: poc.underlying_symbol || poc.underlying || params.symbol,
+                    display_name: poc.display_name || marketDisplayName,
+                    contract_type: poc.contract_type || spec.apiContractType,
+                    longcode: poc.longcode || resolvedLongcode,
+                    buy_price: Number(poc.buy_price ?? buyPrice),
+                    bid_price: Number(poc.bid_price ?? buyPrice),
+                    payout: Number(poc.payout ?? payout),
+                    profit: finalProfit,
+                    currency: resolvedCurrency,
+                    entry_spot: entrySpot,
+                    exit_spot: exitSpot,
+                    transaction_ids: {
+                        buy: poc.transaction_ids?.buy ?? buyTxId,
+                        ...(poc.transaction_ids?.sell ? { sell: poc.transaction_ids.sell } : {}),
+                    },
+                    status: statusStr,
+                    is_completed: isTerminal,
+                };
+
+                transactions?.onBotContractEvent?.(mergedRecord);
+                summary_card?.onBotContractEvent?.(mergedRecord);
+
+                if (shouldLogSettlement) {
+                    journal?.onLogSuccess?.({
+                        log_type: finalProfit > 0 ? LogTypes.PROFIT : LogTypes.LOST,
+                        extra: {
+                            currency: resolvedCurrency,
+                            profit: finalProfit,
                         },
-                        status: statusStr,
-                        is_completed: isTerminal,
-                    };
-
-                    transactions?.onBotContractEvent?.(mergedRecord);
-                    summary_card?.onBotContractEvent?.(mergedRecord);
-
-                    if (shouldLogSettlement) {
-                        journal?.onLogSuccess?.({
-                            log_type: finalProfit > 0 ? LogTypes.PROFIT : LogTypes.LOST,
-                            extra: {
-                                currency: resolvedCurrency,
-                                profit: finalProfit,
-                            },
-                        });
+                    });
+                    if (!tabStore) {
                         unsubMsg?.();
                     }
                 }

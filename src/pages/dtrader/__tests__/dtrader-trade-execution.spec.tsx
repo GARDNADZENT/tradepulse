@@ -22,6 +22,9 @@ class TestErrorBoundary extends React.Component<
 const messageListeners: Array<(evt: { data: any }) => void> = [];
 const mockToggleDrawer = jest.fn();
 const mockSetActiveTabIndex = jest.fn();
+const mockTxOnBotContractEvent = jest.fn();
+const mockSummaryOnBotContractEvent = jest.fn();
+const mockJournalOnLogSuccess = jest.fn();
 let buyCounter = 0;
 
 const mockSend = jest.fn(async (payload: any) => {
@@ -119,11 +122,16 @@ jest.mock('@/hooks/useStore', () => ({
             loginid: 'VRTC948201',
             currency: 'USD',
         },
-        journal: {},
-        summary_card: {},
+        journal: {
+            onLogSuccess: (...args: any[]) => mockJournalOnLogSuccess(...args),
+        },
+        summary_card: {
+            onBotContractEvent: (...args: any[]) => mockSummaryOnBotContractEvent(...args),
+        },
         transactions: {
             recovered_transactions: [],
             recovered_completed_transactions: [],
+            onBotContractEvent: (...args: any[]) => mockTxOnBotContractEvent(...args),
         },
         run_panel: {
             is_drawer_open: false,
@@ -144,6 +152,9 @@ describe('DTrader SmartCharts Canvas, 2x5 Circular Digits & 4-Button Execution C
         mockSend.mockClear();
         mockToggleDrawer.mockClear();
         mockSetActiveTabIndex.mockClear();
+        mockTxOnBotContractEvent.mockClear();
+        mockSummaryOnBotContractEvent.mockClear();
+        mockJournalOnLogSuccess.mockClear();
     });
 
     it('renders SmartCharts controls, 2x5 circular 0-9 digit rings, Matches/Differs/Both/AUTO buttons, auto-docks sidebar, and triggers TP modal on win', async () => {
@@ -198,6 +209,22 @@ describe('DTrader SmartCharts Canvas, 2x5 Circular Digits & 4-Button Execution C
             );
         });
 
+        // Verify open contract immediately recorded into global Transactions, Summary & Journal
+        expect(mockTxOnBotContractEvent).toHaveBeenCalledWith(
+            expect.objectContaining({
+                contract_id: 987654321,
+                contract_type: 'DIGITMATCH',
+                status: 'open',
+                is_completed: false,
+            })
+        );
+        expect(mockSummaryOnBotContractEvent).toHaveBeenCalledTimes(1);
+        expect(mockJournalOnLogSuccess).toHaveBeenCalledWith(
+            expect.objectContaining({
+                log_type: 'purchase',
+            })
+        );
+
         // Settle contract with +$3.10 profit (>= default TP 2.5) -> CONTRACT WON & Take Profit Hit modal pops up!
         await act(async () => {
             messageListeners.slice().forEach(cb =>
@@ -225,6 +252,15 @@ describe('DTrader SmartCharts Canvas, 2x5 Circular Digits & 4-Button Execution C
             expect(screen.getByTestId('tp-sl-modal-title')).toHaveTextContent('Take Profit Hit');
             expect(screen.getByTestId('tp-sl-modal-amount')).toHaveTextContent('+$3.10');
         });
+        expect(mockTxOnBotContractEvent).toHaveBeenCalledWith(
+            expect.objectContaining({
+                contract_id: 987654321,
+                profit: 3.1,
+                entry_spot: '1419.85',
+                exit_spot: '1419.96',
+                is_completed: true,
+            })
+        );
         fireEvent.click(screen.getByTestId('tp-sl-modal-continue'));
 
         // 3. Test simultaneous 'Both' button (purchases Matches + Differs in parallel)
