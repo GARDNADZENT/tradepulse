@@ -301,8 +301,9 @@ const RunPanel = observer(() => {
     const { statistics, transactions: transaction_list } = transactions;
     const { active_tour, active_tab } = dashboard;
     const { total_payout, total_profit, total_stake, won_contracts, lost_contracts, number_of_runs } = statistics;
-    const { BOT_BUILDER, FREE_BOTS } = DBOT_TABS;
-    const isExecSurface = [BOT_BUILDER, FREE_BOTS].includes(active_tab);
+    const { BOT_BUILDER, FREE_BOTS, DTRADER } = DBOT_TABS;
+    const isMobileExecSurface = [BOT_BUILDER, FREE_BOTS].includes(active_tab);
+    const isDesktopExecSurface = [BOT_BUILDER, FREE_BOTS, DTRADER].includes(active_tab);
 
     const contract_count = Array.isArray(transaction_list)
         ? transaction_list.filter(item => item?.type === 'contract').length
@@ -315,7 +316,7 @@ const RunPanel = observer(() => {
 
     if (active_tour === 'bot_builder') return null;
 
-    const showEmbeddedStatsFooter = !isDesktop || !isExecSurface;
+    const showEmbeddedStatsFooter = !isDesktop || !isDesktopExecSurface;
 
     return (
         <>
@@ -323,8 +324,8 @@ const RunPanel = observer(() => {
                 data-testid='drawer'
                 className={classNames('tp-global-run-drawer', {
                     'tp-global-run-drawer--open': is_drawer_open,
-                    'tp-global-run-drawer--exec-surface': isExecSurface && isDesktop,
-                    'tp-global-run-drawer--mobile-exec': isExecSurface && !isDesktop,
+                    'tp-global-run-drawer--exec-surface': isDesktopExecSurface && isDesktop,
+                    'tp-global-run-drawer--mobile-exec': isMobileExecSurface && !isDesktop,
                     'run-panel__container--tour-active': isDesktop && active_tour,
                 })}
                 style={{ zIndex: popover_zindex.RUN_PANEL }}
@@ -364,7 +365,7 @@ const RunPanel = observer(() => {
                                   : localize('Journal')}
                         </span>
                         <div className='tp-global-run-drawer__topbar-actions'>
-                            {(!isDesktop || !isExecSurface) && (
+                            {(!isDesktop || !isDesktopExecSurface) && (
                                 <Button
                                     id='db-run-panel__clear-button'
                                     className='tp-global-run-drawer__reset-btn'
@@ -408,7 +409,7 @@ const RunPanel = observer(() => {
                 </div>
             </aside>
 
-            {!isDesktop && isExecSurface && !quick_strategy?.is_open && <MobileDrawerFooter />}
+            {!isDesktop && isMobileExecSurface && !quick_strategy?.is_open && <MobileDrawerFooter />}
 
             <StatisticsInfoModal
                 is_mobile={!isDesktop}

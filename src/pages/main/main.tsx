@@ -348,9 +348,9 @@ const AppWrapper = observer(() => {
         listEl.scrollBy({ left: dir === 'left' ? -260 : 260, behavior: 'smooth' });
     };
 
-    const isExecSurface = [BOT_BUILDER, FREE_BOTS].includes(active_tab);
-    const isExecScrollTab = active_tab === FREE_BOTS;
-    const isDockablePageTab = ![BOT_BUILDER, DBOT_TABS.DTRADER, DBOT_TABS.ANALYSIS_TOOL].includes(active_tab);
+    const isExecSurface = [BOT_BUILDER, FREE_BOTS, DBOT_TABS.DTRADER].includes(active_tab);
+    const isExecScrollTab = [FREE_BOTS, DBOT_TABS.DTRADER].includes(active_tab);
+    const isDockablePageTab = ![BOT_BUILDER, DBOT_TABS.ANALYSIS_TOOL].includes(active_tab);
 
     return (
         <React.Fragment>

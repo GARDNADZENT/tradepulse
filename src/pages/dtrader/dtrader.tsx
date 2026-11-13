@@ -1,11 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { observer } from 'mobx-react-lite';
 import { generateOAuthURL } from '@/components/shared';
-import {
-    RecordTabKey,
-    TabExecutionRecordPanel,
-    TabSessionDockBar,
-} from '@/components/tab-trade-record/tab-execution-record-panel';
+import { autoDockRunPanel, triggerTpSlModal } from '@/components/tp-sl-modal';
 import { api_base } from '@/external/bot-skeleton';
 import chart_api from '@/external/bot-skeleton/services/api/chart-api';
 import { useStore } from '@/hooks/useStore';
@@ -20,8 +16,8 @@ import './dtrader.scss';
 type TickPoint = { epoch: number; quote: number; digit: number };
 
 type DTraderGroup =
-    | 'over_under'
     | 'matches_differs'
+    | 'over_under'
     | 'even_odd'
     | 'rise_fall'
     | 'higher_lower'
@@ -33,10 +29,13 @@ type DTraderGroup =
 type TimeframeKey = '1T' | '1M' | '5M';
 type OverlayMode = 'default' | 'digits';
 type SeriesMode = 'line' | 'candles';
+type TriggerMode = 'instant' | 'adaptive' | 'opp1' | 'opp2';
+type LoopMode = 'single' | 'continuous';
 
 interface TradeGroupOption {
     id: DTraderGroup;
     label: string;
+    categoryBadge: string;
     supportsMinutes: boolean;
     usesDigitPrediction: boolean;
     usesBarrierOffset: boolean;
@@ -46,8 +45,9 @@ interface TradeGroupOption {
 
 const TRADE_GROUPS: TradeGroupOption[] = [
     {
-        id: 'over_under',
-        label: 'Over / Under (Digits)',
+        id: 'matches_differs',
+        label: 'Matches/Differs',
+        categoryBadge: 'Digits',
         supportsMinutes: false,
         usesDigitPrediction: true,
         usesBarrierOffset: false,
@@ -55,8 +55,9 @@ const TRADE_GROUPS: TradeGroupOption[] = [
         maxTicks: 10,
     },
     {
-        id: 'matches_differs',
-        label: 'Matches / Differs (Digits)',
+        id: 'over_under',
+        label: 'Over/Under',
+        categoryBadge: 'Digits',
         supportsMinutes: false,
         usesDigitPrediction: true,
         usesBarrierOffset: false,
@@ -65,7 +66,8 @@ const TRADE_GROUPS: TradeGroupOption[] = [
     },
     {
         id: 'even_odd',
-        label: 'Even / Odd (Digits)',
+        label: 'Even/Odd',
+        categoryBadge: 'Digits',
         supportsMinutes: false,
         usesDigitPrediction: false,
         usesBarrierOffset: false,
@@ -74,7 +76,8 @@ const TRADE_GROUPS: TradeGroupOption[] = [
     },
     {
         id: 'rise_fall',
-        label: 'Rise / Fall (Up/Down)',
+        label: 'Rise/Fall',
+        categoryBadge: 'Up/Down',
         supportsMinutes: true,
         usesDigitPrediction: false,
         usesBarrierOffset: false,
@@ -83,7 +86,8 @@ const TRADE_GROUPS: TradeGroupOption[] = [
     },
     {
         id: 'higher_lower',
-        label: 'Higher / Lower (Up/Down)',
+        label: 'Higher/Lower',
+        categoryBadge: 'Up/Down',
         supportsMinutes: true,
         usesDigitPrediction: false,
         usesBarrierOffset: true,
@@ -92,7 +96,8 @@ const TRADE_GROUPS: TradeGroupOption[] = [
     },
     {
         id: 'reset',
-        label: 'Reset Call / Reset Put',
+        label: 'Reset Call/Put',
+        categoryBadge: 'Reset',
         supportsMinutes: true,
         usesDigitPrediction: false,
         usesBarrierOffset: false,
@@ -101,7 +106,8 @@ const TRADE_GROUPS: TradeGroupOption[] = [
     },
     {
         id: 'runs',
-        label: 'Only Ups / Only Downs',
+        label: 'Only Ups/Downs',
+        categoryBadge: 'Runs',
         supportsMinutes: false,
         usesDigitPrediction: false,
         usesBarrierOffset: false,
@@ -110,7 +116,8 @@ const TRADE_GROUPS: TradeGroupOption[] = [
     },
     {
         id: 'touch',
-        label: 'Touch / No Touch (In/Out)',
+        label: 'Touch/No Touch',
+        categoryBadge: 'In/Out',
         supportsMinutes: true,
         usesDigitPrediction: false,
         usesBarrierOffset: true,
@@ -119,7 +126,8 @@ const TRADE_GROUPS: TradeGroupOption[] = [
     },
     {
         id: 'accumulators',
-        label: 'Accumulators (Growth)',
+        label: 'Accumulators',
+        categoryBadge: 'Growth',
         supportsMinutes: false,
         usesDigitPrediction: false,
         usesBarrierOffset: false,
@@ -154,7 +162,6 @@ const DEFAULT_MARKETS = [
 ];
 
 const ZOOM_STEPS = [35, 55, 85, 130, 200, 320];
-const TERMINAL_STATUSES = ['won', 'lost', 'sold', 'expired'];
 const REQUEST_TIMEOUT_MS = 12000;
 const OVER_RATIOS = [0.095, 0.234, 0.405, 0.642, 0.961, 1.432, 2.214, 3.8, 8.5];
 
@@ -166,6 +173,15 @@ function digitFromQuote(quote: number, decimals = 2): number {
 function formatEpochTime(epochSec: number): string {
     const d = new Date(epochSec * 1000);
     return d.toTimeString().slice(0, 8);
+}
+
+function formatEpochFull(epochSec: number): string {
+    const d = new Date(epochSec * 1000);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const hhmmss = d.toTimeString().slice(0, 8);
+    return `${yyyy}-${mm}-${dd} ${hhmmss}`;
 }
 
 function getTransport(): any {
@@ -190,9 +206,20 @@ function sendWithTimeout<T = any>(
     ]);
 }
 
+function parseMarketBadge(symbolCode: string): { num: string; is1s: boolean } {
+    const m1s = /^1HZ(\d+)V$/i.exec(symbolCode);
+    if (m1s) return { num: m1s[1], is1s: true };
+    const mVol = /^R_(\d+)$/i.exec(symbolCode);
+    if (mVol) return { num: mVol[1], is1s: false };
+    const mJump = /^JD(\d+)$/i.exec(symbolCode);
+    if (mJump) return { num: `J${mJump[1]}`, is1s: false };
+    return { num: symbolCode.slice(0, 3).toUpperCase(), is1s: false };
+}
+
 interface LegDefinition {
     key: 'up' | 'down';
     contractType: string;
+    shortTitle: string;
     title: string;
     barrier?: number | string;
     valid: boolean;
@@ -212,11 +239,33 @@ function buildDTraderPairLegs(params: {
     const safeOffset = Math.max(0.01, Math.abs(Number(barrierOffset) || 0.5));
 
     switch (group) {
+        case 'matches_differs':
+            return [
+                {
+                    key: 'up',
+                    contractType: 'DIGITMATCH',
+                    shortTitle: 'Matches',
+                    title: `Matches ${d}`,
+                    barrier: d,
+                    valid: true,
+                    fallbackNetRatio: 7.95,
+                },
+                {
+                    key: 'down',
+                    contractType: 'DIGITDIFF',
+                    shortTitle: 'Differs',
+                    title: `Differs ${d}`,
+                    barrier: d,
+                    valid: true,
+                    fallbackNetRatio: 0.088,
+                },
+            ];
         case 'over_under':
             return [
                 {
                     key: 'up',
                     contractType: 'DIGITOVER',
+                    shortTitle: 'Over',
                     title: `Over ${d}`,
                     barrier: d,
                     valid: d >= 0 && d <= 8,
@@ -226,6 +275,7 @@ function buildDTraderPairLegs(params: {
                 {
                     key: 'down',
                     contractType: 'DIGITUNDER',
+                    shortTitle: 'Under',
                     title: `Under ${d}`,
                     barrier: d,
                     valid: d >= 1 && d <= 9,
@@ -233,30 +283,12 @@ function buildDTraderPairLegs(params: {
                     fallbackNetRatio: OVER_RATIOS[Math.min(8, Math.max(0, 9 - d))] ?? 0.405,
                 },
             ];
-        case 'matches_differs':
-            return [
-                {
-                    key: 'up',
-                    contractType: 'DIGITMATCH',
-                    title: `Matches ${d}`,
-                    barrier: d,
-                    valid: true,
-                    fallbackNetRatio: 8.09,
-                },
-                {
-                    key: 'down',
-                    contractType: 'DIGITDIFF',
-                    title: `Differs ${d}`,
-                    barrier: d,
-                    valid: true,
-                    fallbackNetRatio: 0.098,
-                },
-            ];
         case 'even_odd':
             return [
                 {
                     key: 'up',
                     contractType: 'DIGITEVEN',
+                    shortTitle: 'Even',
                     title: 'Even',
                     valid: true,
                     fallbackNetRatio: 0.961,
@@ -264,6 +296,7 @@ function buildDTraderPairLegs(params: {
                 {
                     key: 'down',
                     contractType: 'DIGITODD',
+                    shortTitle: 'Odd',
                     title: 'Odd',
                     valid: true,
                     fallbackNetRatio: 0.961,
@@ -274,6 +307,7 @@ function buildDTraderPairLegs(params: {
                 {
                     key: 'up',
                     contractType: allowEquals ? 'CALLE' : 'CALL',
+                    shortTitle: allowEquals ? 'Rise =' : 'Rise',
                     title: allowEquals ? 'Rise =' : 'Rise',
                     valid: true,
                     fallbackNetRatio: 0.953,
@@ -281,6 +315,7 @@ function buildDTraderPairLegs(params: {
                 {
                     key: 'down',
                     contractType: allowEquals ? 'PUTE' : 'PUT',
+                    shortTitle: allowEquals ? 'Fall =' : 'Fall',
                     title: allowEquals ? 'Fall =' : 'Fall',
                     valid: true,
                     fallbackNetRatio: 0.953,
@@ -291,6 +326,7 @@ function buildDTraderPairLegs(params: {
                 {
                     key: 'up',
                     contractType: 'HIGHER',
+                    shortTitle: 'Higher',
                     title: `Higher (+${safeOffset})`,
                     barrier: safeOffset,
                     valid: true,
@@ -299,6 +335,7 @@ function buildDTraderPairLegs(params: {
                 {
                     key: 'down',
                     contractType: 'LOWER',
+                    shortTitle: 'Lower',
                     title: `Lower (-${safeOffset})`,
                     barrier: safeOffset,
                     valid: true,
@@ -310,6 +347,7 @@ function buildDTraderPairLegs(params: {
                 {
                     key: 'up',
                     contractType: 'RESETCALL',
+                    shortTitle: 'Reset Call',
                     title: 'Reset Call',
                     valid: true,
                     fallbackNetRatio: 0.88,
@@ -317,6 +355,7 @@ function buildDTraderPairLegs(params: {
                 {
                     key: 'down',
                     contractType: 'RESETPUT',
+                    shortTitle: 'Reset Put',
                     title: 'Reset Put',
                     valid: true,
                     fallbackNetRatio: 0.88,
@@ -327,6 +366,7 @@ function buildDTraderPairLegs(params: {
                 {
                     key: 'up',
                     contractType: 'RUNHIGH',
+                    shortTitle: 'Only Ups',
                     title: 'Only Ups',
                     valid: true,
                     fallbackNetRatio: 2.86,
@@ -334,6 +374,7 @@ function buildDTraderPairLegs(params: {
                 {
                     key: 'down',
                     contractType: 'RUNLOW',
+                    shortTitle: 'Only Downs',
                     title: 'Only Downs',
                     valid: true,
                     fallbackNetRatio: 2.86,
@@ -344,6 +385,7 @@ function buildDTraderPairLegs(params: {
                 {
                     key: 'up',
                     contractType: 'ONETOUCH',
+                    shortTitle: 'Touch',
                     title: `Touch (+${safeOffset})`,
                     barrier: safeOffset,
                     valid: true,
@@ -352,6 +394,7 @@ function buildDTraderPairLegs(params: {
                 {
                     key: 'down',
                     contractType: 'NOTOUCH',
+                    shortTitle: 'No Touch',
                     title: `No Touch (-${safeOffset})`,
                     barrier: safeOffset,
                     valid: true,
@@ -363,6 +406,7 @@ function buildDTraderPairLegs(params: {
                 {
                     key: 'up',
                     contractType: 'ACCU',
+                    shortTitle: 'Buy Accumulator',
                     title: `Buy Accumulator (${Math.round(growthRate * 100)}%)`,
                     valid: true,
                     fallbackNetRatio: growthRate,
@@ -372,43 +416,58 @@ function buildDTraderPairLegs(params: {
 }
 
 export default observer(function DTrader() {
-    const { client, transactions } = useStore();
-    const [recordOpen, setRecordOpen] = useState(true);
-    const [recordTab, setRecordTab] = useState<RecordTabKey>('journal');
+    const store = useStore();
+    const { client, journal, transactions, summary_card, run_panel } = store || ({} as any);
 
     const [symbol, setSymbol] = useState('1HZ100V');
     const [markets, setMarkets] = useState<any[]>(DEFAULT_MARKETS);
     const [marketOpen, setMarketOpen] = useState(false);
     const [search, setSearch] = useState('');
 
-    // Chart controls matching RiskManagers DTrader
+    // SmartCharts-style controls matching logged-in DTrader reference
     const [timeframe, setTimeframe] = useState<TimeframeKey>('1T');
-    const [zoomIndex, setZoomIndex] = useState<number>(2); // 85 points default
+    const [zoomIndex, setZoomIndex] = useState<number>(2);
     const [overlayMode, setOverlayMode] = useState<OverlayMode>('digits');
-    const [seriesMode, setSeriesMode] = useState<SeriesMode>('line');
+    const [seriesMode, setSeriesMode] = useState<SeriesMode>('candles');
+    const [showSma, setShowSma] = useState<boolean>(false);
+    const [denseGrid, setDenseGrid] = useState<boolean>(true);
+    const [crosshairEnabled, setCrosshairEnabled] = useState<boolean>(true);
     const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
     const [ticks, setTicks] = useState<TickPoint[]>([]);
-    const [digitWindow, setDigitWindow] = useState<number>(1000);
-    const [feedState, setFeedState] = useState<'CONNECTING' | 'LIVE' | 'ERROR'>('CONNECTING');
 
-    // Classic DTrader sidebar parameters
-    const [tradeGroup, setTradeGroup] = useState<DTraderGroup>('over_under');
+    // Floating Right Execution & Auto-Bot Card state
+    const [tradeGroup, setTradeGroup] = useState<DTraderGroup>('matches_differs');
     const [durationUnit, setDurationUnit] = useState<'t' | 'm'>('t');
     const [duration, setDuration] = useState<number>(1);
-    const [prediction, setPrediction] = useState<number>(6);
+    const [triggerMode, setTriggerMode] = useState<TriggerMode>('instant');
+    const [prediction, setPrediction] = useState<number>(1);
     const [barrierOffset, setBarrierOffset] = useState<number>(0.5);
     const [allowEquals, setAllowEquals] = useState<boolean>(false);
     const [growthRate, setGrowthRate] = useState<number>(0.03);
-    const [accuTakeProfit, setAccuTakeProfit] = useState<string>('');
-    const [basis, setBasis] = useState<'stake' | 'payout'>('stake');
-    const [amount, setAmount] = useState<number>(10);
+    const [stakeInput, setStakeInput] = useState<string>('0.35');
+    const [loopMode, setLoopMode] = useState<LoopMode>('single');
+    const [tpInput, setTpInput] = useState<string>('2.5');
+    const [slInput, setSlInput] = useState<string>('50');
+    const [martingaleInput, setMartingaleInput] = useState<string>('1.2');
 
     const [proposals, setProposals] = useState<Record<string, any>>({});
     const [openContracts, setOpenContracts] = useState<any[]>([]);
     const [buyingLeg, setBuyingLeg] = useState<string | null>(null);
-    const [message, setMessage] = useState<string>('');
+    const [autoRunning, setAutoRunning] = useState<boolean>(false);
+    const [statusLine, setStatusLine] = useState<string>('Ready.');
+    const [statusTone, setStatusTone] = useState<'neutral' | 'won' | 'lost' | 'running'>('neutral');
+
     const buyInFlightRef = useRef(false);
+    const autoRunningRef = useRef(false);
+    const sessionPLRef = useRef<number>(0);
+    const currentAutoStakeRef = useRef<number>(0.35);
+    const lastAutoEpochRef = useRef<number>(0);
+
+    const baseStake = Math.max(0.35, Number(stakeInput) || 0.35);
+    const parsedTP = Math.max(0.1, Number(tpInput) || 2.5);
+    const parsedSL = Math.max(0.1, Number(slInput) || 50);
+    const parsedMartingale = Math.max(0.1, Number(martingaleInput) || 1.2);
 
     // Cross-tab prefill listener from Analysis Tool & Digits Analysis
     useEffect(() => {
@@ -471,7 +530,6 @@ export default observer(function DTrader() {
     // Subscribe to live ticks for selected symbol
     useEffect(() => {
         let cancelled = false;
-        setFeedState('CONNECTING');
 
         const applyHistory = (symbolName: string, history: { t: number; price: number }[]) => {
             if (cancelled || symbolName !== symbol || !history.length) return;
@@ -483,30 +541,25 @@ export default observer(function DTrader() {
                     digit: digitFromQuote(Number(t.price), pip),
                 }))
             );
-            setFeedState('LIVE');
         };
 
         const releaseHistory = derivBus.onHistory(applyHistory);
-        const releaseStatus = derivBus.onStatus?.(st => {
-            if (cancelled) return;
-            if (st === 'error') setFeedState('ERROR');
-            else if (st === 'connecting') setFeedState('CONNECTING');
-            else if (st === 'live') setFeedState('LIVE');
-        });
-        const releaseTick = derivBus.onTick((tickSymbol, tick) => {
-            if (cancelled || tickSymbol !== symbol) return;
+        const releaseTick = derivBus.onTick((tickSymbol: any, tick?: any) => {
+            // Support both (symbol, tick) and ({ symbol, price, t }) signatures
+            const sym = typeof tickSymbol === 'string' ? tickSymbol : tickSymbol?.symbol;
+            const payload = tick || tickSymbol;
+            if (cancelled || sym !== symbol || !payload) return;
             const pip = derivBus.getPipSize(symbol);
-            setTicks(prev =>
-                [
-                    ...prev,
-                    {
-                        epoch: tick.t / 1000,
-                        quote: Number(tick.price),
-                        digit: digitFromQuote(Number(tick.price), pip),
-                    },
-                ].slice(-1000)
-            );
-            setFeedState('LIVE');
+            const epoch = Number(payload.t || Date.now()) / 1000;
+            const quote = Number(payload.price);
+            if (!Number.isFinite(quote)) return;
+            const nextPt = {
+                epoch,
+                quote,
+                digit: digitFromQuote(quote, pip),
+            };
+            setTicks(prev => [...prev, nextPt].slice(-1000));
+            void onAutoTickRef.current?.(nextPt);
         });
 
         applyHistory(symbol, derivBus.getTicks(symbol));
@@ -517,9 +570,14 @@ export default observer(function DTrader() {
             releaseBus();
             releaseTick();
             releaseHistory();
-            releaseStatus?.();
         };
     }, [symbol]);
+
+    useEffect(() => {
+        return () => {
+            autoRunningRef.current = false;
+        };
+    }, []);
 
     const selectedMarket = markets.find(m => m.symbol === symbol) || {
         symbol,
@@ -539,7 +597,6 @@ export default observer(function DTrader() {
 
     const groupMeta = TRADE_GROUPS.find(g => g.id === tradeGroup) || TRADE_GROUPS[0];
 
-    // Enforce valid duration unit & tick bounds when switching trade group
     useEffect(() => {
         if (!groupMeta.supportsMinutes && durationUnit === 'm') {
             setDurationUnit('t');
@@ -572,7 +629,7 @@ export default observer(function DTrader() {
         let cancelled = false;
         const timer = window.setTimeout(async () => {
             if (buyInFlightRef.current) return;
-            const safeAmt = Math.max(0.35, Number(amount) || 1);
+            const safeAmt = baseStake;
 
             const results = await Promise.all(
                 pairLegs.map(async leg => {
@@ -603,7 +660,7 @@ export default observer(function DTrader() {
                             const r: Record<string, any> = {
                                 proposal: 1,
                                 amount: safeAmt,
-                                basis,
+                                basis: 'stake',
                                 contract_type: spec.apiContractType,
                                 currency: activeCurrency,
                                 duration: spec.duration,
@@ -643,7 +700,7 @@ export default observer(function DTrader() {
                 }
                 setProposals(map);
             }
-        }, 220);
+        }, 200);
 
         return () => {
             cancelled = true;
@@ -654,24 +711,23 @@ export default observer(function DTrader() {
         pairLegs,
         duration,
         durationUnit,
-        basis,
-        amount,
+        baseStake,
         activeCurrency,
         growthRate,
         isAuthorizedSession,
     ]);
 
-    // Digit distribution over rolling window
+    // 0-9 circular digit distribution over rolling 1000-tick window
     const digitStats = useMemo(() => {
-        const slice = ticks.slice(-digitWindow);
+        const slice = ticks.slice(-1000);
         const counts = new Array(10).fill(0) as number[];
         for (const t of slice) counts[t.digit] += 1;
-        const n = Math.max(1, slice.length);
-        const pcts = counts.map(c => (c / n) * 100);
+        const n = slice.length;
+        const pcts = counts.map(c => (n > 0 ? (c / n) * 100 : 0));
 
         let highestDigit = -1;
         let lowestDigit = -1;
-        if (slice.length >= 10) {
+        if (slice.length >= 5) {
             let maxVal = -1;
             let minVal = Infinity;
             pcts.forEach((p, idx) => {
@@ -688,9 +744,9 @@ export default observer(function DTrader() {
         }
         const currentDigit = slice.length > 0 ? slice[slice.length - 1].digit : null;
         return { pcts, sampleCount: slice.length, highestDigit, lowestDigit, currentDigit };
-    }, [ticks, digitWindow]);
+    }, [ticks]);
 
-    // Chart series geometry (Line + Digits bubbles OR OHLC Candles)
+    // Chart series geometry (Candles OR Line + Digits bubbles)
     const chartData = useMemo(() => {
         const visibleCount = ZOOM_STEPS[zoomIndex] || 85;
         if (ticks.length < 2) return null;
@@ -698,7 +754,7 @@ export default observer(function DTrader() {
         const bucketSec = timeframe === '5M' ? 300 : timeframe === '1M' ? 60 : 0;
 
         if (seriesMode === 'candles' || bucketSec > 0) {
-            const groupSize = bucketSec > 0 ? Math.max(4, Math.round(bucketSec / 2)) : 4;
+            const groupSize = bucketSec > 0 ? Math.max(4, Math.round(bucketSec / 2)) : 3;
             const rawSlice = ticks.slice(-Math.min(ticks.length, visibleCount * groupSize));
             const candles: Array<{
                 epoch: number;
@@ -781,66 +837,139 @@ export default observer(function DTrader() {
             ? (priceDelta / prevTick.quote) * 100
             : 0;
 
-    async function connectAccount() {
+    const stopAllLoops = useCallback((reason = 'Stopped.', tone: 'neutral' | 'won' | 'lost' = 'neutral') => {
+        autoRunningRef.current = false;
+        setAutoRunning(false);
+        currentAutoStakeRef.current = Math.max(0.35, Number(stakeInput) || 0.35);
+        setStatusLine(reason);
+        setStatusTone(tone);
+    }, [stakeInput]);
+
+    const connectAccount = useCallback(async () => {
         try {
             const url = await generateOAuthURL();
             if (url) window.location.replace(url);
-            else setMessage('Unable to start Deriv login.');
+            else setStatusLine('Unable to start Deriv login.');
         } catch (e: any) {
-            setMessage(e?.message || 'Unable to start Deriv login.');
+            setStatusLine(e?.message || 'Unable to start Deriv login.');
         }
-    }
+    }, []);
 
-    async function handleBuyLeg(leg: LegDefinition) {
-        if (!isAuthorizedSession) {
-            void connectAccount();
-            return;
-        }
-        if (!leg.valid || buyInFlightRef.current) return;
+    const checkSessionLimitsAndNotify = useCallback(
+        (nextPL: number): boolean => {
+            if (nextPL >= parsedTP) {
+                sessionPLRef.current = 0;
+                stopAllLoops(`Take Profit Hit (+${nextPL.toFixed(2)} ${activeCurrency})`, 'won');
+                triggerTpSlModal({
+                    type: 'tp',
+                    amount: nextPL,
+                    currency: activeCurrency,
+                    source: 'dtrader',
+                });
+                return true;
+            }
+            if (nextPL <= -Math.abs(parsedSL)) {
+                sessionPLRef.current = 0;
+                stopAllLoops(`Stop Loss Hit (${nextPL.toFixed(2)} ${activeCurrency})`, 'lost');
+                triggerTpSlModal({
+                    type: 'sl',
+                    amount: nextPL,
+                    currency: activeCurrency,
+                    source: 'dtrader',
+                });
+                return true;
+            }
+            return false;
+        },
+        [parsedTP, parsedSL, activeCurrency, stopAllLoops]
+    );
 
-        buyInFlightRef.current = true;
-        setBuyingLeg(leg.key);
-        setMessage('');
-        setRecordOpen(true);
+    const executeOneLeg = useCallback(
+        async (leg: LegDefinition, overrideStake?: number, isAutoCycle = false) => {
+            if (!isAuthorizedSession) {
+                void connectAccount();
+                return;
+            }
+            if (!leg.valid) {
+                setStatusLine(leg.invalidHint || 'Invalid contract barrier.');
+                setStatusTone('lost');
+                return;
+            }
 
-        const safeAmt = Math.max(0.35, Number(amount) || 1);
-        const tpNum = Number(accuTakeProfit);
+            autoDockRunPanel(run_panel, 1);
+            const stakeToUse = Math.max(0.35, Number((overrideStake ?? baseStake).toFixed(2)));
+            const tpOrder =
+                leg.contractType === 'ACCU' && Number.isFinite(parsedTP) && parsedTP > 0
+                    ? parsedTP
+                    : undefined;
 
-        try {
+            let settled = false;
+
             const { contractId, buyPrice, payout, longcode } = await executeLiveDerivTrade({
                 symbol,
                 contractType: leg.contractType,
-                stake: safeAmt,
-                basis,
+                stake: stakeToUse,
+                basis: 'stake',
                 duration,
                 durationUnit,
                 barrier: leg.barrier,
                 growthRate,
-                takeProfit: Number.isFinite(tpNum) && tpNum > 0 ? tpNum : undefined,
+                takeProfit: tpOrder,
                 currency: activeCurrency,
                 tabNamespace: 'dtrader',
-                stores: { transactions },
-                onContractUpdate: pc => {
+                stores: { journal, transactions, summary_card, run_panel },
+                onContractUpdate: (pc, isTerminal) => {
                     const st = String(pc.status || (pc.is_sold ? 'sold' : 'open'));
                     const cid = Number(pc.contract_id);
+                    const profit = Number(pc.profit || 0);
+
                     setOpenContracts(prev =>
-                        prev.map(x =>
-                            x.id === cid
-                                ? {
-                                      ...x,
-                                      status: st,
-                                      profit: Number(pc.profit || 0),
-                                      bid: Number(pc.bid_price || 0),
-                                      payout: Number(pc.payout || x.payout || 0),
-                                      isValidToSell: Boolean(pc.is_valid_to_sell),
-                                  }
-                                : x
-                        )
+                        prev
+                            .map(x =>
+                                x.id === cid
+                                    ? {
+                                          ...x,
+                                          status: st,
+                                          profit,
+                                          bid: Number(pc.bid_price || 0),
+                                          payout: Number(pc.payout || x.payout || 0),
+                                          isValidToSell: Boolean(pc.is_valid_to_sell) && !isTerminal,
+                                      }
+                                    : x
+                            )
+                            .filter(x => x.status === 'open' || x.id === cid)
                     );
+
+                    if (isTerminal && !settled) {
+                        settled = true;
+                        const nextPL = Number((sessionPLRef.current + profit).toFixed(2));
+                        sessionPLRef.current = nextPL;
+
+                        if (profit >= 0) {
+                            currentAutoStakeRef.current = baseStake;
+                            setStatusLine(
+                                `CONTRACT WON: ${leg.title} (+${profit.toFixed(2)} ${activeCurrency})`
+                            );
+                            setStatusTone('won');
+                        } else {
+                            currentAutoStakeRef.current = Math.max(
+                                0.35,
+                                Number((stakeToUse * parsedMartingale).toFixed(2))
+                            );
+                            setStatusLine(
+                                `CONTRACT LOST: ${leg.title} (${profit.toFixed(2)} ${activeCurrency})`
+                            );
+                            setStatusTone('lost');
+                        }
+
+                        const hitLimit = checkSessionLimitsAndNotify(nextPL);
+                        if (!hitLimit && (isAutoCycle || loopMode === 'continuous') && autoRunningRef.current) {
+                            buyInFlightRef.current = false;
+                        }
+                    }
                 },
             });
 
-            setRecordOpen(true);
             setOpenContracts(prev =>
                 [
                     {
@@ -852,48 +981,245 @@ export default observer(function DTrader() {
                         payout,
                         isValidToSell: leg.contractType === 'ACCU' || durationUnit === 'm',
                     },
-                    ...prev,
-                ].slice(0, 20)
+                    ...prev.filter(x => x.status === 'open'),
+                ].slice(0, 8)
             );
-            setMessage(longcode ? `Bought: ${longcode}` : `Contract purchased: #${contractId}`);
+
+            setStatusLine(longcode ? `Bought: ${longcode}` : `OPEN CONTRACT #${contractId}`);
+            setStatusTone('running');
+        },
+        [
+            isAuthorizedSession,
+            connectAccount,
+            run_panel,
+            baseStake,
+            parsedTP,
+            symbol,
+            duration,
+            durationUnit,
+            growthRate,
+            activeCurrency,
+            journal,
+            transactions,
+            summary_card,
+            parsedMartingale,
+            checkSessionLimitsAndNotify,
+            loopMode,
+        ]
+    );
+
+    const handleBuySingle = async (leg: LegDefinition) => {
+        if (buyInFlightRef.current) return;
+        buyInFlightRef.current = true;
+        setBuyingLeg(leg.key);
+        if (loopMode === 'continuous') {
+            autoRunningRef.current = true;
+            setAutoRunning(true);
+            currentAutoStakeRef.current = baseStake;
+        }
+        try {
+            await executeOneLeg(leg, baseStake, loopMode === 'continuous');
         } catch (e: any) {
-            setMessage(extractDerivApiError(e, 'Purchase failed — please try again.'));
+            setStatusLine(extractDerivApiError(e, 'Purchase failed — please try again.'));
+            setStatusTone('lost');
+            autoRunningRef.current = false;
+            setAutoRunning(false);
         } finally {
             buyInFlightRef.current = false;
             setBuyingLeg(null);
         }
-    }
+    };
+
+    const handleBuyBoth = async () => {
+        if (pairLegs.length < 2 || buyInFlightRef.current) return;
+        if (!isAuthorizedSession) {
+            void connectAccount();
+            return;
+        }
+        const [legA, legB] = pairLegs;
+        if (!legA.valid || !legB.valid) {
+            setStatusLine(legA.invalidHint || legB.invalidHint || 'Adjust digit 1–8 to hedge Both.');
+            setStatusTone('lost');
+            return;
+        }
+
+        buyInFlightRef.current = true;
+        setBuyingLeg('both');
+        autoDockRunPanel(run_panel, 1);
+
+        try {
+            await Promise.all([
+                executeOneLeg(legA, baseStake, false),
+                executeOneLeg(legB, baseStake, false),
+            ]);
+            setStatusLine(`Bought Both: ${legA.title} + ${legB.title}`);
+            setStatusTone('running');
+        } catch (e: any) {
+            setStatusLine(extractDerivApiError(e, 'Dual purchase failed — please try again.'));
+            setStatusTone('lost');
+        } finally {
+            buyInFlightRef.current = false;
+            setBuyingLeg(null);
+        }
+    };
+
+    // Choose smartest leg in AUTO Adaptive mode
+    const pickAdaptiveAutoLeg = useCallback((): LegDefinition => {
+        const legA = pairLegs[0];
+        const legB = pairLegs[1];
+        if (!legB) return legA;
+
+        if (triggerMode !== 'adaptive') {
+            return legA.valid ? legA : legB;
+        }
+
+        if (tradeGroup === 'matches_differs') {
+            // Differs has ~90% win rate when predicted digit isn't spiking
+            return legB;
+        }
+
+        if (tradeGroup === 'over_under') {
+            const d = Math.max(0, Math.min(9, Math.round(prediction)));
+            const overProb = digitStats.pcts.slice(d + 1).reduce((a, b) => a + b, 0);
+            const underProb = digitStats.pcts.slice(0, d).reduce((a, b) => a + b, 0);
+            if (overProb >= underProb && legA.valid) return legA;
+            if (legB.valid) return legB;
+            return legA;
+        }
+
+        if (tradeGroup === 'even_odd') {
+            const evenSum = [0, 2, 4, 6, 8].reduce((s, d) => s + (digitStats.pcts[d] || 0), 0);
+            return evenSum >= 50 ? legA : legB;
+        }
+
+        if (ticks.length >= 3) {
+            const last = ticks[ticks.length - 1].quote;
+            const prev = ticks[ticks.length - 3].quote;
+            return last >= prev ? legA : legB;
+        }
+
+        return legA;
+    }, [pairLegs, triggerMode, tradeGroup, prediction, digitStats.pcts, ticks]);
+
+    const runAutoCycleTick = useCallback(
+        async (incomingPt?: TickPoint) => {
+            if (!autoRunningRef.current || buyInFlightRef.current) return;
+            const pt = incomingPt || (ticks.length ? ticks[ticks.length - 1] : null);
+            if (pt && pt.epoch === lastAutoEpochRef.current) return;
+
+            if (triggerMode === 'opp1' || triggerMode === 'opp2') {
+                const need = triggerMode === 'opp2' ? 2 : 1;
+                if (ticks.length < need + 1) return;
+                const tail = ticks.slice(-need);
+                const d = Math.max(0, Math.min(9, Math.round(prediction)));
+                if (tradeGroup === 'over_under' && !tail.every(t => t.digit <= d)) return;
+                if (tradeGroup === 'even_odd' && !tail.every(t => t.digit % 2 === 1)) return;
+            }
+
+            const chosenLeg = pickAdaptiveAutoLeg();
+            if (!chosenLeg?.valid) return;
+
+            if (pt) lastAutoEpochRef.current = pt.epoch;
+            buyInFlightRef.current = true;
+            setBuyingLeg('auto');
+            try {
+                await executeOneLeg(chosenLeg, currentAutoStakeRef.current, true);
+            } catch (e: any) {
+                stopAllLoops(extractDerivApiError(e, 'AUTO stopped due to trade error.'), 'lost');
+            } finally {
+                buyInFlightRef.current = false;
+                setBuyingLeg(null);
+            }
+        },
+        [ticks, triggerMode, prediction, tradeGroup, pickAdaptiveAutoLeg, executeOneLeg, stopAllLoops]
+    );
+
+    const onAutoTickRef = useRef(runAutoCycleTick);
+    onAutoTickRef.current = runAutoCycleTick;
+
+    const handleToggleAuto = useCallback(() => {
+        if (autoRunningRef.current) {
+            stopAllLoops('Stopped.');
+            return;
+        }
+        if (!isAuthorizedSession) {
+            void connectAccount();
+            return;
+        }
+        sessionPLRef.current = 0;
+        currentAutoStakeRef.current = baseStake;
+        autoRunningRef.current = true;
+        setAutoRunning(true);
+        autoDockRunPanel(run_panel, 1);
+        setStatusLine('Running AUTO (Adaptive)…');
+        setStatusTone('running');
+        void runAutoCycleTick();
+    }, [isAuthorizedSession, connectAccount, baseStake, run_panel, runAutoCycleTick, stopAllLoops]);
+
+    // Connect bottom RunStrategy '▶ Run' button on DTrader tab to handleToggleAuto
+    useEffect(() => {
+        const onRunBar = () => {
+            handleToggleAuto();
+        };
+        window.addEventListener('tp-dtrader-run-bar', onRunBar);
+        return () => window.removeEventListener('tp-dtrader-run-bar', onRunBar);
+    }, [handleToggleAuto]);
 
     async function sellContract(contractId: number) {
         const transport = getTransport();
         if (!transport?.send) return;
         try {
             await sendWithTimeout(transport.send.bind(transport), { sell: contractId, price: 0 });
-            setMessage(`Sell order submitted for #${contractId}`);
+            setStatusLine(`Sold contract #${contractId}`);
         } catch (e: any) {
-            setMessage(extractDerivApiError(e, 'Sell request failed.'));
+            setStatusLine(extractDerivApiError(e, 'Sell request failed.'));
         }
     }
+
+    const cycleGroup = (dir: -1 | 1) => {
+        const idx = TRADE_GROUPS.findIndex(g => g.id === tradeGroup);
+        const nextIdx = (idx + dir + TRADE_GROUPS.length) % TRADE_GROUPS.length;
+        setTradeGroup(TRADE_GROUPS[nextIdx].id);
+    };
+
+    const cycleTimeframe = () => {
+        setTimeframe(prev => (prev === '1T' ? '1M' : prev === '1M' ? '5M' : '1T'));
+    };
+
+    const exportSnapshotCsv = () => {
+        if (!ticks.length || typeof document === 'undefined') return;
+        const rows = ['epoch,quote,digit', ...ticks.slice(-200).map(t => `${t.epoch},${t.quote},${t.digit}`)];
+        const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${symbol}-ticks.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
 
     const filteredMarkets = markets.filter(m =>
         `${m.symbol} ${m.name}`.toLowerCase().includes(search.toLowerCase())
     );
+    const badge = parseMarketBadge(symbol);
 
-    const stepAmount = (dir: -1 | 1) => {
-        setAmount(prev => {
-            const cur = Number(prev) || 1;
-            const delta = cur <= 2 ? 0.5 : 1;
-            return Math.max(0.35, Number((cur + dir * delta).toFixed(2)));
-        });
-    };
+    const legA = pairLegs[0];
+    const legB = pairLegs[1];
+    const payoutA = Number(
+        proposals.up?.payout ?? baseStake * (1 + (legA?.fallbackNetRatio ?? 0.9))
+    );
+    const payoutB = legB
+        ? Number(proposals.down?.payout ?? baseStake * (1 + (legB?.fallbackNetRatio ?? 0.9)))
+        : 0;
+    const totalBothStake = baseStake * (legB ? 2 : 1);
 
-    // SVG coordinate constants
-    const svgW = 920;
-    const svgH = 380;
-    const plotLeft = 14;
-    const plotRight = 838;
-    const plotTop = 18;
-    const plotBottom = 344;
+    // SVG Chart Coordinates
+    const svgW = 900;
+    const svgH = 500;
+    const plotLeft = 58;
+    const plotRight = 830;
+    const plotTop = 58;
+    const plotBottom = 468;
     const plotWidth = plotRight - plotLeft;
     const plotHeight = plotBottom - plotTop;
 
@@ -915,26 +1241,28 @@ export default observer(function DTrader() {
         }
 
         const { min, max, points, candles, mode } = chartData;
-        const pad = (max - min || 0.2) * 0.12;
+        const pad = (max - min || 0.2) * 0.14;
         const yMin = min - pad;
         const yMax = max + pad;
         const ySpan = yMax - yMin || 1;
 
-        const yFor = (price: number) =>
-            plotBottom - ((price - yMin) / ySpan) * plotHeight;
+        const yFor = (price: number) => plotBottom - ((price - yMin) / ySpan) * plotHeight;
         const xFor = (idx: number, count: number) =>
-            plotLeft + (idx / Math.max(1, count - 1)) * plotWidth;
+            plotLeft + (idx / Math.max(1, count - 1)) * (plotWidth - 28);
 
-        const yTicks = Array.from({ length: 7 }, (_, i) => {
-            const val = yMax - (i / 6) * ySpan;
+        const gridSteps = denseGrid ? 8 : 5;
+        const yTicks = Array.from({ length: gridSteps }, (_, i) => {
+            const val = yMax - (i / (gridSteps - 1)) * ySpan;
             return { val, y: yFor(val) };
         });
 
-        const xTickIndices = Array.from({ length: 7 }, (_, i) =>
-            Math.min(points.length - 1, Math.round((i / 6) * (points.length - 1)))
+        const xTickIndices = Array.from({ length: 8 }, (_, i) =>
+            Math.min(points.length - 1, Math.round((i / 7) * (points.length - 1)))
         );
 
-        const lastPt = points[points.length - 1];
+        const lastIdx = points.length - 1;
+        const lastPt = points[lastIdx];
+        const lastX = xFor(lastIdx, points.length);
         const lastY = yFor(lastPt.quote);
 
         const lineCoords = points.map((pt, i) => ({
@@ -943,10 +1271,31 @@ export default observer(function DTrader() {
             pt,
         }));
         const linePath = `M ${lineCoords.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' L ')}`;
-        const areaPath = `${linePath} L ${lineCoords[lineCoords.length - 1].x.toFixed(1)},${plotBottom} L ${lineCoords[0].x.toFixed(1)},${plotBottom} Z`;
+
+        const smaPath = showSma
+            ? (() => {
+                  const smaPts: string[] = [];
+                  for (let i = 0; i < points.length; i++) {
+                      const win = points.slice(Math.max(0, i - 9), i + 1);
+                      const avg = win.reduce((s, p) => s + p.quote, 0) / win.length;
+                      smaPts.push(
+                          `${i === 0 ? 'M' : 'L'}${xFor(i, points.length).toFixed(1)},${yFor(avg).toFixed(1)}`
+                      );
+                  }
+                  return smaPts.join(' ');
+              })()
+            : '';
 
         const digitNodes =
             overlayMode === 'digits' && mode === 'line' ? lineCoords.slice(-14) : [];
+
+        const safeHover =
+            crosshairEnabled && hoverIndex !== null && hoverIndex >= 0 && hoverIndex < points.length
+                ? hoverIndex
+                : null;
+        const hoverPt = safeHover !== null ? points[safeHover] : null;
+        const hoverX = safeHover !== null ? xFor(safeHover, points.length) : 0;
+        const hoverY = hoverPt ? yFor(hoverPt.quote) : 0;
 
         return (
             <svg
@@ -956,158 +1305,137 @@ export default observer(function DTrader() {
                 onMouseMove={e => {
                     const rect = e.currentTarget.getBoundingClientRect();
                     const relX = ((e.clientX - rect.left) / Math.max(1, rect.width)) * svgW;
-                    if (relX < plotLeft || relX > plotRight) {
-                        setHoverIndex(null);
-                        return;
-                    }
-                    const idx = Math.round(
-                        ((relX - plotLeft) / plotWidth) * (points.length - 1)
+                    const ratio = (relX - plotLeft) / Math.max(1, plotWidth - 28);
+                    const idx = Math.max(
+                        0,
+                        Math.min(points.length - 1, Math.round(ratio * (points.length - 1)))
                     );
-                    setHoverIndex(Math.max(0, Math.min(points.length - 1, idx)));
+                    setHoverIndex(idx);
                 }}
                 onMouseLeave={() => setHoverIndex(null)}
             >
-                <defs>
-                    <linearGradient id='rmDtAreaGrad' x1='0' y1='0' x2='0' y2='1'>
-                        <stop offset='0%' stopColor='#0066ff' stopOpacity='0.34' />
-                        <stop offset='100%' stopColor='#0066ff' stopOpacity='0.0' />
-                    </linearGradient>
-                </defs>
-
-                {/* Horizontal Grid + Right Price Axis */}
+                {/* Subtle SmartCharts Horizontal & Vertical Grid */}
                 {yTicks.map((yt, idx) => (
-                    <g key={`yt-${idx}`}>
+                    <g key={`y-${idx}`}>
                         <line
                             x1={plotLeft}
                             x2={plotRight}
                             y1={yt.y}
                             y2={yt.y}
-                            stroke='#131c2e'
+                            stroke='#f1f5f9'
                             strokeWidth='1'
                         />
                         <text
                             x={plotRight + 8}
                             y={yt.y + 4}
-                            fill='#64748b'
-                            fontSize='11'
-                            fontFamily='Inter, sans-serif'
+                            fill='#475569'
+                            fontSize='10.5'
+                            fontFamily='monospace'
                         >
                             {yt.val.toFixed(decimals)}
                         </text>
                     </g>
                 ))}
 
-                {/* Bottom Timestamps */}
                 {xTickIndices.map((ptIdx, idx) => {
+                    const pt = points[ptIdx];
                     const x = xFor(ptIdx, points.length);
-                    const ep = points[ptIdx]?.epoch;
                     return (
-                        <text
-                            key={`xt-${idx}`}
-                            x={x}
-                            y={svgH - 8}
-                            textAnchor='middle'
-                            fill='#64748b'
-                            fontSize='10.5'
-                            fontFamily='Inter, sans-serif'
-                        >
-                            {ep ? formatEpochTime(ep) : ''}
-                        </text>
+                        <g key={`x-${idx}`}>
+                            <line
+                                x1={x}
+                                x2={x}
+                                y1={plotTop}
+                                y2={plotBottom}
+                                stroke='#f8fafc'
+                                strokeWidth='1'
+                            />
+                            <text
+                                x={x}
+                                y={svgH - 10}
+                                textAnchor='middle'
+                                fill='#64748b'
+                                fontSize='10'
+                                fontFamily='monospace'
+                            >
+                                {formatEpochTime(pt.epoch)}
+                            </text>
+                        </g>
                     );
                 })}
 
+                {/* Candlesticks OR Line Series */}
                 {mode === 'candles' ? (
                     candles.map((c, idx) => {
                         const x = xFor(idx, candles.length);
-                        const up = c.close >= c.open;
-                        const color = up ? '#10b981' : '#ef4444';
-                        const topY = yFor(Math.max(c.open, c.close));
-                        const botY = yFor(Math.min(c.open, c.close));
-                        const bodyH = Math.max(2, botY - topY);
-                        const candleW = Math.max(4, Math.min(14, (plotWidth / candles.length) * 0.62));
+                        const bull = c.close >= c.open;
+                        const color = bull ? '#2a9d8f' : '#e75550';
+                        const yOpen = yFor(c.open);
+                        const yClose = yFor(c.close);
+                        const yHigh = yFor(c.high);
+                        const yLow = yFor(c.low);
+                        const bodyTop = Math.min(yOpen, yClose);
+                        const bodyH = Math.max(2.5, Math.abs(yClose - yOpen));
+                        const candleW = Math.max(4, Math.min(11, (plotWidth / candles.length) * 0.56));
                         return (
-                            <g key={`cdl-${idx}`}>
+                            <g key={`c-${idx}`}>
                                 <line
                                     x1={x}
                                     x2={x}
-                                    y1={yFor(c.high)}
-                                    y2={yFor(c.low)}
+                                    y1={yHigh}
+                                    y2={yLow}
                                     stroke={color}
-                                    strokeWidth='1.4'
+                                    strokeWidth='1.35'
                                 />
                                 <rect
                                     x={x - candleW / 2}
-                                    y={topY}
+                                    y={bodyTop}
                                     width={candleW}
                                     height={bodyH}
-                                    rx='1.5'
                                     fill={color}
+                                    rx='1'
                                 />
                             </g>
                         );
                     })
                 ) : (
-                    <>
-                        <path d={areaPath} fill='url(#rmDtAreaGrad)' />
-                        <path
-                            d={linePath}
-                            fill='none'
-                            stroke='#2563eb'
-                            strokeWidth='2.2'
-                            strokeLinejoin='round'
-                        />
-                    </>
+                    <path
+                        d={linePath}
+                        fill='none'
+                        stroke='#1e293b'
+                        strokeWidth='2'
+                        strokeLinejoin='round'
+                    />
                 )}
 
-                {/* Current Price Guide Line & Right Tag */}
-                <line
-                    x1={plotLeft}
-                    x2={plotRight}
-                    y1={lastY}
-                    y2={lastY}
-                    stroke='#3b82f6'
-                    strokeDasharray='4 4'
-                    strokeOpacity='0.6'
-                />
-                <rect
-                    x={plotRight + 3}
-                    y={lastY - 10}
-                    width={76}
-                    height={20}
-                    rx={4}
-                    fill='#0066ff'
-                />
-                <text
-                    x={plotRight + 41}
-                    y={lastY + 4}
-                    textAnchor='middle'
-                    fill='#ffffff'
-                    fontSize='11'
-                    fontWeight='700'
-                >
-                    {lastPt.quote.toFixed(decimals)}
-                </text>
+                {showSma && smaPath && (
+                    <path
+                        d={smaPath}
+                        fill='none'
+                        stroke='#0066ff'
+                        strokeWidth='1.6'
+                        strokeDasharray='4 2'
+                    />
+                )}
 
-                {/* Live Digit Bubbles on Recent Ticks (Digits Overlay Mode) */}
+                {/* Digit Bubbles along Line when Line + Digits is selected */}
                 {digitNodes.map((node, idx) => {
-                    const isLatest = idx === digitNodes.length - 1;
+                    const isEven = node.pt.digit % 2 === 0;
+                    const isLast = idx === digitNodes.length - 1;
                     return (
-                        <g key={`dn-${idx}`}>
+                        <g key={`d-${idx}`} transform={`translate(${node.x}, ${node.y - 14})`}>
                             <circle
-                                cx={node.x}
-                                cy={node.y}
-                                r={isLatest ? 10.5 : 8.5}
-                                fill={isLatest ? '#0066ff' : '#1e293b'}
-                                stroke={isLatest ? '#93c5fd' : '#475569'}
+                                r={isLast ? 10 : 8.5}
+                                fill={isLast ? '#0f172a' : isEven ? '#ecfdf5' : '#fef2f2'}
+                                stroke={isLast ? '#0066ff' : isEven ? '#10b981' : '#ef4444'}
                                 strokeWidth='1.4'
                             />
                             <text
-                                x={node.x}
-                                y={node.y + 3.8}
+                                y='3.5'
                                 textAnchor='middle'
-                                fill='#ffffff'
-                                fontSize='10'
-                                fontWeight='700'
+                                fill={isLast ? '#ffffff' : isEven ? '#047857' : '#b91c1c'}
+                                fontSize='9.5'
+                                fontWeight='800'
                             >
                                 {node.pt.digit}
                             </text>
@@ -1115,734 +1443,822 @@ export default observer(function DTrader() {
                     );
                 })}
 
-                {/* Hover Crosshair */}
-                {hoverIndex !== null && points[hoverIndex] && (
-                    <line
-                        x1={xFor(hoverIndex, points.length)}
-                        x2={xFor(hoverIndex, points.length)}
-                        y1={plotTop}
-                        y2={plotBottom}
-                        stroke='#94a3b8'
-                        strokeDasharray='3 3'
-                        strokeOpacity='0.55'
-                    />
+                {/* Live Spot Dot + Dashed Guide + Solid Black Right-Axis Callout */}
+                <line
+                    x1={lastX}
+                    x2={plotRight}
+                    y1={lastY}
+                    y2={lastY}
+                    stroke='#0f172a'
+                    strokeDasharray='3 3'
+                    strokeWidth='1.1'
+                />
+                <circle cx={lastX} cy={lastY} r='4' fill='#0f172a' stroke='#ffffff' strokeWidth='1.5' />
+                <g transform={`translate(${plotRight + 2}, ${lastY - 10})`}>
+                    <rect width='64' height='20' rx='3' fill='#0f172a' />
+                    <text
+                        x='32'
+                        y='13.5'
+                        textAnchor='middle'
+                        fill='#ffffff'
+                        fontSize='10.5'
+                        fontWeight='700'
+                        fontFamily='monospace'
+                    >
+                        {lastPt.quote.toFixed(decimals)}
+                    </text>
+                </g>
+
+                {/* Hover Crosshair & Timestamp/Quote Tooltip */}
+                {hoverPt && (
+                    <g pointerEvents='none'>
+                        <line
+                            x1={hoverX}
+                            x2={hoverX}
+                            y1={plotTop}
+                            y2={plotBottom}
+                            stroke='#94a3b8'
+                            strokeDasharray='3 3'
+                            strokeWidth='1'
+                        />
+                        <line
+                            x1={plotLeft}
+                            x2={plotRight}
+                            y1={hoverY}
+                            y2={hoverY}
+                            stroke='#94a3b8'
+                            strokeDasharray='3 3'
+                            strokeWidth='1'
+                        />
+                        <g
+                            transform={`translate(${Math.min(
+                                plotRight - 140,
+                                Math.max(plotLeft + 8, hoverX + 10)
+                            )}, ${Math.max(plotTop + 10, hoverY - 38)})`}
+                        >
+                            <rect
+                                width='132'
+                                height='36'
+                                rx='4'
+                                fill='rgba(226, 232, 240, 0.95)'
+                                stroke='#cbd5e1'
+                            />
+                            <text x='8' y='14' fill='#334155' fontSize='9.5' fontFamily='monospace'>
+                                {formatEpochFull(hoverPt.epoch)}
+                            </text>
+                            <text
+                                x='8'
+                                y='28'
+                                fill='#0f172a'
+                                fontSize='11'
+                                fontWeight='800'
+                                fontFamily='monospace'
+                            >
+                                {hoverPt.quote.toFixed(decimals)}
+                            </text>
+                        </g>
+                    </g>
                 )}
             </svg>
         );
     };
 
-    const hoveredPoint =
-        hoverIndex !== null && chartData?.points[hoverIndex] ? chartData.points[hoverIndex] : null;
+    const renderDigitCircle = (d: number) => {
+        const pct = digitStats.pcts[d] ?? 0;
+        const isMax = digitStats.highestDigit === d;
+        const isMin = digitStats.lowestDigit === d;
+        const isCurrent = digitStats.currentDigit === d;
+        const isSelected = groupMeta.usesDigitPrediction && prediction === d;
+        const ringColor = isMin || pct < 9.5 ? '#ef4444' : '#10b981';
+        const r = 20;
+        const circ = 2 * Math.PI * r;
+        const clampedPct = Math.max(8, Math.min(100, pct * 4));
+        const dashOffset = circ * (1 - clampedPct / 100);
+
+        return (
+            <button
+                key={d}
+                type='button'
+                className={
+                    'rm-dtrader__digit-ring-btn' +
+                    (isCurrent ? ' rm-dtrader__digit-ring-btn--current' : '') +
+                    (isSelected ? ' rm-dtrader__digit-ring-btn--selected' : '')
+                }
+                onClick={() => setPrediction(d)}
+                title={`Digit ${d}: ${pct.toFixed(1)}% — Click to set Prediction ${d}`}
+                data-testid={`dtrader-digit-ring-${d}`}
+            >
+                <svg viewBox='0 0 46 46' className='rm-dtrader__digit-ring-svg'>
+                    <circle
+                        cx='23'
+                        cy='23'
+                        r={r}
+                        fill='none'
+                        stroke='#e2e8f0'
+                        strokeWidth='3'
+                    />
+                    <circle
+                        cx='23'
+                        cy='23'
+                        r={r}
+                        fill='none'
+                        stroke={ringColor}
+                        strokeWidth='3.2'
+                        strokeDasharray={circ.toFixed(1)}
+                        strokeDashoffset={dashOffset.toFixed(1)}
+                        strokeLinecap='round'
+                    />
+                </svg>
+                <span
+                    className={
+                        'rm-dtrader__digit-ring-inner' +
+                        (isMax
+                            ? ' rm-dtrader__digit-ring-inner--max'
+                            : isMin
+                              ? ' rm-dtrader__digit-ring-inner--min'
+                              : '')
+                    }
+                >
+                    <span className='rm-dtrader__digit-ring-num'>{d}</span>
+                    <span className='rm-dtrader__digit-ring-pct'>{pct.toFixed(1)}%</span>
+                </span>
+                {isCurrent && <span className='rm-dtrader__digit-pointer' aria-hidden='true' />}
+            </button>
+        );
+    };
+
+    const sellableOpenContracts = openContracts.filter(c => c.status === 'open' && c.isValidToSell);
 
     return (
         <div className='rm-dtrader' data-testid='rm-dtrader-page'>
-            <div className='rm-dtrader__split'>
-                {/* Left Column: Chart + 0-9 Digit Distribution */}
-                <div className='rm-dtrader__left'>
-                    <section className='rm-dtrader__chart-card'>
-                        <div className='rm-dtrader__chart-topbar'>
-                            {/* Market Selector Pill */}
-                            <div className='rm-dtrader__market-wrap'>
-                                <button
-                                    type='button'
-                                    className='rm-dtrader__market-btn'
-                                    onClick={() => setMarketOpen(v => !v)}
-                                    data-testid='dtrader-market-picker'
-                                >
-                                    <span className='rm-dtrader__market-icon'>1s</span>
+            <div className='rm-dtrader__workspace'>
+                {/* Left SmartCharts-Style White Stage */}
+                <div className='rm-dtrader__chart-stage'>
+                    {/* Top-Left Floating Market Card */}
+                    <div className='rm-dtrader__market-float'>
+                        <button
+                            type='button'
+                            className='rm-dtrader__market-card-btn'
+                            onClick={() => setMarketOpen(v => !v)}
+                            data-testid='dtrader-market-picker'
+                        >
+                            <span className='rm-dtrader__market-emblem'>
+                                <span className='rm-dtrader__market-emblem-num'>{badge.num}</span>
+                                <span className='rm-dtrader__market-emblem-bars'>
+                                    <i />
+                                    <i />
+                                    <i />
+                                </span>
+                                {badge.is1s && (
+                                    <span className='rm-dtrader__market-emblem-1s'>1s</span>
+                                )}
+                            </span>
+                            <span className='rm-dtrader__market-info'>
+                                <span className='rm-dtrader__market-title-row'>
                                     <span className='rm-dtrader__market-name'>
                                         {selectedMarket.name}
                                     </span>
-                                    <span>·</span>
-                                    <span className='rm-dtrader__market-price'>
+                                    <span className='rm-dtrader__market-caret'>⌄</span>
+                                </span>
+                                <span className='rm-dtrader__market-sub-row'>
+                                    <span>
                                         {latestTick ? latestTick.quote.toFixed(decimals) : '—'}
                                     </span>
-                                    {latestTick && (
-                                        <span
-                                            className={`rm-dtrader__market-delta ${
-                                                priceDelta >= 0
-                                                    ? 'rm-dtrader__market-delta--up'
-                                                    : 'rm-dtrader__market-delta--down'
-                                            }`}
-                                        >
-                                            {priceDelta >= 0 ? '+' : '−'}
-                                            {Math.abs(priceDelta).toFixed(decimals)} (
-                                            {Math.abs(priceDeltaPct).toFixed(2)}%)
-                                        </span>
-                                    )}
-                                    <span className='rm-dtrader__market-caret'>▾</span>
-                                </button>
-
-                                {marketOpen && (
-                                    <div className='rm-dtrader__market-dropdown'>
-                                        <div className='rm-dtrader__market-search'>
-                                            <input
-                                                autoFocus
-                                                value={search}
-                                                onChange={e => setSearch(e.target.value)}
-                                                placeholder='Search Volatility, Jump, Crash/Boom…'
-                                            />
-                                            <button
-                                                type='button'
-                                                onClick={() => setMarketOpen(false)}
-                                                aria-label='Close market selector'
-                                            >
-                                                ×
-                                            </button>
-                                        </div>
-                                        <div className='rm-dtrader__market-list'>
-                                            {filteredMarkets.slice(0, 80).map(m => (
-                                                <button
-                                                    key={m.symbol}
-                                                    type='button'
-                                                    className={`rm-dtrader__market-option${
-                                                        m.symbol === symbol
-                                                            ? ' rm-dtrader__market-option--selected'
-                                                            : ''
-                                                    }`}
-                                                    onClick={() => {
-                                                        setSymbol(m.symbol);
-                                                        setMarketOpen(false);
-                                                        setSearch('');
-                                                    }}
-                                                >
-                                                    <span>{m.name}</span>
-                                                    <small>{m.symbol}</small>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Chart Toolbar Controls matching RiskManagers DTrader */}
-                            <div className='rm-dtrader__toolbar'>
-                                <div className='rm-dtrader__seg' role='group' aria-label='Timeframe'>
-                                    {(['1T', '1M', '5M'] as TimeframeKey[]).map(tf => (
-                                        <button
-                                            key={tf}
-                                            type='button'
-                                            className={`rm-dtrader__seg-btn${
-                                                timeframe === tf ? ' rm-dtrader__seg-btn--active' : ''
-                                            }`}
-                                            onClick={() => setTimeframe(tf)}
-                                        >
-                                            {tf}
-                                        </button>
-                                    ))}
-                                </div>
-
-                                <div className='rm-dtrader__seg' role='group' aria-label='Zoom'>
-                                    <button
-                                        type='button'
-                                        className='rm-dtrader__seg-btn'
-                                        disabled={zoomIndex === 0}
-                                        onClick={() => setZoomIndex(i => Math.max(0, i - 1))}
-                                        title='Zoom in'
-                                    >
-                                        +
-                                    </button>
-                                    <button
-                                        type='button'
-                                        className='rm-dtrader__seg-btn'
-                                        disabled={zoomIndex === ZOOM_STEPS.length - 1}
-                                        onClick={() =>
-                                            setZoomIndex(i => Math.min(ZOOM_STEPS.length - 1, i + 1))
-                                        }
-                                        title='Zoom out'
-                                    >
-                                        −
-                                    </button>
-                                </div>
-
-                                <div className='rm-dtrader__seg' role='group' aria-label='Chart overlay'>
-                                    <button
-                                        type='button'
-                                        className={`rm-dtrader__seg-btn${
-                                            overlayMode === 'default'
-                                                ? ' rm-dtrader__seg-btn--active'
-                                                : ''
+                                    <span
+                                        className={`rm-dtrader__market-delta ${
+                                            priceDelta >= 0
+                                                ? 'rm-dtrader__market-delta--up'
+                                                : 'rm-dtrader__market-delta--down'
                                         }`}
-                                        onClick={() => setOverlayMode('default')}
                                     >
-                                        Default
-                                    </button>
-                                    <button
-                                        type='button'
-                                        className={`rm-dtrader__seg-btn${
-                                            overlayMode === 'digits'
-                                                ? ' rm-dtrader__seg-btn--active'
-                                                : ''
-                                        }`}
-                                        onClick={() => setOverlayMode('digits')}
-                                    >
-                                        Digits
-                                    </button>
-                                </div>
-
-                                <div className='rm-dtrader__seg' role='group' aria-label='Chart type'>
-                                    <button
-                                        type='button'
-                                        className={`rm-dtrader__seg-btn${
-                                            seriesMode === 'line'
-                                                ? ' rm-dtrader__seg-btn--active'
-                                                : ''
-                                        }`}
-                                        onClick={() => setSeriesMode('line')}
-                                    >
-                                        Line
-                                    </button>
-                                    <button
-                                        type='button'
-                                        className={`rm-dtrader__seg-btn${
-                                            seriesMode === 'candles'
-                                                ? ' rm-dtrader__seg-btn--active'
-                                                : ''
-                                        }`}
-                                        onClick={() => setSeriesMode('candles')}
-                                    >
-                                        Candles
-                                    </button>
-                                </div>
-
-                                <span
-                                    className={`rm-dtrader__live-pill${
-                                        feedState !== 'LIVE'
-                                            ? ' rm-dtrader__live-pill--connecting'
-                                            : ''
-                                    }`}
-                                >
-                                    <i />
-                                    {feedState === 'LIVE' ? 'Live' : 'Connecting'}
+                                        {priceDelta >= 0 ? '+' : '−'}{' '}
+                                        {Math.abs(priceDelta).toFixed(decimals)} (
+                                        {Math.abs(priceDeltaPct).toFixed(2)}%){' '}
+                                        {priceDelta >= 0 ? '▲' : '▼'}
+                                    </span>
                                 </span>
+                            </span>
+                        </button>
 
-                                <button
-                                    type='button'
-                                    className={`rm-dtrader__drawer-btn${
-                                        recordOpen ? ' rm-dtrader__drawer-btn--active' : ''
-                                    }`}
-                                    onClick={() => setRecordOpen(v => !v)}
-                                    title='Toggle DTrader Positions & Record'
-                                >
-                                    ☷
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className='rm-dtrader__canvas-wrap'>
-                            {hoveredPoint && (
-                                <div className='rm-dtrader__hover-tip'>
-                                    <span>{formatEpochTime(hoveredPoint.epoch)}</span>
-                                    <strong>{hoveredPoint.quote.toFixed(decimals)}</strong>
-                                    <span>Digit: {hoveredPoint.digit}</span>
-                                </div>
-                            )}
-                            {renderChartSvg()}
-                        </div>
-                    </section>
-
-                    {/* Bottom 0-9 Digit Distribution Strip */}
-                    <section className='rm-dtrader__digits-card'>
-                        <div className='rm-dtrader__digits-head'>
-                            <div className='rm-dtrader__digits-title'>
-                                <span>0–9 Digit Distribution</span>
-                                <span className='rm-dtrader__digits-sub'>
-                                    ({digitStats.sampleCount} ticks)
-                                </span>
-                            </div>
-
-                            <div className='rm-dtrader__digits-controls'>
-                                <div className='rm-dtrader__seg'>
-                                    {[100, 500, 1000].map(w => (
+                        {marketOpen && (
+                            <div className='rm-dtrader__dropdown'>
+                                <input
+                                    type='text'
+                                    className='rm-dtrader__dropdown-search'
+                                    placeholder='Search Volatility, Jump, Crash/Boom, Forex…'
+                                    value={search}
+                                    onChange={e => setSearch(e.target.value)}
+                                />
+                                <div className='rm-dtrader__dropdown-list'>
+                                    {filteredMarkets.slice(0, 60).map(m => (
                                         <button
-                                            key={w}
+                                            key={m.symbol}
                                             type='button'
-                                            className={`rm-dtrader__seg-btn${
-                                                digitWindow === w
-                                                    ? ' rm-dtrader__seg-btn--active'
+                                            className={`rm-dtrader__dropdown-item ${
+                                                m.symbol === symbol
+                                                    ? 'rm-dtrader__dropdown-item--active'
                                                     : ''
                                             }`}
-                                            onClick={() => setDigitWindow(w)}
+                                            onClick={() => {
+                                                setSymbol(m.symbol);
+                                                setMarketOpen(false);
+                                            }}
                                         >
-                                            {w}t
+                                            <span>{m.name}</span>
+                                            <span className='rm-dtrader__dropdown-code'>
+                                                {m.symbol}
+                                            </span>
                                         </button>
                                     ))}
                                 </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Top-Center Floating Segmented Pills: Default | Digits, Line | Candles */}
+                    <div className='rm-dtrader__top-pills'>
+                        <div className='rm-dtrader__pill-seg' role='group' aria-label='Chart overlay'>
+                            <button
+                                type='button'
+                                className={`rm-dtrader__pill-btn ${
+                                    overlayMode === 'default' ? 'rm-dtrader__pill-btn--active' : ''
+                                }`}
+                                onClick={() => setOverlayMode('default')}
+                            >
+                                Default
+                            </button>
+                            <button
+                                type='button'
+                                className={`rm-dtrader__pill-btn ${
+                                    overlayMode === 'digits' ? 'rm-dtrader__pill-btn--active' : ''
+                                }`}
+                                onClick={() => setOverlayMode('digits')}
+                            >
+                                Digits
+                            </button>
+                        </div>
+
+                        <div className='rm-dtrader__pill-seg' role='group' aria-label='Chart type'>
+                            <button
+                                type='button'
+                                className={`rm-dtrader__pill-btn ${
+                                    seriesMode === 'line' ? 'rm-dtrader__pill-btn--active' : ''
+                                }`}
+                                onClick={() => setSeriesMode('line')}
+                            >
+                                Line
+                            </button>
+                            <button
+                                type='button'
+                                className={`rm-dtrader__pill-btn ${
+                                    seriesMode === 'candles' ? 'rm-dtrader__pill-btn--active' : ''
+                                }`}
+                                onClick={() => setSeriesMode('candles')}
+                            >
+                                Candles
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Left-Edge SmartCharts Vertical Toolbar */}
+                    <div className='rm-dtrader__left-rail'>
+                        <div className='rm-dtrader__tool-stack' role='toolbar' aria-label='Chart tools'>
+                            <button
+                                type='button'
+                                className='rm-dtrader__tool-btn'
+                                onClick={cycleTimeframe}
+                                title={`Timeframe: ${timeframe} (click to cycle 1T / 1M / 5M)`}
+                            >
+                                <span className='rm-dtrader__tool-tf'>{timeframe}</span>
+                                <svg width='16' height='16' viewBox='0 0 24 24' fill='none'>
+                                    <path
+                                        d='M4 18l5-6 4 3 7-9'
+                                        stroke='currentColor'
+                                        strokeWidth='2'
+                                        strokeLinecap='round'
+                                        strokeLinejoin='round'
+                                    />
+                                </svg>
+                            </button>
+
+                            <button
+                                type='button'
+                                className={`rm-dtrader__tool-btn ${
+                                    showSma ? 'rm-dtrader__tool-btn--active' : ''
+                                }`}
+                                onClick={() => setShowSma(v => !v)}
+                                title='Toggle SMA-10 Indicator'
+                            >
+                                <svg width='16' height='16' viewBox='0 0 24 24' fill='none'>
+                                    <rect
+                                        x='3'
+                                        y='4'
+                                        width='18'
+                                        height='16'
+                                        rx='2'
+                                        stroke='currentColor'
+                                        strokeWidth='1.8'
+                                    />
+                                    <path
+                                        d='M4 16l5-5 4 3 6-6'
+                                        stroke='currentColor'
+                                        strokeWidth='1.8'
+                                        strokeLinecap='round'
+                                    />
+                                </svg>
+                            </button>
+
+                            <button
+                                type='button'
+                                className={`rm-dtrader__tool-btn ${
+                                    denseGrid ? 'rm-dtrader__tool-btn--active' : ''
+                                }`}
+                                onClick={() => setDenseGrid(v => !v)}
+                                title='Toggle Grid Density'
+                            >
+                                <svg width='16' height='16' viewBox='0 0 24 24' fill='none'>
+                                    <rect
+                                        x='3'
+                                        y='3'
+                                        width='18'
+                                        height='18'
+                                        rx='2'
+                                        stroke='currentColor'
+                                        strokeWidth='1.8'
+                                    />
+                                    <path
+                                        d='M3 9h18M3 15h18M9 3v18M15 3v18'
+                                        stroke='currentColor'
+                                        strokeWidth='1.5'
+                                    />
+                                </svg>
+                            </button>
+
+                            <button
+                                type='button'
+                                className={`rm-dtrader__tool-btn ${
+                                    crosshairEnabled ? 'rm-dtrader__tool-btn--active' : ''
+                                }`}
+                                onClick={() => setCrosshairEnabled(v => !v)}
+                                title='Toggle Crosshair Tooltip'
+                            >
+                                <svg width='16' height='16' viewBox='0 0 24 24' fill='none'>
+                                    <path
+                                        d='M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z'
+                                        stroke='currentColor'
+                                        strokeWidth='1.8'
+                                        strokeLinejoin='round'
+                                    />
+                                </svg>
+                            </button>
+
+                            <button
+                                type='button'
+                                className='rm-dtrader__tool-btn'
+                                onClick={exportSnapshotCsv}
+                                title='Download Recent Ticks CSV'
+                            >
+                                <svg width='16' height='16' viewBox='0 0 24 24' fill='none'>
+                                    <path
+                                        d='M12 4v11m0 0l-4-4m4 4l4-4M4 19h16'
+                                        stroke='currentColor'
+                                        strokeWidth='1.8'
+                                        strokeLinecap='round'
+                                        strokeLinejoin='round'
+                                    />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <span className='rm-dtrader__brand-pill'>TP</span>
+                    </div>
+
+                    {/* Bottom-Left Zoom Controls (+ / Target / -) */}
+                    <div className='rm-dtrader__zoom-stack' role='group' aria-label='Zoom'>
+                        <button
+                            type='button'
+                            className='rm-dtrader__zoom-btn'
+                            title='Zoom in'
+                            onClick={() => setZoomIndex(z => Math.max(0, z - 1))}
+                        >
+                            +
+                        </button>
+                        <button
+                            type='button'
+                            className='rm-dtrader__zoom-btn'
+                            title='Reset zoom to live spot'
+                            onClick={() => {
+                                setZoomIndex(2);
+                                setHoverIndex(null);
+                            }}
+                        >
+                            ⌖
+                        </button>
+                        <button
+                            type='button'
+                            className='rm-dtrader__zoom-btn'
+                            title='Zoom out'
+                            onClick={() => setZoomIndex(z => Math.min(ZOOM_STEPS.length - 1, z + 1))}
+                        >
+                            −
+                        </button>
+                    </div>
+
+                    {/* Interactive Candlestick / Line SVG */}
+                    {renderChartSvg()}
+
+                    {/* Bottom-Center 2x5 Circular 0-9 Digit Rings */}
+                    {overlayMode === 'digits' && (
+                        <div
+                            className='rm-dtrader__digits-cluster'
+                            aria-label='0–9 Digit Distribution'
+                            data-testid='dtrader-digits-cluster'
+                        >
+                            <div className='rm-dtrader__digits-row'>
+                                {[0, 1, 2, 3, 4].map(renderDigitCircle)}
                                 <span
-                                    className='rm-dtrader__info-badge'
-                                    title='Green marks the highest-frequency digit, red marks the lowest-frequency digit, and ▲ marks the latest tick digit.'
+                                    className='rm-dtrader__digits-info'
+                                    title={`0–9 Digit Distribution (${digitStats.sampleCount} ticks)`}
                                 >
                                     i
                                 </span>
                             </div>
+                            <div className='rm-dtrader__digits-row'>
+                                {[5, 6, 7, 8, 9].map(renderDigitCircle)}
+                            </div>
                         </div>
-
-                        <div className='rm-dtrader__digits-row'>
-                            {digitStats.pcts.map((pct, d) => {
-                                const isHighest = d === digitStats.highestDigit;
-                                const isLowest = d === digitStats.lowestDigit;
-                                const isCurrent = d === digitStats.currentDigit;
-                                const isSelected =
-                                    groupMeta.usesDigitPrediction && prediction === d;
-                                const arcColor = isHighest
-                                    ? '#10b981'
-                                    : isLowest
-                                      ? '#ef4444'
-                                      : isCurrent
-                                        ? '#3b82f6'
-                                        : '#475569';
-                                const clampedRatio = Math.min(1, Math.max(0.05, pct / 22));
-                                const arcLen = 69.1; // pi * r (r=22)
-                                const dashOffset = arcLen * (1 - clampedRatio);
-
-                                return (
-                                    <button
-                                        key={d}
-                                        type='button'
-                                        className={
-                                            'rm-dtrader__arc-item' +
-                                            (isHighest ? ' rm-dtrader__arc-item--highest' : '') +
-                                            (isLowest ? ' rm-dtrader__arc-item--lowest' : '') +
-                                            (isSelected ? ' rm-dtrader__arc-item--selected' : '') +
-                                            (isCurrent ? ' rm-dtrader__arc-item--current' : '')
-                                        }
-                                        onClick={() => {
-                                            if (groupMeta.usesDigitPrediction) {
-                                                setPrediction(d);
-                                            }
-                                        }}
-                                    >
-                                        <svg viewBox='0 0 56 34' className='rm-dtrader__arc-svg'>
-                                            <path
-                                                d='M 6 30 A 22 22 0 0 1 50 30'
-                                                fill='none'
-                                                stroke='#1e293b'
-                                                strokeWidth='4.5'
-                                                strokeLinecap='round'
-                                            />
-                                            <path
-                                                d='M 6 30 A 22 22 0 0 1 50 30'
-                                                fill='none'
-                                                stroke={arcColor}
-                                                strokeWidth='4.5'
-                                                strokeLinecap='round'
-                                                strokeDasharray={arcLen}
-                                                strokeDashoffset={dashOffset}
-                                            />
-                                            <text
-                                                x='28'
-                                                y='29'
-                                                textAnchor='middle'
-                                                fill='#f8fafc'
-                                                fontSize='14'
-                                                fontWeight='700'
-                                            >
-                                                {d}
-                                            </text>
-                                        </svg>
-
-                                        <span
-                                            className={
-                                                'rm-dtrader__arc-pct' +
-                                                (isHighest ? ' rm-dtrader__arc-pct--highest' : '') +
-                                                (isLowest ? ' rm-dtrader__arc-pct--lowest' : '')
-                                            }
-                                        >
-                                            {pct.toFixed(1)}%
-                                        </span>
-
-                                        <span className='rm-dtrader__arc-cursor'>
-                                            {isCurrent ? '▲' : ''}
-                                        </span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </section>
+                    )}
                 </div>
 
-                {/* Right Sidebar: Authentic DTrader Trade Panel */}
-                <aside className='rm-dtrader__sidebar' aria-label='DTrader trade panel'>
-                    <div className='rm-dtrader__field'>
-                        <span className='rm-dtrader__label'>Trade Type</span>
-                        <select
-                            className='rm-dtrader__select'
-                            value={tradeGroup}
-                            aria-label='Trade Type'
-                            onChange={e => setTradeGroup(e.target.value as DTraderGroup)}
-                        >
-                            {TRADE_GROUPS.map(g => (
-                                <option key={g.id} value={g.id}>
-                                    {g.label}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {tradeGroup !== 'accumulators' ? (
-                        <div className='rm-dtrader__field'>
-                            <div className='rm-dtrader__tabs-2'>
+                {/* Right Floating White Trade & Auto-Bot Card */}
+                <aside className='rm-dtrader__trade-col'>
+                    <div className='rm-dtrader__trade-card' data-testid='dtrader-trade-card'>
+                        {/* Header: < [Icons] Matches/Differs  [Digits] */}
+                        <div className='rm-dtrader__card-header'>
+                            <div className='rm-dtrader__card-header-left'>
                                 <button
                                     type='button'
-                                    className={durationUnit === 't' ? 'is-active' : ''}
-                                    onClick={() => setDurationUnit('t')}
+                                    className='rm-dtrader__cycle-btn'
+                                    onClick={() => cycleGroup(-1)}
+                                    aria-label='Previous contract type'
                                 >
-                                    Ticks
+                                    ‹
                                 </button>
-                                <button
-                                    type='button'
-                                    disabled={!groupMeta.supportsMinutes}
-                                    className={durationUnit === 'm' ? 'is-active' : ''}
-                                    onClick={() => {
-                                        setDurationUnit('m');
-                                        setDuration(d => Math.max(1, d));
-                                    }}
+                                <span className='rm-dtrader__contract-icon' aria-hidden='true'>
+                                    <svg width='20' height='16' viewBox='0 0 24 18' fill='none'>
+                                        <path
+                                            d='M2 13l5-5 3 3 5-6M11 5h4v4'
+                                            stroke='#ef4444'
+                                            strokeWidth='2'
+                                            strokeLinecap='round'
+                                            strokeLinejoin='round'
+                                        />
+                                    </svg>
+                                </span>
+                                <select
+                                    aria-label='Trade Type'
+                                    className='rm-dtrader__group-select'
+                                    value={tradeGroup}
+                                    onChange={e => setTradeGroup(e.target.value as DTraderGroup)}
+                                    data-testid='dtrader-group-select'
                                 >
-                                    Minutes
-                                </button>
+                                    {TRADE_GROUPS.map(g => (
+                                        <option key={g.id} value={g.id}>
+                                            {g.label}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
 
-                            {durationUnit === 't' ? (
-                                <>
-                                    <span className='rm-dtrader__label'>
-                                        <span>Ticks: {duration}</span>
-                                        <span className='rm-dtrader__label-muted'>
-                                            {groupMeta.minTicks}–{groupMeta.maxTicks}
-                                        </span>
+                            <button
+                                type='button'
+                                className='rm-dtrader__cat-pill'
+                                onClick={() => cycleGroup(1)}
+                                title='Cycle contract category'
+                            >
+                                <span>📊</span>
+                                <span>{groupMeta.categoryBadge}</span>
+                            </button>
+                        </div>
+
+                        {/* Row 2: Ticks [ 1 ]   [ Instant ] */}
+                        {tradeGroup !== 'accumulators' && (
+                            <div className='rm-dtrader__form-row'>
+                                <div className='rm-dtrader__field-inline'>
+                                    <span className='rm-dtrader__lbl'>
+                                        {durationUnit === 't' ? 'Ticks' : 'Minutes'}
                                     </span>
                                     <input
-                                        type='range'
-                                        className='rm-dtrader__slider'
-                                        min={groupMeta.minTicks}
-                                        max={groupMeta.maxTicks}
+                                        type='number'
+                                        className='rm-dtrader__num-input'
+                                        min={durationUnit === 't' ? groupMeta.minTicks : 1}
+                                        max={durationUnit === 't' ? groupMeta.maxTicks : 60}
                                         value={duration}
-                                        onChange={e => setDuration(Number(e.target.value))}
+                                        onChange={e =>
+                                            setDuration(Math.max(1, Number(e.target.value) || 1))
+                                        }
+                                        data-testid='dtrader-ticks-input'
                                     />
-                                    <div className='rm-dtrader__tick-pills'>
-                                        {[1, 2, 3, 5, 10].map(t => (
-                                            <button
-                                                key={t}
-                                                type='button'
-                                                disabled={
-                                                    t < groupMeta.minTicks || t > groupMeta.maxTicks
-                                                }
-                                                className={duration === t ? 'is-active' : ''}
-                                                onClick={() => setDuration(t)}
-                                            >
-                                                {t}t
-                                            </button>
-                                        ))}
-                                    </div>
-                                </>
-                            ) : (
-                                <>
-                                    <span className='rm-dtrader__label'>
-                                        <span>Minutes</span>
-                                        <span className='rm-dtrader__label-muted'>1–1440m</span>
-                                    </span>
-                                    <div className='rm-dtrader__stake-box'>
-                                        <input
-                                            type='number'
-                                            min={1}
-                                            max={1440}
-                                            value={duration}
-                                            onChange={e =>
-                                                setDuration(Math.max(1, Number(e.target.value) || 1))
-                                            }
-                                        />
-                                        <span>MIN</span>
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    ) : (
-                        /* Accumulators Growth Rate & Take Profit */
-                        <div className='rm-dtrader__field'>
-                            <span className='rm-dtrader__label'>Growth Rate</span>
-                            <div className='rm-dtrader__tick-pills'>
-                                {[0.01, 0.02, 0.03, 0.04, 0.05].map(gr => (
-                                    <button
-                                        key={gr}
-                                        type='button'
-                                        className={growthRate === gr ? 'is-active' : ''}
-                                        onClick={() => setGrowthRate(gr)}
-                                    >
-                                        {Math.round(gr * 100)}%
-                                    </button>
-                                ))}
-                            </div>
+                                </div>
 
-                            <span className='rm-dtrader__label' style={{ marginTop: '0.4rem' }}>
-                                <span>Take Profit (optional)</span>
-                                <span className='rm-dtrader__label-muted'>{activeCurrency}</span>
-                            </span>
-                            <div className='rm-dtrader__stake-box'>
-                                <input
-                                    type='number'
-                                    min={0}
-                                    step='0.5'
-                                    placeholder='None'
-                                    value={accuTakeProfit}
-                                    onChange={e => setAccuTakeProfit(e.target.value)}
-                                />
-                                <span>{activeCurrency}</span>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Last Digit Prediction 0-9 Grid */}
-                    {groupMeta.usesDigitPrediction && (
-                        <div className='rm-dtrader__field'>
-                            <span className='rm-dtrader__label'>Last Digit Prediction</span>
-                            <div
-                                className='rm-dtrader__pred-grid'
-                                role='group'
-                                aria-label='Last Digit Prediction'
-                            >
-                                {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(d => (
-                                    <button
-                                        key={d}
-                                        type='button'
-                                        className={prediction === d ? 'is-active' : ''}
-                                        onClick={() => setPrediction(d)}
-                                    >
-                                        {d}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Barrier Offset Input for Higher/Lower & Touch/No Touch */}
-                    {groupMeta.usesBarrierOffset && (
-                        <div className='rm-dtrader__field'>
-                            <span className='rm-dtrader__label'>Barrier Offset</span>
-                            <div className='rm-dtrader__stake-box'>
-                                <input
-                                    type='number'
-                                    min={0.01}
-                                    step='0.1'
-                                    value={barrierOffset}
-                                    onChange={e =>
-                                        setBarrierOffset(Math.max(0.01, Number(e.target.value) || 0.5))
-                                    }
-                                />
-                                <span>±SPOT</span>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Allow Equals for Rise/Fall */}
-                    {tradeGroup === 'rise_fall' && (
-                        <label className='rm-dtrader__equals-check'>
-                            <input
-                                type='checkbox'
-                                checked={allowEquals}
-                                onChange={e => setAllowEquals(e.target.checked)}
-                            />
-                            <span>Allow equals</span>
-                        </label>
-                    )}
-
-                    {/* Stake | Payout Toggle + Stepper */}
-                    <div className='rm-dtrader__field'>
-                        {tradeGroup !== 'accumulators' && (
-                            <div className='rm-dtrader__tabs-2'>
-                                <button
-                                    type='button'
-                                    className={basis === 'stake' ? 'is-active' : ''}
-                                    onClick={() => setBasis('stake')}
+                                <select
+                                    aria-label='Entry trigger mode'
+                                    className='rm-dtrader__mode-select'
+                                    value={triggerMode}
+                                    onChange={e => setTriggerMode(e.target.value as TriggerMode)}
+                                    data-testid='dtrader-trigger-select'
                                 >
-                                    Stake
-                                </button>
-                                <button
-                                    type='button'
-                                    className={basis === 'payout' ? 'is-active' : ''}
-                                    onClick={() => setBasis('payout')}
-                                >
-                                    Payout
-                                </button>
+                                    <option value='instant'>Instant</option>
+                                    <option value='adaptive'>Adaptive</option>
+                                    <option value='opp1'>Wait 1 Opp</option>
+                                    <option value='opp2'>Wait 2 Opp</option>
+                                </select>
                             </div>
                         )}
 
-                        <div className='rm-dtrader__stepper'>
-                            <button
-                                type='button'
-                                onClick={() => stepAmount(-1)}
-                                aria-label='Decrease stake'
-                            >
-                                −
-                            </button>
-                            <div className='rm-dtrader__stake-box'>
-                                <input
-                                    type='number'
-                                    min={0.35}
-                                    step='0.01'
-                                    value={amount}
-                                    aria-label='Stake amount'
-                                    onChange={e =>
-                                        setAmount(Math.max(0.35, Number(e.target.value) || 0.35))
-                                    }
-                                />
-                                <span>{activeCurrency}</span>
+                        {/* Row 3: Prediction [ 1 ] OR Barrier / Growth Rate */}
+                        {groupMeta.usesDigitPrediction && (
+                            <div className='rm-dtrader__form-row'>
+                                <div className='rm-dtrader__field-inline'>
+                                    <span className='rm-dtrader__lbl'>Prediction</span>
+                                    <input
+                                        type='number'
+                                        min={0}
+                                        max={9}
+                                        className='rm-dtrader__num-input'
+                                        value={prediction}
+                                        onChange={e =>
+                                            setPrediction(
+                                                Math.max(0, Math.min(9, Number(e.target.value) || 0))
+                                            )
+                                        }
+                                        data-testid='dtrader-prediction-input'
+                                    />
+                                </div>
                             </div>
-                            <button
-                                type='button'
-                                onClick={() => stepAmount(1)}
-                                aria-label='Increase stake'
-                            >
-                                +
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Dual Live DTrader Purchase Buttons */}
-                    <div className='rm-dtrader__purchase-stack'>
-                        {pairLegs.map(leg => {
-                            const prop = proposals[leg.key];
-                            const safeAmt = Math.max(0.35, Number(amount) || 1);
-                            const liveAsk =
-                                prop?.ask_price != null ? Number(prop.ask_price) : safeAmt;
-                            const livePayout =
-                                prop?.payout != null
-                                    ? Number(prop.payout)
-                                    : basis === 'payout'
-                                      ? safeAmt
-                                      : safeAmt * (1 + leg.fallbackNetRatio);
-                            const netPct =
-                                liveAsk > 0 ? ((livePayout - liveAsk) / liveAsk) * 100 : 0;
-
-                            return (
-                                <button
-                                    key={leg.key}
-                                    type='button'
-                                    disabled={!leg.valid || buyingLeg !== null}
-                                    className={`rm-dtrader__buy-card rm-dtrader__buy-card--${leg.key}`}
-                                    onClick={() => void handleBuyLeg(leg)}
-                                    data-testid={`dtrader-buy-${leg.key}`}
-                                >
-                                    <span className='rm-dtrader__buy-title'>
-                                        {buyingLeg === leg.key
-                                            ? `Buying ${leg.title}…`
-                                            : `${leg.title} — Payout`}
-                                    </span>
-                                    <span className='rm-dtrader__buy-sub'>
-                                        {!leg.valid
-                                            ? leg.invalidHint
-                                            : leg.contractType === 'ACCU'
-                                              ? `Stake ${safeAmt.toFixed(2)} ${activeCurrency} · +${Math.round(
-                                                    growthRate * 100
-                                                )}%/tick`
-                                              : `${livePayout.toFixed(2)} ${activeCurrency} (+${netPct.toFixed(
-                                                    1
-                                                )}%)`}
-                                    </span>
-                                </button>
-                            );
-                        })}
-
-                        {!isAuthorizedSession && (
-                            <button
-                                type='button'
-                                className='rm-dtrader__login-cta'
-                                onClick={() => void connectAccount()}
-                            >
-                                Log in with Deriv to Trade Live
-                            </button>
                         )}
-                    </div>
 
-                    {message && <div className='rm-dtrader__status-note'>{message}</div>}
+                        {groupMeta.usesBarrierOffset && (
+                            <div className='rm-dtrader__form-row'>
+                                <div className='rm-dtrader__field-inline'>
+                                    <span className='rm-dtrader__lbl'>Barrier ±</span>
+                                    <input
+                                        type='number'
+                                        step='0.1'
+                                        min='0.01'
+                                        className='rm-dtrader__num-input'
+                                        value={barrierOffset}
+                                        onChange={e =>
+                                            setBarrierOffset(Math.max(0.01, Number(e.target.value) || 0.5))
+                                        }
+                                    />
+                                </div>
+                            </div>
+                        )}
 
-                    {/* Open Positions Box */}
-                    <div className='rm-dtrader__positions-box'>
-                        <div className='rm-dtrader__positions-head'>
-                            <span>Open Positions ({openContracts.filter(c => !TERMINAL_STATUSES.includes(c.status)).length})</span>
-                            {openContracts.length > 0 && (
-                                <button
-                                    type='button'
-                                    className='rm-dtrader__sell-btn'
-                                    onClick={() => {
-                                        setRecordOpen(true);
-                                        setRecordTab('transactions');
-                                    }}
-                                >
-                                    View All
-                                </button>
-                            )}
-                        </div>
+                        {tradeGroup === 'rise_fall' && (
+                            <div className='rm-dtrader__form-row'>
+                                <label className='rm-dtrader__field-inline'>
+                                    <input
+                                        type='checkbox'
+                                        checked={allowEquals}
+                                        onChange={e => setAllowEquals(e.target.checked)}
+                                    />
+                                    <span className='rm-dtrader__lbl'>Allow equals</span>
+                                </label>
+                            </div>
+                        )}
 
-                        {openContracts.slice(0, 4).map(oc => {
-                            const statusText = String(oc?.status || 'open');
-                            const resolved = TERMINAL_STATUSES.includes(statusText);
-                            const pl = Number(oc.profit || 0);
-                            return (
-                                <div
-                                    key={oc.id}
-                                    className={
-                                        'rm-dtrader__pos-item' +
-                                        (resolved ? ` rm-dtrader__pos-item--${statusText}` : '')
-                                    }
-                                >
-                                    <div className='rm-dtrader__pos-top'>
-                                        <span>
-                                            {resolved
-                                                ? `CONTRACT ${statusText.toUpperCase()}`
-                                                : 'OPEN CONTRACT'}{' '}
-                                            · {oc.label}
-                                        </span>
-                                        <span
-                                            style={{
-                                                color: pl >= 0 ? '#10b981' : '#ef4444',
-                                            }}
+                        {tradeGroup === 'accumulators' && (
+                            <div className='rm-dtrader__form-row'>
+                                <span className='rm-dtrader__lbl'>Growth Rate</span>
+                                <div className='rm-dtrader__growth-row'>
+                                    {[0.01, 0.02, 0.03, 0.04, 0.05].map(gr => (
+                                        <button
+                                            key={gr}
+                                            type='button'
+                                            className={`rm-dtrader__growth-btn ${
+                                                growthRate === gr
+                                                    ? 'rm-dtrader__growth-btn--active'
+                                                    : ''
+                                            }`}
+                                            onClick={() => setGrowthRate(gr)}
                                         >
-                                            {pl >= 0 ? '+' : ''}
-                                            {pl.toFixed(2)} {activeCurrency}
+                                            {Math.round(gr * 100)}%
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Row 4: Stake [ 0.35 ] USD [ Single ] [ Stop ] */}
+                        <div className='rm-dtrader__form-row'>
+                            <div className='rm-dtrader__field-inline'>
+                                <span className='rm-dtrader__lbl'>Stake</span>
+                                <input
+                                    type='number'
+                                    min='0.35'
+                                    step='0.05'
+                                    className='rm-dtrader__num-input'
+                                    value={stakeInput}
+                                    onChange={e => setStakeInput(e.target.value)}
+                                    data-testid='dtrader-stake-input'
+                                />
+                                <span className='rm-dtrader__ccy'>{activeCurrency}</span>
+                            </div>
+
+                            <select
+                                aria-label='Loop mode'
+                                className='rm-dtrader__mode-select'
+                                value={loopMode}
+                                onChange={e => setLoopMode(e.target.value as LoopMode)}
+                                data-testid='dtrader-loop-select'
+                            >
+                                <option value='single'>Single</option>
+                                <option value='continuous'>Continuous</option>
+                            </select>
+
+                            <button
+                                type='button'
+                                className={`rm-dtrader__stop-btn ${
+                                    autoRunning ? 'rm-dtrader__stop-btn--active' : ''
+                                }`}
+                                onClick={() => stopAllLoops('Stopped.')}
+                                data-testid='dtrader-stop-btn'
+                            >
+                                Stop
+                            </button>
+                        </div>
+
+                        {/* Row 5: TP [ 2.5 ]   SL [ 50 ]   x [ 1.2 ] */}
+                        <div className='rm-dtrader__tpsl-row'>
+                            <label className='rm-dtrader__tpsl-cell'>
+                                <span className='rm-dtrader__lbl'>TP</span>
+                                <input
+                                    type='number'
+                                    min='0.1'
+                                    step='0.5'
+                                    className='rm-dtrader__num-input rm-dtrader__num-input--sm'
+                                    value={tpInput}
+                                    onChange={e => setTpInput(e.target.value)}
+                                    data-testid='dtrader-tp-input'
+                                />
+                            </label>
+
+                            <label className='rm-dtrader__tpsl-cell'>
+                                <span className='rm-dtrader__lbl'>SL</span>
+                                <input
+                                    type='number'
+                                    min='0.1'
+                                    step='1'
+                                    className='rm-dtrader__num-input rm-dtrader__num-input--sm'
+                                    value={slInput}
+                                    onChange={e => setSlInput(e.target.value)}
+                                    data-testid='dtrader-sl-input'
+                                />
+                            </label>
+
+                            <label className='rm-dtrader__tpsl-cell'>
+                                <span className='rm-dtrader__lbl'>×</span>
+                                <input
+                                    type='number'
+                                    min='0.1'
+                                    step='0.1'
+                                    className='rm-dtrader__num-input rm-dtrader__num-input--sm'
+                                    value={martingaleInput}
+                                    onChange={e => setMartingaleInput(e.target.value)}
+                                    data-testid='dtrader-martingale-input'
+                                />
+                            </label>
+                        </div>
+
+                        {/* Status Readout */}
+                        <div
+                            className={`rm-dtrader__status-line ${
+                                statusTone !== 'neutral'
+                                    ? `rm-dtrader__status-line--${statusTone}`
+                                    : ''
+                            }`}
+                            data-testid='dtrader-status-line'
+                        >
+                            {statusLine}
+                        </div>
+
+                        {/* Row 6: 4-Column Payout | Payout | Total stake | AUTO Strip */}
+                        <div className='rm-dtrader__summary-strip'>
+                            <div className='rm-dtrader__summary-col'>
+                                <span className='rm-dtrader__summary-lbl'>Payout ⓘ</span>
+                                <span className='rm-dtrader__summary-val'>
+                                    {payoutA.toFixed(2)} {activeCurrency}
+                                </span>
+                            </div>
+                            <div className='rm-dtrader__summary-col'>
+                                <span className='rm-dtrader__summary-lbl'>Payout ⓘ</span>
+                                <span className='rm-dtrader__summary-val'>
+                                    {legB ? `${payoutB.toFixed(2)} ${activeCurrency}` : '—'}
+                                </span>
+                            </div>
+                            <div className='rm-dtrader__summary-col'>
+                                <span className='rm-dtrader__summary-lbl'>Total stake</span>
+                                <span className='rm-dtrader__summary-val'>
+                                    {totalBothStake.toFixed(2)} {activeCurrency}
+                                </span>
+                            </div>
+                            <div className='rm-dtrader__summary-col'>
+                                <span className='rm-dtrader__summary-lbl'>AUTO</span>
+                                <span className='rm-dtrader__summary-val'>
+                                    {triggerMode === 'instant'
+                                        ? 'Instant'
+                                        : triggerMode === 'adaptive'
+                                          ? 'Adaptive'
+                                          : triggerMode === 'opp1'
+                                            ? 'Opp 1'
+                                            : 'Opp 2'}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Row 7: 4 Side-by-Side Buttons: [Matches] [Differs] [Both] [AUTO] */}
+                        <div
+                            className={`rm-dtrader__actions-grid ${
+                                !legB ? 'rm-dtrader__actions-grid--single' : ''
+                            }`}
+                        >
+                            <button
+                                type='button'
+                                disabled={!legA.valid || buyingLeg !== null}
+                                className='rm-dtrader__act-btn rm-dtrader__act-btn--up'
+                                onClick={() => void handleBuySingle(legA)}
+                                data-testid='dtrader-buy-up'
+                            >
+                                <span className='rm-dtrader__act-main'>{legA.shortTitle}</span>
+                            </button>
+
+                            {legB && (
+                                <button
+                                    type='button'
+                                    disabled={!legB.valid || buyingLeg !== null}
+                                    className='rm-dtrader__act-btn rm-dtrader__act-btn--down'
+                                    onClick={() => void handleBuySingle(legB)}
+                                    data-testid='dtrader-buy-down'
+                                >
+                                    <span className='rm-dtrader__act-main'>{legB.shortTitle}</span>
+                                </button>
+                            )}
+
+                            {legB && (
+                                <button
+                                    type='button'
+                                    disabled={!legA.valid || !legB.valid || buyingLeg !== null}
+                                    className='rm-dtrader__act-btn rm-dtrader__act-btn--both'
+                                    onClick={() => void handleBuyBoth()}
+                                    data-testid='dtrader-buy-both'
+                                >
+                                    <span className='rm-dtrader__act-main'>Both</span>
+                                    <span className='rm-dtrader__act-sub'>
+                                        {legA.shortTitle} + {legB.shortTitle}
+                                    </span>
+                                </button>
+                            )}
+
+                            <button
+                                type='button'
+                                className={`rm-dtrader__act-btn rm-dtrader__act-btn--auto ${
+                                    autoRunning ? 'rm-dtrader__act-btn--auto-on' : ''
+                                }`}
+                                onClick={handleToggleAuto}
+                                data-testid='dtrader-buy-auto'
+                            >
+                                <span className='rm-dtrader__act-main'>AUTO</span>
+                                <span className='rm-dtrader__act-sub'>
+                                    {autoRunning ? 'Running' : 'Automatic'}
+                                </span>
+                            </button>
+                        </div>
+
+                        {/* Early Sell Strip for Open Sellable Positions (ACCU / Multi-Min) */}
+                        {sellableOpenContracts.length > 0 && (
+                            <div className='rm-dtrader__open-strip'>
+                                {sellableOpenContracts.map(c => (
+                                    <div key={c.id} className='rm-dtrader__open-item'>
+                                        <span>
+                                            {c.label} ({c.profit >= 0 ? '+' : ''}
+                                            {c.profit.toFixed(2)} {activeCurrency})
                                         </span>
-                                    </div>
-                                    <div className='rm-dtrader__pos-meta'>
-                                        <span>#{oc.id}</span>
                                         <button
                                             type='button'
                                             className='rm-dtrader__sell-btn'
-                                            disabled={resolved}
-                                            onClick={() => void sellContract(oc.id)}
+                                            onClick={() => void sellContract(c.id)}
                                         >
-                                            {resolved ? 'SETTLED' : 'SELL NOW'}
+                                            Sell
                                         </button>
                                     </div>
-                                </div>
-                            );
-                        })}
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </aside>
             </div>
-
-            <TabExecutionRecordPanel
-                namespace='dtrader'
-                title='DTRADER RECORD'
-                previewTitle='DTrader Transactions (Preview)'
-                resetLabel='Reset DTrader'
-                emptyHint='Place a trade on the DTrader panel to stream live DTrader Journal logs and Transactions records here.'
-                variant='dtrader'
-                activeTab={recordTab}
-                onActiveTabChange={setRecordTab}
-                isOpen={recordOpen}
-                onToggleOpen={setRecordOpen}
-                currencyFallback={activeCurrency}
-            />
-
-            <TabSessionDockBar
-                namespace='dtrader'
-                resetLabel='Reset DTrader'
-                activeTab={recordTab}
-                isOpen={recordOpen}
-                onSelectTab={tab => {
-                    setRecordOpen(true);
-                    setRecordTab(tab);
-                }}
-                currencyFallback={activeCurrency}
-            />
         </div>
     );
 });

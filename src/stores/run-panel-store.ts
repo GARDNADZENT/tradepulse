@@ -4,6 +4,7 @@ import { botNotification } from '@/components/bot-notification/bot-notification'
 import { notification_message } from '@/components/bot-notification/bot-notification-utils';
 import { generateOAuthURL, isSafari, mobileOSDetect, standalone_routes } from '@/components/shared';
 import { contract_stages, TContractStage } from '@/constants/contract-stage';
+import { DBOT_TABS } from '@/constants/bot-contents';
 import { run_panel } from '@/constants/run-panel';
 import { ErrorTypes, MessageTypes, observer, unrecoverable_errors } from '@/external/bot-skeleton';
 import { autoDockRunPanel, triggerTpSlModal } from '@/components/tp-sl-modal';
@@ -172,6 +173,13 @@ export default class RunPanelStore {
     };
 
     onRunButtonClick = async () => {
+        if (this.root_store?.dashboard?.active_tab === DBOT_TABS.DTRADER) {
+            autoDockRunPanel(this, 1);
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('tp-dtrader-run-bar', { detail: { action: 'toggle' } }));
+            }
+            return;
+        }
         let timer_counter = 1;
         if (window.sendRequestsStatistic) {
             performance.clearMeasures();
