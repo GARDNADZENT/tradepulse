@@ -1,22 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { observer } from 'mobx-react-lite';
 import { api_base } from '@/external/bot-skeleton';
-import chart_api from '@/external/bot-skeleton/services/api/chart-api';
 import { autoDockRunPanel, triggerTpSlModal } from '@/components/tp-sl-modal';
 import { useStore } from '@/hooks/useStore';
 import { derivBus } from '@/lib/deriv/tick-bus';
 import { getTenantBrandName, subscribeActiveTenantConfig } from '@/services/site-config/site-runtime-config';
-import { executeLiveDerivTrade, normalizeDerivContractParams } from '@/utils/ai-bot-xml-builder';
+import { executeLiveDerivTrade } from '@/utils/ai-bot-xml-builder';
 import {
     clampPredictionForContract,
     computeNextTickPulseStake,
     createInitialRecoveryState,
-    estimateNetProfitRatio,
     formatTickPulseSelectionLabel,
     getTickPulseContractMeta,
     isPredictionDigitAllowed,
     rankTickPulseMarkets,
     resolveTickPulseOrderSpec,
+    sanitizeMartingaleMultiplier,
     selectBestReadyTickPulseMarket,
     settleTickPulseRecoveryState,
     TICKPULSE_CONTRACTS,
@@ -25,7 +24,6 @@ import {
     TickPulseEntryCondition,
     TickPulseMarketRanking,
     TickPulseRecoveryState,
-    TickPulseSplitCount,
 } from './tick-pulse-engine';
 import './tick-pulse.scss';
 
@@ -47,47 +45,9 @@ interface TickPulseHistoryRow {
     status: 'open' | 'won' | 'lost';
 }
 
-const HISTORY_STORAGE_KEY = 'tp_tickpulse_history_v1';
 const SETTINGS_STORAGE_KEY = 'tp_tickpulse_settings_v2';
+const LEGACY_HISTORY_STORAGE_KEY = 'tp_tickpulse_history_v1';
 const DIGITS_0_TO_9 = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-
-function loadSavedHistory(): TickPulseHistoryRow[] {
-    if (typeof window === 'undefined') return [];
-    try {
-        const raw = window.localStorage.getItem(HISTORY_STORAGE_KEY);
-        if (!raw) return [];
-        const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) return [];
-        return parsed.slice(0, 100);
-    } catch {
-        return [];
-    }
-}
-
-function saveHistory(rows: TickPulseHistoryRow[]): void {
-    if (typeof window === 'undefined') return;
-    try {
-        window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(rows.slice(0, 100)));
-    } catch {
-        // ignore storage quota errors
-    }
-}
-
-function buildMiniSparkPath(values: number[]): string {
-    const pts = values.length >= 2 ? values : [0, 0.2, 0.15, 0.45, 0.38, 0.72, 0.9];
-    const min = Math.min(...pts);
-    const max = Math.max(...pts);
-    const span = max - min || 1;
-    const w = 74;
-    const h = 30;
-    return pts
-        .map((v, i) => {
-            const x = (i / Math.max(1, pts.length - 1)) * w;
-            const y = h - 4 - ((v - min) / span) * (h - 8);
-            return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
-        })
-        .join(' ');
-}
 
 const TickPulse: React.FC = observer(() => {
     const store = useStore();
@@ -99,6 +59,16 @@ const TickPulse: React.FC = observer(() => {
         return subscribeActiveTenantConfig(() => {
             setBrandName(getTenantBrandName());
         });
+    }, []);
+
+    // Purge any legacy cached history key so stale 100/100 stats never persist
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try {
+            window.localStorage.removeItem(LEGACY_HISTORY_STORAGE_KEY);
+        } catch {
+            // ignore
+        }
     }, []);
 
     const activeCurrency =
@@ -131,10 +101,10 @@ const TickPulse: React.FC = observer(() => {
     const [initialStakeInput, setInitialStakeInput] = useState<string>(
         initialSaved?.initialStakeInput || '1.00'
     );
-    const [recoverySplits, setRecoverySplits] = useState<TickPulseSplitCount>(
-        initialSaved?.recoverySplits === 1 || initialSaved?.recoverySplits === 3
-            ? initialSaved.recoverySplits
-            : 2
+    const [martingaleInput, setMartingaleInput] = useState<string>(
+        initialSaved?.martingaleInput !== undefined
+            ? String(initialSaved.martingaleInput)
+            : '2.0'
     );
     const [takeProfitInput, setTakeProfitInput] = useState<string>(
         initialSaved?.takeProfitInput || '20.00'
@@ -167,12 +137,19 @@ const TickPulse: React.FC = observer(() => {
     const [statusMessage, setStatusMessage] = useState<string>('');
     const [hasErrorBanner, setHasErrorBanner] = useState<boolean>(false);
 
+    // Strict zero pre-run state — populates ONLY from real trades & ticks during a run
     const [sessionPL, setSessionPL] = useState<number>(0);
     const [recoveryState, setRecoveryState] = useState<TickPulseRecoveryState>(() =>
-        createInitialRecoveryState(recoverySplits)
+        createInitialRecoveryState()
     );
-    const [historyRows, setHistoryRows] = useState<TickPulseHistoryRow[]>(() => loadSavedHistory());
-    const [liveAfterProfitRatio, setLiveAfterProfitRatio] = useState<number | null>(null);
+    const [historyRows, setHistoryRows] = useState<TickPulseHistoryRow[]>([]);
+    const [runScannerStats, setRunScannerStats] = useState<{
+        marketsCount: number;
+        ticksCount: number;
+    }>({ marketsCount: 0, ticksCount: 0 });
+
+    const scannedMarketsRef = useRef<Set<string>>(new Set());
+    const scannedTicksRef = useRef<number>(0);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -185,7 +162,7 @@ const TickPulse: React.FC = observer(() => {
                     afterContract,
                     afterPrediction,
                     initialStakeInput,
-                    recoverySplits,
+                    martingaleInput,
                     takeProfitInput,
                     stopLossInput,
                     autoBestMarket,
@@ -203,7 +180,7 @@ const TickPulse: React.FC = observer(() => {
         afterContract,
         afterPrediction,
         initialStakeInput,
-        recoverySplits,
+        martingaleInput,
         takeProfitInput,
         stopLossInput,
         autoBestMarket,
@@ -226,7 +203,18 @@ const TickPulse: React.FC = observer(() => {
         };
 
         const unsubHist = derivBus.onHistory(() => bump());
-        const unsubTick = derivBus.onTick(() => {
+        const unsubTick = derivBus.onTick((ev: any) => {
+            if (runningRef.current) {
+                const sym = typeof ev?.symbol === 'string' && ev.symbol ? ev.symbol : null;
+                if (sym) {
+                    scannedMarketsRef.current.add(sym);
+                }
+                scannedTicksRef.current += 1;
+                setRunScannerStats({
+                    marketsCount: scannedMarketsRef.current.size,
+                    ticksCount: scannedTicksRef.current,
+                });
+            }
             bump();
             void onAnyMarketTickRef.current?.();
         });
@@ -268,69 +256,6 @@ const TickPulse: React.FC = observer(() => {
         return topRankedMarket;
     }, [autoBestMarket, pinnedMarket, rankedMarkets, topRankedMarket]);
 
-    // Query live Deriv proposal payout ratio on current target symbol for exact Split-1/2/3 recovery sizing
-    useEffect(() => {
-        let cancelled = false;
-        const symbolToQuote = effectiveTargetMarket?.symbol || '1HZ75V';
-        const orderSpec = resolveTickPulseOrderSpec(afterContract, afterPrediction);
-        const norm = normalizeDerivContractParams({
-            contractType: orderSpec.apiContractType,
-            duration: orderSpec.duration,
-            barrier: orderSpec.barrier,
-        });
-
-        const fetchLiveRatio = async () => {
-            try {
-                const transport: any = api_base?.api?.send ? api_base.api : chart_api?.api;
-                if (!transport?.send) return;
-                const req: Record<string, any> = {
-                    proposal: 1,
-                    amount: 1,
-                    basis: 'stake',
-                    contract_type: norm.apiContractType,
-                    currency: activeCurrency || 'USD',
-                    duration: norm.duration,
-                    duration_unit: norm.durationUnit,
-                    symbol: symbolToQuote,
-                };
-                if (norm.barrier !== undefined) req.barrier = norm.barrier;
-
-                const res = await transport.send(req);
-                const ask = Number(res?.proposal?.ask_price || 1);
-                const payout = Number(res?.proposal?.payout || 0);
-                if (!cancelled && payout > ask && ask > 0) {
-                    setLiveAfterProfitRatio((payout - ask) / ask);
-                }
-            } catch {
-                if (!cancelled) setLiveAfterProfitRatio(null);
-            }
-        };
-
-        const timer = window.setTimeout(() => {
-            void fetchLiveRatio();
-        }, 250);
-
-        return () => {
-            cancelled = true;
-            window.clearTimeout(timer);
-        };
-    }, [afterContract, afterPrediction, effectiveTargetMarket?.symbol, activeCurrency]);
-
-    const marketsConnectedStats = useMemo(() => {
-        void tickVersion;
-        let readyMarkets = 0;
-        let totalTicks = 0;
-        for (const m of TICKPULSE_MARKETS) {
-            const len = derivBus.getTicks(m.symbol).length;
-            if (len > 0) {
-                readyMarkets += 1;
-                totalTicks += Math.min(120, len);
-            }
-        }
-        const avgTicks = readyMarkets > 0 ? Math.round(totalTicks / readyMarkets) : 0;
-        return { readyMarkets, avgTicks };
-    }, [tickVersion]);
-
     const sessionTradesStats = useMemo(() => {
         const total = historyRows.length;
         const settledRows = historyRows.filter(r => r.status === 'won' || r.status === 'lost');
@@ -339,28 +264,18 @@ const TickPulse: React.FC = observer(() => {
         const wins50 = latest50.filter(r => r.status === 'won').length;
         const winRate50 = latest50.length > 0 ? Math.round((wins50 / latest50.length) * 100) : 0;
 
-        // Build cumulative equity curve for KPI sparkline
-        const chronological = [...settledRows].slice(0, 24).reverse();
-        let cum = 0;
-        const curve = [0];
-        for (const r of chronological) {
-            cum += Number(r.profit || 0);
-            curve.push(cum);
-        }
-
-        return { total, settled, winRate50, plSparkPath: buildMiniSparkPath(curve) };
+        return { total, settled, winRate50 };
     }, [historyRows]);
+
+    const parsedMartingale = sanitizeMartingaleMultiplier(martingaleInput);
 
     // Mutable runtime refs for crisp zero-stale-closure multi-market execution
     const runningRef = useRef(false);
     const inFlightRef = useRef(false);
     const lastTradedEpochsRef = useRef<Record<string, number>>({});
     const sessionPLRef = useRef<number>(0);
-    const recoveryRef = useRef<TickPulseRecoveryState>(createInitialRecoveryState(recoverySplits));
+    const recoveryRef = useRef<TickPulseRecoveryState>(createInitialRecoveryState());
     const nextTradeTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
-    const effectiveAfterRatio =
-        liveAfterProfitRatio ?? estimateNetProfitRatio(afterContract, afterPrediction);
 
     const runtimeCfgRef = useRef({
         beforeContract,
@@ -368,14 +283,13 @@ const TickPulse: React.FC = observer(() => {
         afterContract,
         afterPrediction,
         initialStake: Math.max(0.35, Number(initialStakeInput) || 1),
-        recoverySplits,
+        martingale: parsedMartingale,
         takeProfit: Math.max(0.5, Number(takeProfitInput) || 20),
         stopLoss: Math.max(0.5, Number(stopLossInput) || 25),
         autoBestMarket,
         pinnedMarket,
         entryCondition: (noEntryCondition ? 'NONE' : customEntryCondition) as TickPulseEntryCondition,
         currency: activeCurrency,
-        afterProfitRatio: effectiveAfterRatio,
     });
 
     runtimeCfgRef.current = {
@@ -384,14 +298,13 @@ const TickPulse: React.FC = observer(() => {
         afterContract,
         afterPrediction,
         initialStake: Math.max(0.35, Number(initialStakeInput) || 1),
-        recoverySplits,
+        martingale: parsedMartingale,
         takeProfit: Math.max(0.5, Number(takeProfitInput) || 20),
         stopLoss: Math.max(0.5, Number(stopLossInput) || 25),
         autoBestMarket,
         pinnedMarket,
         entryCondition: (noEntryCondition ? 'NONE' : customEntryCondition) as TickPulseEntryCondition,
         currency: activeCurrency,
-        afterProfitRatio: effectiveAfterRatio,
     };
 
     const stopEngine = useCallback((reason: string, isError = false) => {
@@ -421,15 +334,12 @@ const TickPulse: React.FC = observer(() => {
     const upsertHistoryRow = useCallback((nextRow: TickPulseHistoryRow) => {
         setHistoryRows(prev => {
             const idx = prev.findIndex(r => r.contractId === nextRow.contractId);
-            let updated: TickPulseHistoryRow[];
             if (idx >= 0) {
-                updated = [...prev];
+                const updated = [...prev];
                 updated[idx] = nextRow;
-            } else {
-                updated = [nextRow, ...prev].slice(0, 100);
+                return updated;
             }
-            saveHistory(updated);
-            return updated;
+            return [nextRow, ...prev];
         });
     }, []);
 
@@ -457,16 +367,25 @@ const TickPulse: React.FC = observer(() => {
         const symbol = ranking.symbol;
         const marketLabel = ranking.label;
 
+        // Record actual market & entry tick evaluated during this live run
+        scannedMarketsRef.current.add(symbol);
+        if (scannedTicksRef.current === 0) {
+            scannedTicksRef.current = 1;
+        }
+        setRunScannerStats({
+            marketsCount: scannedMarketsRef.current.size,
+            ticksCount: scannedTicksRef.current,
+        });
+
         const stakeToUse = computeNextTickPulseStake({
             initialStake: cfg.initialStake,
+            martingaleMultiplier: cfg.martingale,
             recoveryState: rec,
-            afterNetProfitRatio: cfg.afterProfitRatio,
         });
 
         const orderSpec = resolveTickPulseOrderSpec(activeKey, activePred);
-        const splitStepNumber = rec.totalSplits - rec.remainingSplits + 1;
         const phaseLabel = rec.inRecovery
-            ? `After loss · Split ${Math.min(rec.totalSplits, Math.max(1, splitStepNumber))}/${rec.totalSplits}`
+            ? `After loss · Martingale #${rec.consecutiveLosses} (×${cfg.martingale})`
             : 'Before loss';
 
         inFlightRef.current = true;
@@ -490,6 +409,7 @@ const TickPulse: React.FC = observer(() => {
             if (watchdog !== undefined) clearTimeout(watchdog);
 
             const profit = Number(poc?.profit ?? 0);
+            const executedStake = Number(poc?.buy_price ?? buyPrice);
             const entrySpot =
                 poc?.entry_spot_display_value ?? poc?.entry_tick_display_value ?? poc?.entry_spot;
             const exitSpot =
@@ -503,7 +423,7 @@ const TickPulse: React.FC = observer(() => {
                 phaseLabel,
                 isRecovery: rec.inRecovery,
                 contractLabel: orderSpec.displayLabel,
-                stake: Number(poc?.buy_price ?? buyPrice),
+                stake: executedStake,
                 profit,
                 currency: poc?.currency || cfg.currency,
                 entrySpot: entrySpot !== undefined ? String(entrySpot) : undefined,
@@ -518,7 +438,7 @@ const TickPulse: React.FC = observer(() => {
             const nextRecovery = settleTickPulseRecoveryState({
                 prev: recoveryRef.current,
                 profit,
-                configuredSplits: cfg.recoverySplits,
+                stake: executedStake,
             });
             recoveryRef.current = nextRecovery;
             setRecoveryState(nextRecovery);
@@ -530,7 +450,7 @@ const TickPulse: React.FC = observer(() => {
             if (!runningRef.current) return;
 
             if (nextPL >= cfg.takeProfit) {
-                const cleanRec = createInitialRecoveryState(cfg.recoverySplits);
+                const cleanRec = createInitialRecoveryState();
                 recoveryRef.current = cleanRec;
                 setRecoveryState(cleanRec);
                 stopEngine(
@@ -546,7 +466,7 @@ const TickPulse: React.FC = observer(() => {
             }
 
             if (nextPL <= -Math.abs(cfg.stopLoss)) {
-                const cleanRec = createInitialRecoveryState(cfg.recoverySplits);
+                const cleanRec = createInitialRecoveryState();
                 recoveryRef.current = cleanRec;
                 setRecoveryState(cleanRec);
                 stopEngine(
@@ -565,12 +485,11 @@ const TickPulse: React.FC = observer(() => {
             if (nextRecovery.inRecovery) {
                 const nextStake = computeNextTickPulseStake({
                     initialStake: cfg.initialStake,
+                    martingaleMultiplier: runtimeCfgRef.current.martingale,
                     recoveryState: nextRecovery,
-                    afterNetProfitRatio: runtimeCfgRef.current.afterProfitRatio,
                 });
-                const nextStep = nextRecovery.totalSplits - nextRecovery.remainingSplits + 1;
                 setStatusMessage(
-                    `Recovery Split ${nextStep}/${nextRecovery.totalSplits} — Scanning all 13 markets for best ${formatTickPulseSelectionLabel(cfg.afterContract, cfg.afterPrediction)} setup (${nextStake.toFixed(2)} ${cfg.currency})…`
+                    `Martingale #${nextRecovery.consecutiveLosses} (×${runtimeCfgRef.current.martingale}) — Scanning all 13 markets for best ${formatTickPulseSelectionLabel(cfg.afterContract, cfg.afterPrediction)} setup (${nextStake.toFixed(2)} ${cfg.currency})…`
                 );
             } else {
                 setStatusMessage(
@@ -678,7 +597,7 @@ const TickPulse: React.FC = observer(() => {
             return;
         }
 
-        const cleanRec = createInitialRecoveryState(recoverySplits);
+        const cleanRec = createInitialRecoveryState();
         recoveryRef.current = cleanRec;
         setRecoveryState(cleanRec);
         inFlightRef.current = false;
@@ -701,16 +620,24 @@ const TickPulse: React.FC = observer(() => {
         if (isRunning) return;
         sessionPLRef.current = 0;
         setSessionPL(0);
-        const cleanRec = createInitialRecoveryState(recoverySplits);
+        const cleanRec = createInitialRecoveryState();
         recoveryRef.current = cleanRec;
         setRecoveryState(cleanRec);
+        scannedMarketsRef.current.clear();
+        scannedTicksRef.current = 0;
+        setRunScannerStats({ marketsCount: 0, ticksCount: 0 });
+        setHistoryRows([]);
         setHasErrorBanner(false);
         setStatusMessage('');
     };
 
     const handleClearHistory = () => {
         setHistoryRows([]);
-        saveHistory([]);
+        if (!isRunning) {
+            scannedMarketsRef.current.clear();
+            scannedTicksRef.current = 0;
+            setRunScannerStats({ marketsCount: 0, ticksCount: 0 });
+        }
     };
 
     const beforeMeta = getTickPulseContractMeta(beforeContract);
@@ -808,7 +735,7 @@ const TickPulse: React.FC = observer(() => {
                     </span>
                 </header>
 
-                {/* 4 Elevated Top-Accented KPI Cards */}
+                {/* 4 Clean Top-Accented KPI Cards — Zero Mock Data, Driven Exclusively by Real Run */}
                 <section className='tp-tickpulse__kpis' aria-label='TickPulse live metrics'>
                     <div className='tp-tickpulse__kpi-card tp-tickpulse__kpi-card--emerald'>
                         <div className='tp-tickpulse__kpi-main'>
@@ -826,15 +753,6 @@ const TickPulse: React.FC = observer(() => {
                                 {formattedPL}
                             </span>
                         </div>
-                        <svg viewBox='0 0 74 30' className='tp-tickpulse__kpi-spark' aria-hidden='true'>
-                            <path
-                                d={sessionTradesStats.plSparkPath}
-                                fill='none'
-                                stroke={sessionPL < 0 ? '#f87171' : '#10b981'}
-                                strokeWidth='2.2'
-                                strokeLinecap='round'
-                            />
-                        </svg>
                     </div>
 
                     <div className='tp-tickpulse__kpi-card tp-tickpulse__kpi-card--amber'>
@@ -847,15 +765,6 @@ const TickPulse: React.FC = observer(() => {
                                 {sessionTradesStats.total} / {sessionTradesStats.settled}
                             </span>
                         </div>
-                        <svg viewBox='0 0 74 30' className='tp-tickpulse__kpi-spark' aria-hidden='true'>
-                            <path
-                                d='M2,24 L18,18 L32,20 L48,11 L62,13 L72,6'
-                                fill='none'
-                                stroke='#f59e0b'
-                                strokeWidth='2'
-                                strokeLinecap='round'
-                            />
-                        </svg>
                     </div>
 
                     <div className='tp-tickpulse__kpi-card tp-tickpulse__kpi-card--slate'>
@@ -865,15 +774,6 @@ const TickPulse: React.FC = observer(() => {
                                 {sessionTradesStats.winRate50}%
                             </span>
                         </div>
-                        <svg viewBox='0 0 74 30' className='tp-tickpulse__kpi-spark' aria-hidden='true'>
-                            <path
-                                d='M2,22 L16,16 L30,19 L44,10 L58,12 L72,5'
-                                fill='none'
-                                stroke='#38bdf8'
-                                strokeWidth='2'
-                                strokeLinecap='round'
-                            />
-                        </svg>
                     </div>
 
                     <div className='tp-tickpulse__kpi-card tp-tickpulse__kpi-card--blue'>
@@ -883,18 +783,9 @@ const TickPulse: React.FC = observer(() => {
                                 className='tp-tickpulse__kpi-value'
                                 data-testid='tickpulse-markets-ticks'
                             >
-                                {marketsConnectedStats.readyMarkets} / {marketsConnectedStats.avgTicks}
+                                {runScannerStats.marketsCount} / {runScannerStats.ticksCount}
                             </span>
                         </div>
-                        <svg viewBox='0 0 74 30' className='tp-tickpulse__kpi-spark' aria-hidden='true'>
-                            <path
-                                d='M2,18 L14,12 L26,16 L38,7 L50,14 L62,6 L72,9'
-                                fill='none'
-                                stroke='#0066ff'
-                                strokeWidth='2.2'
-                                strokeLinecap='round'
-                            />
-                        </svg>
                     </div>
                 </section>
 
@@ -938,11 +829,11 @@ const TickPulse: React.FC = observer(() => {
 
                 {subTab === 'settings' ? (
                     <div className='tp-tickpulse__workspace-grid'>
-                        {/* Left Column: Strategy & Split-Recovery Deck */}
+                        {/* Left Column: Strategy & Martingale Deck */}
                         <section className='tp-tickpulse__card'>
                             <div className='tp-tickpulse__section-head'>
                                 <h2 className='tp-tickpulse__section-title'>
-                                    Strategy &amp; Split-Recovery Deck
+                                    Strategy &amp; Martingale Deck
                                 </h2>
                                 <div className='tp-tickpulse__phase-summary'>
                                     <span className='tp-tickpulse__phase-chip tp-tickpulse__phase-chip--before'>
@@ -1041,7 +932,7 @@ const TickPulse: React.FC = observer(() => {
                                     <div className='tp-tickpulse__trade-panel-head'>
                                         <span className='tp-tickpulse__row-label'>After loss</span>
                                         <span className='tp-tickpulse__row-tag'>
-                                            Split-{recoverySplits} Recovery ·{' '}
+                                            Martingale ×{parsedMartingale} ·{' '}
                                             {formatTickPulseSelectionLabel(
                                                 afterContract,
                                                 afterPrediction
@@ -1110,7 +1001,7 @@ const TickPulse: React.FC = observer(() => {
                                 </div>
                             </div>
 
-                            {/* 4-Column Stake, Splits, TP & SL */}
+                            {/* 4-Column Stake, User-Chosen Martingale, TP & SL */}
                             <div className='tp-tickpulse__params-grid'>
                                 <label className='tp-tickpulse__field'>
                                     <span className='tp-tickpulse__field-label'>
@@ -1131,43 +1022,22 @@ const TickPulse: React.FC = observer(() => {
                                     />
                                 </label>
 
-                                <div className='tp-tickpulse__field'>
+                                <label className='tp-tickpulse__field'>
                                     <span className='tp-tickpulse__field-label'>
-                                        <span>Recovery Splits</span>
-                                        <span className='tp-tickpulse__field-hint'>
-                                            ~{Math.round(effectiveAfterRatio * 100)}%
-                                        </span>
+                                        <span>Martingale</span>
+                                        <span className='tp-tickpulse__field-hint'>×</span>
                                     </span>
-                                    <div
-                                        className='tp-tickpulse__splits-group'
-                                        role='group'
-                                        aria-label='Recovery splits'
-                                    >
-                                        {([1, 2, 3] as TickPulseSplitCount[]).map(sp => (
-                                            <button
-                                                key={`split-${sp}`}
-                                                type='button'
-                                                disabled={isRunning}
-                                                className={`tp-tickpulse__split-btn${
-                                                    recoverySplits === sp
-                                                        ? ' tp-tickpulse__split-btn--active'
-                                                        : ''
-                                                }`}
-                                                onClick={() => {
-                                                    setRecoverySplits(sp);
-                                                    if (!recoveryRef.current.inRecovery) {
-                                                        const next = createInitialRecoveryState(sp);
-                                                        recoveryRef.current = next;
-                                                        setRecoveryState(next);
-                                                    }
-                                                }}
-                                                data-testid={`tickpulse-split-${sp}`}
-                                            >
-                                                Split-{sp}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
+                                    <input
+                                        type='number'
+                                        min='0.1'
+                                        step='0.1'
+                                        disabled={isRunning}
+                                        value={martingaleInput}
+                                        onChange={e => setMartingaleInput(e.target.value)}
+                                        className='tp-tickpulse__input'
+                                        data-testid='tickpulse-martingale'
+                                    />
+                                </label>
 
                                 <label className='tp-tickpulse__field'>
                                     <span className='tp-tickpulse__field-label'>
@@ -1325,11 +1195,15 @@ const TickPulse: React.FC = observer(() => {
                                     </button>
 
                                     {!isRunning &&
-                                        (sessionPL !== 0 || recoveryState.inRecovery) && (
+                                        (sessionPL !== 0 ||
+                                            historyRows.length > 0 ||
+                                            runScannerStats.ticksCount > 0 ||
+                                            recoveryState.inRecovery) && (
                                             <button
                                                 type='button'
                                                 className='tp-tickpulse__reset-btn'
                                                 onClick={handleResetSession}
+                                                data-testid='tickpulse-reset-session'
                                             >
                                                 Reset
                                             </button>
@@ -1338,8 +1212,8 @@ const TickPulse: React.FC = observer(() => {
 
                                 <div className='tp-tickpulse__disclaimer'>
                                     <strong>Risk disclaimer:</strong> Automated trading can lose the
-                                    full stake. Recovery splits do not guarantee profit. Stop loss is
-                                    checked after settlement and may be exceeded.
+                                    full stake. Martingale recovery does not guarantee profit. Stop
+                                    loss is checked after settlement and may be exceeded.
                                 </div>
                             </div>
                         </section>
@@ -1519,8 +1393,9 @@ const TickPulse: React.FC = observer(() => {
 
                         {historyRows.length === 0 ? (
                             <div className='tp-tickpulse__history-empty'>
-                                No TickPulse trades recorded yet. Configure your Before / After loss
-                                contracts and click <strong>Load &amp; Auto-Trade Best Market</strong>.
+                                No TickPulse trades recorded in this session yet. Configure your
+                                Before / After loss contracts &amp; Martingale multiplier, then click{' '}
+                                <strong>Load &amp; Auto-Trade Best Market</strong>.
                             </div>
                         ) : (
                             <div className='tp-tickpulse__table-wrap'>

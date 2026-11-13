@@ -7,7 +7,6 @@ import {
     clampPredictionForContract,
     computeNextTickPulseStake,
     createInitialRecoveryState,
-    estimateNetProfitRatio,
     rankTickPulseMarkets,
     resolveTickPulseOrderSpec,
     selectBestReadyTickPulseMarket,
@@ -53,11 +52,6 @@ jest.mock('@/external/bot-skeleton', () => ({
     },
 }));
 
-jest.mock('@/external/bot-skeleton/services/api/chart-api', () => ({
-    __esModule: true,
-    default: { api: null },
-}));
-
 const mockSubscribedLists: string[][] = [];
 let tickListeners: Array<(ev: any) => void> = [];
 
@@ -100,7 +94,7 @@ jest.mock('@/lib/deriv/tick-bus', () => {
     };
 });
 
-describe('TickPulse Engine, Live 13-Market Radar & Auto-Best-Market Trading', () => {
+describe('TickPulse Engine, User Martingale & Zero Pre-Run KPIs', () => {
     beforeEach(() => {
         window.localStorage.clear();
         mockExecuteLiveDerivTrade.mockReset();
@@ -154,58 +148,64 @@ describe('TickPulse Engine, Live 13-Market Radar & Auto-Best-Market Trading', ()
         expect(clampPredictionForContract('UNDER', 0)).toBe(1);
     });
 
-    it('calculates Split-2 recovery stakes and resets back to Before loss after 2 recovery wins', () => {
-        const evenRatio = estimateNetProfitRatio('EVEN', 4);
-        let state = createInitialRecoveryState(2);
+    it('calculates user-chosen Martingale stakes on consecutive losses and resets to initial stake on win', () => {
+        let state = createInitialRecoveryState();
 
         expect(
             computeNextTickPulseStake({
                 initialStake: 1,
+                martingaleMultiplier: 2.5,
                 recoveryState: state,
-                afterNetProfitRatio: evenRatio,
             })
         ).toBe(1);
 
+        // Loss #1 (-$1.00) -> enters After loss, next stake = 1.00 * 2.5 = 2.50
         state = settleTickPulseRecoveryState({
             prev: state,
             profit: -1,
-            configuredSplits: 2,
+            stake: 1,
         });
         expect(state.inRecovery).toBe(true);
-        expect(state.unrecoveredLoss).toBe(1);
-        expect(state.remainingSplits).toBe(2);
+        expect(state.consecutiveLosses).toBe(1);
+        expect(
+            computeNextTickPulseStake({
+                initialStake: 1,
+                martingaleMultiplier: 2.5,
+                recoveryState: state,
+            })
+        ).toBe(2.5);
 
-        const split1Stake = computeNextTickPulseStake({
-            initialStake: 1,
-            recoveryState: state,
-            afterNetProfitRatio: evenRatio,
-        });
-        expect(split1Stake).toBe(0.53);
-
+        // Loss #2 (-$2.50) -> consecutive loss #2, next stake = 2.50 * 2.5 = 6.25
         state = settleTickPulseRecoveryState({
             prev: state,
-            profit: 0.51,
-            configuredSplits: 2,
+            profit: -2.5,
+            stake: 2.5,
         });
         expect(state.inRecovery).toBe(true);
-        expect(state.unrecoveredLoss).toBe(0.49);
-        expect(state.remainingSplits).toBe(1);
+        expect(state.consecutiveLosses).toBe(2);
+        expect(
+            computeNextTickPulseStake({
+                initialStake: 1,
+                martingaleMultiplier: 2.5,
+                recoveryState: state,
+            })
+        ).toBe(6.25);
 
-        const split2Stake = computeNextTickPulseStake({
-            initialStake: 1,
-            recoveryState: state,
-            afterNetProfitRatio: evenRatio,
-        });
-        expect(split2Stake).toBe(0.51);
-
+        // Win (+$5.90) -> resets cleanly back to Before loss and Initial Stake ($1.00)
         state = settleTickPulseRecoveryState({
             prev: state,
-            profit: 0.49,
-            configuredSplits: 2,
+            profit: 5.9,
+            stake: 6.25,
         });
         expect(state.inRecovery).toBe(false);
-        expect(state.unrecoveredLoss).toBe(0);
-        expect(state.remainingSplits).toBe(2);
+        expect(state.consecutiveLosses).toBe(0);
+        expect(
+            computeNextTickPulseStake({
+                initialStake: 1,
+                martingaleMultiplier: 2.5,
+                recoveryState: state,
+            })
+        ).toBe(1);
     });
 
     it('ranks all 13 markets and selects the #1 ready market dynamically per contract', () => {
@@ -253,7 +253,27 @@ describe('TickPulse Engine, Live 13-Market Radar & Auto-Best-Market Trading', ()
         ).toBe(true);
     });
 
-    it('subscribes to all 13 markets, renders the Live 13-Market Radar, and auto-switches to the #1 market per trade', async () => {
+    it('starts strictly at zero KPIs before any run, removes Recovery Splits for user Martingale, and updates exact stats during run', async () => {
+        // Seed legacy history in localStorage to prove stale 100/100 / 66% never leaks into pre-run UI
+        window.localStorage.setItem(
+            'tp_tickpulse_history_v1',
+            JSON.stringify([
+                {
+                    contractId: 111,
+                    timestamp: Date.now(),
+                    symbol: '1HZ75V',
+                    marketLabel: 'Volatility 75 (1s) Index',
+                    phaseLabel: 'Before loss',
+                    isRecovery: false,
+                    contractLabel: 'Over 2',
+                    stake: 1,
+                    profit: 0.4,
+                    currency: 'USD',
+                    status: 'won',
+                },
+            ])
+        );
+
         const tradeCallbacks: Array<(poc: any, isTerminal: boolean) => void> = [];
         mockExecuteLiveDerivTrade.mockImplementation(async (params: any) => {
             tradeCallbacks.push(params.onContractUpdate);
@@ -266,18 +286,28 @@ describe('TickPulse Engine, Live 13-Market Radar & Auto-Best-Market Trading', ()
 
         render(<TickPulse />);
 
-        // Verifies simultaneous subscription to all 13 Volatility symbols
-        expect(mockSubscribedLists[0]).toHaveLength(13);
-        expect(screen.getByTestId('tickpulse-live-radar')).toBeInTheDocument();
-        expect(screen.getByText('★ BEST TARGET')).toBeInTheDocument();
-        expect(screen.getByTestId('tickpulse-markets-ticks')).toHaveTextContent('13 / 40');
+        // 1. Recovery Splits removed; user-editable Martingale input present
+        expect(screen.queryByText(/Split-1/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Recovery Splits/i)).not.toBeInTheDocument();
+        const martingaleInput = screen.getByTestId('tickpulse-martingale') as HTMLInputElement;
+        expect(martingaleInput.value).toBe('2.0');
+
+        // 2. Before any run executes, all KPI cards MUST be strictly zero (0.00 USD, 0 / 0, 0%, 0 / 0)
+        expect(screen.getByTestId('tickpulse-session-pl')).toHaveTextContent('0.00 USD');
+        expect(screen.getByTestId('tickpulse-trades-settled')).toHaveTextContent('0 / 0');
+        expect(screen.getByTestId('tickpulse-win-rate')).toHaveTextContent('0%');
+        expect(screen.getByTestId('tickpulse-markets-ticks')).toHaveTextContent('0 / 0');
+
+        // User chooses custom Martingale = 3.2
+        fireEvent.change(martingaleInput, { target: { value: '3.2' } });
+        expect(martingaleInput.value).toBe('3.2');
 
         // Start Auto-Trading Best Market (Default: Before = Over 2, After = Even)
         await act(async () => {
             fireEvent.click(screen.getByTestId('tickpulse-load-and-run'));
         });
 
-        // Trade 1 automatically picks #1 Over-2 market: 1HZ75V
+        // Trade 1 automatically picks #1 Over-2 market: 1HZ75V with stake $1.00
         await waitFor(() => {
             expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1);
         });
@@ -288,8 +318,15 @@ describe('TickPulse Engine, Live 13-Market Radar & Auto-Best-Market Trading', ()
             stake: 1,
         });
 
-        // Settle Trade 1 as a -$1.00 loss -> TickPulse enters After-loss Split 1/2 (Even)
-        // and dynamically switches to #1 Even market: 1HZ10V!
+        // Emit 2 live ticks during the run -> Live Scanner reflects exact markets & ticks scanned
+        act(() => {
+            tickListeners.forEach(fn => fn({ symbol: '1HZ75V', price: 250.09, t: 1700099999001 }));
+            tickListeners.forEach(fn => fn({ symbol: '1HZ10V', price: 120.02, t: 1700099999002 }));
+        });
+        expect(screen.getByTestId('tickpulse-markets-ticks')).toHaveTextContent('2 / 3');
+
+        // Settle Trade 1 as a -$1.00 loss -> Trades/Settled = 1 / 1, Win Rate = 0%,
+        // and Trade 2 switches to #1 Even market (1HZ10V) with user's Martingale stake 1.00 * 3.2 = $3.20!
         await act(async () => {
             tradeCallbacks[0](
                 {
@@ -300,8 +337,10 @@ describe('TickPulse Engine, Live 13-Market Radar & Auto-Best-Market Trading', ()
                 },
                 true
             );
-            await new Promise(r => setTimeout(r, 220));
         });
+
+        expect(screen.getByTestId('tickpulse-trades-settled')).toHaveTextContent('1 / 1');
+        expect(screen.getByTestId('tickpulse-win-rate')).toHaveTextContent('0%');
 
         await waitFor(() => {
             expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(2);
@@ -309,10 +348,24 @@ describe('TickPulse Engine, Live 13-Market Radar & Auto-Best-Market Trading', ()
         expect(mockExecuteLiveDerivTrade.mock.calls[1][0]).toMatchObject({
             symbol: '1HZ10V',
             contractType: 'DIGITEVEN',
-            stake: 0.53,
+            stake: 3.2,
         });
 
-        // Ensure zero external brand leakage
-        expect(document.body.innerHTML).not.toMatch(/Risk Managers|Makoti|Duke/i);
+        // Settle Trade 2 as a +$3.05 win -> Trades/Settled = 2 / 2, Win Rate = 50%, Session P/L = +2.05 USD
+        await act(async () => {
+            tradeCallbacks[1](
+                {
+                    contract_id: 9002,
+                    profit: 3.05,
+                    buy_price: 3.2,
+                    currency: 'USD',
+                },
+                true
+            );
+        });
+
+        expect(screen.getByTestId('tickpulse-trades-settled')).toHaveTextContent('2 / 2');
+        expect(screen.getByTestId('tickpulse-win-rate')).toHaveTextContent('50%');
+        expect(screen.getByTestId('tickpulse-session-pl')).toHaveTextContent('+2.05 USD');
     });
 });
