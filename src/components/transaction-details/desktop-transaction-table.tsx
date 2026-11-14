@@ -132,6 +132,7 @@ export default function DesktopTransactionTable({
                         );
                     }
 
+                    if (type !== transaction_elements.DIVIDER) return null;
                     return (
                         <div className={`${PARENT_CLASS}__table-row`} key={`transaction-row-divider-${data}`}>
                             <div className={`${PARENT_CLASS}__divider`}>

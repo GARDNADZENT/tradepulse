@@ -1,17 +1,33 @@
 // @ts-nocheck — vendored bot code with known upstream type gaps; see AGENTS.md
 import { action, computed, makeObservable, observable, reaction } from 'mobx';
+import { v4 as uuidv4 } from 'uuid';
 import { formatDate, isEnded } from '@/components/shared';
 import { api_base, LogTypes } from '@/external/bot-skeleton';
 import { ProposalOpenContract } from '@deriv/api-types';
 import { TPortfolioPosition, TStores } from '@deriv/stores/types';
 import { TContractInfo } from '../components/summary/summary-card.types';
 import { transaction_elements } from '../constants/transactions';
-import { getStoredItemsByKey, getStoredItemsByUser, setStoredItemsByKey } from '../utils/session-storage';
+import { getStoredItemsByKey, setStoredItemsByKey } from '../utils/session-storage';
 import RootStore from './root-store';
+
+export type VirtualTransaction = {
+    virtual_id: string;
+    is_virtual: true;
+    display_name: string;
+    underlying_symbol: string;
+    contract_type: 'DIGITEVEN' | 'DIGITODD';
+    entry_spot: string;
+    exit_spot: string;
+    currency: string;
+    outcome: 'won' | 'lost';
+    run_id: string;
+    buy_price: 0;
+    profit: 0;
+};
 
 type TTransaction = {
     type: string;
-    data?: string | TContractInfo;
+    data?: string | TContractInfo | VirtualTransaction;
 };
 
 type TElement = {
@@ -27,7 +43,7 @@ export default class TransactionsStore {
         this.root_store = root_store;
         this.core = core;
         this.is_transaction_details_modal_open = false;
-        this.disposeReactionsFn = this.registerReactions();
+        this.elements = getStoredItemsByKey(this.TRANSACTION_CACHE, {});
 
         makeObservable(this, {
             elements: observable,
@@ -39,6 +55,7 @@ export default class TransactionsStore {
             transactions: computed,
             onBotContractEvent: action.bound,
             pushTransaction: action.bound,
+            pushVirtualTransaction: action.bound,
             clear: action.bound,
             registerReactions: action.bound,
             recoverPendingContracts: action.bound,
@@ -46,10 +63,11 @@ export default class TransactionsStore {
             sortOutPositionsBeforeAction: action.bound,
             recoverPendingContractsById: action.bound,
         });
+        this.disposeReactionsFn = this.registerReactions();
     }
     TRANSACTION_CACHE = 'transaction_cache';
 
-    elements: TElement = getStoredItemsByUser(this.TRANSACTION_CACHE, this.core?.client?.loginid, []);
+    elements: TElement = {};
     active_transaction_id: null | number = null;
     recovered_completed_transactions: number[] = [];
     recovered_transactions: number[] = [];
@@ -156,7 +174,7 @@ export default class TransactionsStore {
             // Render a divider if the "run_id" for this contract is different.
             if (this.elements[current_account]?.length > 0) {
                 const temp_contract = this.elements[current_account]?.[0];
-                const is_contract = temp_contract.type === transaction_elements.CONTRACT;
+                const is_contract = [transaction_elements.CONTRACT, transaction_elements.VIRTUAL_CONTRACT].includes(temp_contract.type);
                 const is_new_run =
                     is_contract &&
                     typeof temp_contract.data === 'object' &&
@@ -185,6 +203,30 @@ export default class TransactionsStore {
         this.elements = { ...this.elements }; // force update
     }
 
+    /** A simulation is not a Deriv contract and must never be recovered or counted. */
+    pushVirtualTransaction(data: Omit<VirtualTransaction, 'virtual_id' | 'is_virtual' | 'run_id' | 'buy_price' | 'profit'>, accountKey: string) {
+        if (!accountKey || accountKey !== this.resolveAccountKey()) return;
+        const run_id = this.root_store.run_panel.run_id;
+        const contract: VirtualTransaction = {
+            ...data,
+            virtual_id: uuidv4(),
+            is_virtual: true,
+            run_id,
+            buy_price: 0,
+            profit: 0,
+        };
+        if (!this.elements[accountKey]) {
+            this.elements = { ...this.elements, [accountKey]: [] };
+        }
+        const previous = this.elements[accountKey][0];
+        if (previous && [transaction_elements.CONTRACT, transaction_elements.VIRTUAL_CONTRACT].includes(previous.type) &&
+            typeof previous.data === 'object' && previous.data?.run_id !== run_id) {
+            this.elements[accountKey].unshift({ type: transaction_elements.DIVIDER, data: run_id });
+        }
+        this.elements[accountKey].unshift({ type: transaction_elements.VIRTUAL_CONTRACT, data: contract });
+        this.elements = { ...this.elements };
+    }
+
     clear() {
         const key = this.resolveAccountKey();
         if (this.elements && this.elements[key]?.length > 0) {
@@ -196,14 +238,15 @@ export default class TransactionsStore {
     }
 
     registerReactions() {
-        const { client } = this.core;
-
-        // Write transactions to session storage on each change in transaction elements.
+        // Write the active account's transactions to session storage on each change.
         const disposeTransactionElementsListener = reaction(
-            () => this.elements[client?.loginid as string],
-            elements => {
+            () => {
+                const key = this.resolveAccountKey();
+                return { key, elements: this.elements[key] };
+            },
+            ({ key, elements }) => {
                 const stored_transactions = getStoredItemsByKey(this.TRANSACTION_CACHE, {});
-                stored_transactions[client.loginid as string] = elements?.slice(0, 5000) ?? [];
+                stored_transactions[key] = elements?.slice(0, 5000) ?? [];
                 setStoredItemsByKey(this.TRANSACTION_CACHE, stored_transactions);
             }
         );

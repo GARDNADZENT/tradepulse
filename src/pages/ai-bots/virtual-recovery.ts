@@ -9,6 +9,8 @@ export interface VirtualRecoveryTrade {
     pipSize: number;
     ticksRemaining: number;
     lastTickTime: number;
+    entrySpot: number;
+    currency: string;
 }
 
 /** Advance only on newer live ticks from the chosen market. No buy or P/L is involved. */
