@@ -5,6 +5,7 @@ export type RiskManagerAIBotId =
     | 'over2-rec-evenodd'
     | 'over2-rec-range'
     | 'under7-rec-evenodd'
+    | 'under7-rec-evenodd-virtual'
     | 'under7-rec-range';
 
 export type AIBotAccentTheme = 'blue' | 'teal' | 'purple' | 'amber' | 'pink';
@@ -79,6 +80,7 @@ export function evaluateAIScannerMarket(params: {
         botId === 'over2-rec-evenodd' ||
         botId === 'over2-rec-range' ||
         botId === 'under7-rec-evenodd' ||
+        botId === 'under7-rec-evenodd-virtual' ||
         botId === 'under7-rec-range';
     const activeStage = isRecoveryCapable && inRecovery ? 'Recovery' : 'Initial';
     const requiredCount = activeStage === 'Recovery' ? safeRecovery : safeEntry;
@@ -229,7 +231,7 @@ export function evaluateAIScannerMarket(params: {
                 requiredCount,
             };
         }
-    } else if (botId === 'under7-rec-evenodd') {
+    } else if (botId === 'under7-rec-evenodd' || botId === 'under7-rec-evenodd-virtual') {
         if (activeStage === 'Recovery') {
             hit = evalEvenOdd();
         } else if (checkedCount >= requiredCount && recentDigits.every(d => d > 7)) {
@@ -342,6 +344,16 @@ export const RISK_MANAGER_AI_BOTS: RiskManagerAIBotCard[] = [
         accent: 'pink',
         defaultEntryCount: 2,
         defaultRecoveryCount: 2,
+        hasRecovery: true,
+    },
+    {
+        id: 'under7-rec-evenodd-virtual',
+        number: '08',
+        title: 'Under 7 Recovery → Even–Odd Virtual',
+        description: 'After a real loss, simulate Even–Odd signals until a virtual loss, then resume real trading.',
+        accent: 'pink',
+        defaultEntryCount: 2,
+        defaultRecoveryCount: 3,
         hasRecovery: true,
     },
 ];
@@ -525,6 +537,10 @@ const buildPrimaryBarrierEntryXml = (opts: {
       </block>`;
 
 export function buildRiskManagerAIBotXml(botId: RiskManagerAIBotId): string {
+    // This scanner-only strategy must never silently export as a bot without its virtual gate.
+    if (botId === 'under7-rec-evenodd-virtual') {
+        throw new Error('The virtual recovery strategy is available in AI Scanner only.');
+    }
     let cfg: InternalPresetXmlConfig;
 
     switch (botId) {

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { observer } from 'mobx-react-lite';
-import { api_base } from '@/external/bot-skeleton';
+import { api_base, MessageTypes } from '@/external/bot-skeleton';
 import { useStore } from '@/hooks/useStore';
 import { derivBus } from '@/lib/deriv/tick-bus';
 import { executeLiveDerivTrade } from '@/utils/ai-bot-xml-builder';
@@ -13,6 +13,7 @@ import {
     RiskManagerAIBotCard,
     RiskManagerAIBotId,
 } from './ai-bot-presets';
+import { advanceVirtualRecovery, VirtualRecoveryContract, VirtualRecoveryTrade } from './virtual-recovery';
 import './ai-bots.scss';
 
 const RobotIcon: React.FC = () => (
@@ -36,6 +37,13 @@ const RobotIcon: React.FC = () => (
         <path d='M9 13v2' />
     </svg>
 );
+
+// Keep the lock across AI Bots unmount/remounts while a real contract is unresolved.
+// A full page reload clears it, so traders should check open contracts before restarting.
+let virtualBotUnsettledOrder: symbol | null = null;
+type SuspendedVirtualRecovery = { virtualMode: boolean; stake: number; totalPL: number };
+// Preserve a recovery gate across scanner stops and tab changes in this page session.
+const virtualRecoveryByAccount = new Map<string, SuspendedVirtualRecovery>();
 
 const COUNT_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const RISE_FALL_COUNT_OPTIONS = [2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -135,7 +143,7 @@ const TradingRuleBox: React.FC<{
     }
 
     const isOver2Primary = bot.id === 'over2-rec-evenodd' || bot.id === 'over2-rec-range';
-    const isEvenOddRecovery = bot.id === 'over2-rec-evenodd' || bot.id === 'under7-rec-evenodd';
+    const isEvenOddRecovery = ['over2-rec-evenodd', 'under7-rec-evenodd', 'under7-rec-evenodd-virtual'].includes(bot.id);
 
     return (
         <div className='rm-ai-scanner__rule-box' data-testid='ai-scanner-trading-rule'>
@@ -176,6 +184,15 @@ const TradingRuleBox: React.FC<{
             <p className='rm-ai-scanner__rule-note'>
                 Resets to initial entry mode and base stake immediately after a recovery win.
             </p>
+            {bot.id === 'under7-rec-evenodd-virtual' && (
+                <p className='rm-ai-scanner__rule-note'>
+                    After a real loss, simulate each recovery signal until a virtual loss; then wait for the next
+                    recovery signal to trade real. Virtual results do not change real P/L, recovery mode or stake.
+                    Simulation uses subsequent market ticks and may differ from a real contract.
+                    Stopping keeps the recovery gate while this page remains open; reloading resets it.
+                    Check open contracts before restarting after a reload.
+                </p>
+            )}
         </div>
     );
 };
@@ -201,6 +218,7 @@ const AIBots = observer(() => {
 
     const [isRunning, setIsRunning] = useState(false);
     const [inRecovery, setInRecovery] = useState(false);
+    const [virtualMode, setVirtualMode] = useState(false);
     const [isExecutingTrade, setIsExecutingTrade] = useState(false);
     const [totalPL, setTotalPL] = useState(0);
     const [footerMessage, setFooterMessage] = useState('Scanner idle — configure setup and start scanning.');
@@ -209,6 +227,12 @@ const AIBots = observer(() => {
     const runningRef = useRef(false);
     const inFlightRef = useRef(false);
     const inRecoveryRef = useRef(false);
+    const virtualModeRef = useRef(false);
+    const virtualTradeRef = useRef<VirtualRecoveryTrade | null>(null);
+    const virtualTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // An unresolved real order must not be duplicated by stopping and restarting.
+    const runGenerationRef = useRef(0);
+    const runningAccountRef = useRef('');
     const currentStakeRef = useRef(0.5);
     const totalPLRef = useRef(0);
     const lastFiredEpochBySymbolRef = useRef<Record<string, number>>({});
@@ -225,6 +249,7 @@ const AIBots = observer(() => {
         stopLoss: 30,
         martingale: 2,
         currency: 'USD',
+        accountKey: '',
     });
 
     configRef.current = {
@@ -239,11 +264,19 @@ const AIBots = observer(() => {
         stopLoss: Math.max(0.5, Number(stopLossInput) || 30),
         martingale: Math.max(1, Number(martingaleInput) || 2),
         currency,
+        accountKey: String(client?.loginid || (api_base as any)?.account_info?.loginid ||
+            (typeof window !== 'undefined' ? window.localStorage?.getItem('active_loginid') : '') || ''),
     };
 
     const stopScannerInternal = useCallback((reason?: string) => {
         runningRef.current = false;
+        runGenerationRef.current += 1;
         inFlightRef.current = false;
+        virtualModeRef.current = false;
+        virtualTradeRef.current = null;
+        if (virtualTimerRef.current) clearTimeout(virtualTimerRef.current);
+        virtualTimerRef.current = null;
+        setVirtualMode(false);
         setIsRunning(false);
         setIsExecutingTrade(false);
         if (reason) {
@@ -273,6 +306,10 @@ const AIBots = observer(() => {
             if (!runningRef.current || inFlightRef.current) return;
             const cfg = configRef.current;
             if (!cfg.selectedBotId) return;
+            if (cfg.selectedBotId === 'under7-rec-evenodd-virtual' && cfg.accountKey !== runningAccountRef.current) {
+                stopScannerInternal('Account changed. Scanner stopped; check your account before restarting.');
+                return;
+            }
             if (cfg.marketScope !== 'ALL' && cfg.marketScope !== sym) return;
 
             const rawTicks = derivBus.getTicks(sym);
@@ -296,7 +333,40 @@ const AIBots = observer(() => {
             const marketMeta = AI_SCANNER_MARKETS.find(m => m.symbol === sym);
             const marketLabel = marketMeta?.label || sym;
             const stakeToUse = Math.max(0.35, Number(currentStakeRef.current.toFixed(2)));
+            const isVirtualBot = cfg.selectedBotId === 'under7-rec-evenodd-virtual';
 
+            if (isVirtualBot && virtualModeRef.current) {
+                // Use the same scanner and tick duration, but never call the buy API.
+                if (
+                    !latestEpoch || !Number.isFinite(latestEpoch) ||
+                    !Number.isInteger(pipSize) || pipSize < 0 || pipSize > 10 ||
+                    !['DIGITEVEN', 'DIGITODD'].includes(evalResult.contractType)
+                ) {
+                    stopScannerInternal('Cannot safely simulate this recovery signal. Scanner stopped.');
+                    return;
+                }
+                inFlightRef.current = true;
+                setIsExecutingTrade(true);
+                lastFiredEpochBySymbolRef.current[sym] = latestEpoch;
+                virtualTradeRef.current = {
+                    symbol: sym, marketLabel, contractType: evalResult.contractType as VirtualRecoveryContract,
+                    pipSize, ticksRemaining: cfg.durationTicks, lastTickTime: latestEpoch,
+                };
+                const message = `[VIRTUAL] Simulating ${evalResult.actionLabel.replace('Trade ', '')} on ${marketLabel} for ${cfg.durationTicks} tick(s). No contract purchased.`;
+                setFooterMessage(message);
+                journal?.pushMessage?.(message, MessageTypes.NOTIFY, '');
+                virtualTimerRef.current = setTimeout(() => {
+                    if (virtualTradeRef.current) {
+                        stopScannerInternal('Virtual trade timed out without enough live ticks. Scanner stopped; no real trade placed.');
+                    }
+                }, 90000);
+                return;
+            }
+
+            const orderGeneration = runGenerationRef.current;
+            const orderPriorPL = totalPLRef.current;
+            const realOrderToken = isVirtualBot ? Symbol('ai-virtual-real-order') : null;
+            if (realOrderToken) virtualBotUnsettledOrder = realOrderToken;
             inFlightRef.current = true;
             setIsExecutingTrade(true);
             if (latestEpoch) {
@@ -314,6 +384,23 @@ const AIBots = observer(() => {
                 settledHandled = true;
                 if (safetyTimer !== undefined) clearTimeout(safetyTimer);
 
+                if (isVirtualBot) {
+                    if (virtualBotUnsettledOrder === realOrderToken) virtualBotUnsettledOrder = null;
+                    // Remember a late real loss even if the scanner was stopped or the tab closed.
+                    if (!runningRef.current || runGenerationRef.current !== orderGeneration ||
+                        configRef.current.accountKey !== cfg.accountKey) {
+                        if (runningRef.current && runGenerationRef.current === orderGeneration) {
+                            stopScannerInternal('Account changed. Scanner stopped; check your account before restarting.');
+                        }
+                        if (profit > 0) virtualRecoveryByAccount.delete(cfg.accountKey);
+                        else virtualRecoveryByAccount.set(cfg.accountKey, {
+                            virtualMode: true,
+                            stake: Number((stakeToUse * cfg.martingale).toFixed(2)),
+                            totalPL: Number((orderPriorPL + profit).toFixed(2)),
+                        });
+                        return;
+                    }
+                }
                 const nextPL = Number((totalPLRef.current + profit).toFixed(2));
                 totalPLRef.current = nextPL;
                 setTotalPL(nextPL);
@@ -323,6 +410,7 @@ const AIBots = observer(() => {
                 if (!runningRef.current) return;
 
                 if (nextPL >= cfg.takeProfit) {
+                    if (isVirtualBot) virtualRecoveryByAccount.delete(cfg.accountKey);
                     inRecoveryRef.current = false;
                     setInRecovery(false);
                     stopScannerInternal(`Take profit reached: +${nextPL.toFixed(2)}`);
@@ -336,6 +424,7 @@ const AIBots = observer(() => {
                 }
 
                 if (nextPL <= -Math.abs(cfg.stopLoss)) {
+                    if (isVirtualBot) virtualRecoveryByAccount.delete(cfg.accountKey);
                     inRecoveryRef.current = false;
                     setInRecovery(false);
                     stopScannerInternal(`Stop loss reached: ${nextPL.toFixed(2)}`);
@@ -349,6 +438,7 @@ const AIBots = observer(() => {
                 }
 
                 if (profit > 0) {
+                    if (isVirtualBot) virtualRecoveryByAccount.delete(cfg.accountKey);
                     currentStakeRef.current = cfg.baseStake;
                     inRecoveryRef.current = false;
                     setInRecovery(false);
@@ -360,9 +450,20 @@ const AIBots = observer(() => {
                     if (cfg.hasRecovery) {
                         inRecoveryRef.current = true;
                         setInRecovery(true);
-                        setFooterMessage(
-                            `Lost ${profit.toFixed(2)} ${cfg.currency} on ${marketLabel} · Recovery mode active (next stake ${currentStakeRef.current.toFixed(2)})`
-                        );
+                        if (isVirtualBot) {
+                            virtualModeRef.current = true;
+                            virtualRecoveryByAccount.set(cfg.accountKey, {
+                                virtualMode: true, stake: currentStakeRef.current, totalPL: nextPL,
+                            });
+                            setVirtualMode(true);
+                            const message = `Real loss ${profit.toFixed(2)} ${cfg.currency} on ${marketLabel} · Virtual recovery scanning (next real stake ${currentStakeRef.current.toFixed(2)})`;
+                            setFooterMessage(message);
+                            journal?.pushMessage?.(`[VIRTUAL] ${message}`, MessageTypes.NOTIFY, '');
+                        } else {
+                            setFooterMessage(
+                                `Lost ${profit.toFixed(2)} ${cfg.currency} on ${marketLabel} · Recovery mode active (next stake ${currentStakeRef.current.toFixed(2)})`
+                            );
+                        }
                     } else {
                         setFooterMessage(
                             `Lost ${profit.toFixed(2)} ${cfg.currency} on ${marketLabel} · Next stake ${currentStakeRef.current.toFixed(2)}`
@@ -373,9 +474,16 @@ const AIBots = observer(() => {
 
             safetyTimer = setTimeout(() => {
                 if (!settledHandled) {
-                    settledHandled = true;
-                    inFlightRef.current = false;
-                    setIsExecutingTrade(false);
+                    if (isVirtualBot) {
+                        // The outcome is unknown: never release the real-order lock on a timer.
+                        if (runningRef.current && runGenerationRef.current === orderGeneration) {
+                            stopScannerInternal('Real contract settlement timed out. Scanner stopped; wait for settlement before restarting.');
+                        }
+                    } else {
+                        settledHandled = true;
+                        inFlightRef.current = false;
+                        setIsExecutingTrade(false);
+                    }
                 }
             }, 25000);
 
@@ -390,17 +498,29 @@ const AIBots = observer(() => {
                     stores: { journal, transactions, summary_card, run_panel },
                     onContractUpdate: (poc, isTerminal) => {
                         if (isTerminal) {
+                            if (settledHandled) return;
+                            if (isVirtualBot && (poc?.profit == null || !Number.isFinite(Number(poc.profit)))) {
+                                if (safetyTimer !== undefined) clearTimeout(safetyTimer);
+                                // The outcome is unknown, so keep the lock and allow a later valid update.
+                                if (runningRef.current && runGenerationRef.current === orderGeneration) {
+                                    stopScannerInternal('Real settlement has no valid profit. Scanner stopped; check the contract before restarting.');
+                                }
+                                return;
+                            }
                             finalizeSettlement(Number(poc?.profit ?? 0));
                         }
                     },
                 });
             } catch (err: any) {
+                if (settledHandled) return;
                 if (safetyTimer !== undefined) clearTimeout(safetyTimer);
-                settledHandled = true;
+                settledHandled = !isVirtualBot;
+                // A failed network request may still have reached Deriv. Keep the lock until
+                // a known settlement or page reload, after manually checking open contracts.
                 inFlightRef.current = false;
                 setIsExecutingTrade(false);
                 const msg = err?.message || 'Trade execution failed.';
-                stopScannerInternal(msg);
+                stopScannerInternal(isVirtualBot ? `${msg} Check your account for an open contract before reloading or restarting.` : msg);
             }
         },
         [stopScannerInternal, journal, transactions, summary_card, run_panel]
@@ -425,6 +545,32 @@ const AIBots = observer(() => {
         });
         const unsubTick = derivBus.onTick((sym, tk) => {
             scheduleRefresh();
+            const pending = virtualTradeRef.current;
+            if (pending && configRef.current.accountKey !== runningAccountRef.current) {
+                stopScannerInternal('Account changed. Scanner stopped; check your account before restarting.');
+                return;
+            }
+            if (pending) {
+                const result = advanceVirtualRecovery(pending, sym, tk);
+                virtualTradeRef.current = result.trade;
+                if (result.outcome) {
+                    virtualTradeRef.current = null;
+                    if (virtualTimerRef.current) clearTimeout(virtualTimerRef.current);
+                    virtualTimerRef.current = null;
+                    inFlightRef.current = false;
+                    setIsExecutingTrade(false);
+                    const didWin = result.outcome === 'won';
+                    virtualModeRef.current = didWin;
+                    const saved = virtualRecoveryByAccount.get(runningAccountRef.current);
+                    if (saved) virtualRecoveryByAccount.set(runningAccountRef.current, { ...saved, virtualMode: didWin });
+                    setVirtualMode(didWin);
+                    const action = didWin ? 'Continue virtual scanning' : 'Wait for the next real recovery signal';
+                    const message = `[VIRTUAL] ${pending.contractType === 'DIGITEVEN' ? 'Even' : 'Odd'} on ${pending.marketLabel} · digit ${result.digit} · ${didWin ? 'WIN' : 'LOSS'} · ${action}. No money wagered.`;
+                    setFooterMessage(message);
+                    journal?.pushMessage?.(message, MessageTypes.NOTIFY, '');
+                }
+                return;
+            }
             void attemptAutoTradeOnTick(sym, tk);
         });
         const release = derivBus.subscribe(allSymbols);
@@ -435,21 +581,30 @@ const AIBots = observer(() => {
             unsubTick();
             release();
         };
-    }, [selectedBotId, attemptAutoTradeOnTick]);
+    }, [selectedBotId, attemptAutoTradeOnTick, journal]);
 
     useEffect(() => {
         return () => {
             runningRef.current = false;
+            runGenerationRef.current += 1;
             inFlightRef.current = false;
+            virtualTradeRef.current = null;
+            if (virtualTimerRef.current) clearTimeout(virtualTimerRef.current);
         };
     }, []);
 
     const handleToggleScanner = () => {
         if (isRunning) {
-            stopScannerInternal('Scanner stopped by user.');
+            stopScannerInternal(virtualBotUnsettledOrder
+                ? 'Scanner stopped. The real contract is still settling; wait before restarting.'
+                : 'Scanner stopped by user.');
             return;
         }
 
+        if (virtualBotUnsettledOrder) {
+            setFooterMessage('A real contract is still unsettled. Wait for settlement before restarting.');
+            return;
+        }
         const hasAuth =
             Boolean(client?.is_logged_in) ||
             Boolean((api_base as any)?.is_authorized) ||
@@ -460,19 +615,39 @@ const AIBots = observer(() => {
             return;
         }
 
+        const isVirtualBot = selectedBotId === 'under7-rec-evenodd-virtual';
+        const accountKey = configRef.current.accountKey;
+        if (isVirtualBot && !accountKey) {
+            setFooterMessage('Wait for your account ID to load before starting this strategy.');
+            return;
+        }
+        const saved = isVirtualBot ? virtualRecoveryByAccount.get(accountKey) : undefined;
+        if (saved && (saved.totalPL >= configRef.current.takeProfit || saved.totalPL <= -Math.abs(configRef.current.stopLoss))) {
+            virtualRecoveryByAccount.delete(accountKey);
+            setFooterMessage('The previous run reached its take profit or stop loss while stopped. Review it before starting a new run.');
+            return;
+        }
         const baseStake = Math.max(0.35, Number(stakeInput) || 0.5);
-        currentStakeRef.current = baseStake;
-        inRecoveryRef.current = false;
-        setInRecovery(false);
-        totalPLRef.current = 0;
-        setTotalPL(0);
+        currentStakeRef.current = saved?.stake ?? baseStake;
+        inRecoveryRef.current = Boolean(saved);
+        setInRecovery(Boolean(saved));
+        totalPLRef.current = saved?.totalPL ?? 0;
+        setTotalPL(totalPLRef.current);
         inFlightRef.current = false;
+        virtualModeRef.current = saved?.virtualMode ?? false;
+        virtualTradeRef.current = null;
+        setVirtualMode(virtualModeRef.current);
+        runningAccountRef.current = accountKey;
+        runGenerationRef.current += 1;
         runningRef.current = true;
         setIsRunning(true);
         autoDockRunPanel(run_panel, 1);
-        setFooterMessage(
-            `Scanning ${marketScope === 'ALL' ? 'All Markets' : marketScope} for confirmed ${selectedBot?.title || 'AI'} signal…`
+        setFooterMessage(saved
+            ? `Resuming ${saved.virtualMode ? 'virtual' : 'real'} recovery scanning · next real stake ${saved.stake.toFixed(2)}. Waiting for a new signal.`
+            : `Scanning ${marketScope === 'ALL' ? 'All Markets' : marketScope} for confirmed ${selectedBot?.title || 'AI'} signal…`
         );
+        // A restarted recovery must wait for a new live tick, not reuse a stale signal.
+        if (saved) return;
 
         const candidateSymbols =
             marketScope === 'ALL' ? AI_SCANNER_MARKETS.map(m => m.symbol) : [marketScope];
@@ -560,11 +735,9 @@ const AIBots = observer(() => {
     }
 
     const statusBadgeLabel = isExecutingTrade
-        ? 'EXECUTING TRADE'
+        ? virtualMode ? 'VIRTUAL TRADE' : 'EXECUTING TRADE'
         : isRunning
-          ? inRecovery
-              ? 'RECOVERY SCANNING'
-              : 'SCANNER ACTIVE'
+          ? virtualMode ? 'VIRTUAL SCANNING' : inRecovery ? 'RECOVERY SCANNING' : 'SCANNER ACTIVE'
           : 'SCANNER IDLE';
 
     return (

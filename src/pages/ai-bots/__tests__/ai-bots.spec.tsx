@@ -11,13 +11,24 @@ import AIBots from '../ai-bots';
 
 const mockExecuteLiveDerivTrade = jest.fn();
 const mockSetActiveTab = jest.fn();
+const mockJournalPush = jest.fn();
+const mockJournal = { pushMessage: mockJournalPush };
+const mockTransactions = {};
+const mockSummary = {};
+const mockRunPanel = {};
+let mockTickListener: ((symbol: string, tick: { t: number; price: number }) => void) | null = null;
+let mockAccountSerial = 0;
+let mockLoginId = '';
 
 const mockTickBuffers: Record<string, Array<{ t: number; price: number }>> = {};
 
 jest.mock('@/lib/deriv/tick-bus', () => ({
     derivBus: {
         subscribe: jest.fn(() => () => undefined),
-        onTick: jest.fn(() => () => undefined),
+        onTick: jest.fn((callback: (symbol: string, tick: { t: number; price: number }) => void) => {
+            mockTickListener = callback;
+            return () => { if (mockTickListener === callback) mockTickListener = null; };
+        }),
         onHistory: jest.fn(() => () => undefined),
         getTicks: (sym: string) => mockTickBuffers[sym] || [],
         getPipSize: () => 2,
@@ -28,6 +39,7 @@ jest.mock('@/external/bot-skeleton', () => ({
     api_base: {
         is_authorized: true,
     },
+    MessageTypes: { NOTIFY: 'notify' },
 }));
 
 jest.mock('@/utils/ai-bot-xml-builder', () => ({
@@ -36,22 +48,24 @@ jest.mock('@/utils/ai-bot-xml-builder', () => ({
 
 jest.mock('@/hooks/useStore', () => ({
     useStore: () => ({
-        client: { is_logged_in: true, currency: 'USD' },
+        client: { is_logged_in: true, currency: 'USD', loginid: mockLoginId },
         dashboard: { setActiveTab: mockSetActiveTab },
-        journal: {},
-        transactions: {},
-        summary_card: {},
-        run_panel: {},
+        journal: mockJournal,
+        transactions: mockTransactions,
+        summary_card: mockSummary,
+        run_panel: mockRunPanel,
     }),
 }));
 
-describe('AI Bots (riskmanagers.site 7-card suite & in-page AI Scanner workspace)', () => {
+describe('AI Bots (8-card suite & in-page AI Scanner workspace)', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockTickListener = null;
+        mockLoginId = `VRTC_TEST_${++mockAccountSerial}`;
         Object.keys(mockTickBuffers).forEach(k => delete mockTickBuffers[k]);
     });
 
-    it('renders all 7 riskmanagers.site AI Bot cards with exact numbers, titles, descriptions, and accents', () => {
+    it('renders all 8 AI Bot cards with their numbers, titles, descriptions, and accents', () => {
         render(<AIBots />);
 
         expect(screen.getByTestId('rm-ai-bots-page')).toBeInTheDocument();
@@ -99,6 +113,12 @@ describe('AI Bots (riskmanagers.site 7-card suite & in-page AI Scanner workspace
                 desc: 'The selected digit count above 7 triggers Under 7, followed by range recovery after a loss.',
                 accent: 'rm-ai-bots__card--pink',
             },
+            {
+                num: '08',
+                title: 'Under 7 Recovery → Even–Odd Virtual',
+                desc: 'After a real loss, simulate Even–Odd signals until a virtual loss, then resume real trading.',
+                accent: 'rm-ai-bots__card--pink',
+            },
         ];
 
         for (const item of expectedCards) {
@@ -109,7 +129,7 @@ describe('AI Bots (riskmanagers.site 7-card suite & in-page AI Scanner workspace
             expect(cardEl).toHaveTextContent(item.desc);
         }
 
-        expect(screen.getAllByRole('button', { name: /Load AI Bot/i })).toHaveLength(7);
+        expect(screen.getAllByRole('button', { name: /Load AI Bot/i })).toHaveLength(8);
     });
 
     it('opens the in-page AI Scanner workspace when Load AI Bot is clicked without navigating to Bot Builder, and returns via Strategies', () => {
@@ -159,7 +179,7 @@ describe('AI Bots (riskmanagers.site 7-card suite & in-page AI Scanner workspace
         expect(screen.getByTestId('scanner-row-R_25')).toHaveTextContent('Scanning');
         expect(screen.getByTestId('scanner-row-R_25')).toHaveTextContent('Initial · 5/5 checked');
 
-        // Clicking <- Strategies returns to the 7-card grid
+        // Clicking <- Strategies returns to the card grid
         fireEvent.click(screen.getByRole('button', { name: /Strategies/i }));
         expect(screen.getByTestId('rm-ai-bots-page')).toBeInTheDocument();
     });
@@ -212,6 +232,172 @@ describe('AI Bots (riskmanagers.site 7-card suite & in-page AI Scanner workspace
 
         expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('RECOVERY SCANNING');
         expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('Total P/L -0.50');
+    });
+
+    it('uses virtual recovery signals until a virtual loss, then waits for a new real signal', async () => {
+        mockTickBuffers.R_10 = [{ t: 1000, price: 100.08 }, { t: 2000, price: 100.09 }];
+        const settlements: Array<(poc: any, terminal: boolean) => void> = [];
+        mockExecuteLiveDerivTrade.mockImplementation(async (params: any) => {
+            settlements.push(params.onContractUpdate);
+            return { contractId: 9000 + settlements.length, buyPrice: params.stake, payout: 1, longcode: 'test' };
+        });
+        const tick = (t: number, digit: number, sym = 'R_10') => {
+            const item = { t, price: Number((100 + digit / 100).toFixed(2)) };
+            mockTickBuffers[sym] = [...(mockTickBuffers[sym] || []), item];
+            act(() => mockTickListener?.(sym, item));
+        };
+        render(<AIBots />);
+        fireEvent.click(screen.getAllByRole('button', { name: /Load AI Bot/i })[7]);
+        expect(screen.getByTestId('ai-scanner-trading-rule')).toHaveTextContent('Virtual results do not change real P/L');
+        fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+        await waitFor(() => expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1));
+        expect(mockExecuteLiveDerivTrade.mock.calls[0][0]).toMatchObject({ contractType: 'DIGITUNDER', barrier: 7, stake: 0.5 });
+
+        act(() => settlements[0]({ profit: -0.5 }, true));
+        expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('VIRTUAL SCANNING');
+        expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('Total P/L -0.50');
+
+        tick(3000, 2); tick(4000, 4); tick(5000, 6); // Even streak → virtual Odd
+        expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('VIRTUAL TRADE');
+        tick(6000, 1, 'R_25'); // other market must not settle the virtual contract
+        expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('VIRTUAL TRADE');
+        tick(6000, 1); // virtual Odd wins; stay virtual, no money wagered
+        expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('VIRTUAL SCANNING');
+        expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1);
+        expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('Total P/L -0.50');
+
+        tick(7000, 2); tick(8000, 4); tick(9000, 6); // next virtual Odd
+        expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('VIRTUAL TRADE');
+        tick(10000, 3); // a second virtual win must also remain virtual
+        expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('VIRTUAL SCANNING');
+        tick(11000, 2); tick(12000, 4); tick(13000, 6);
+        expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('VIRTUAL TRADE');
+        tick(14000, 8); // virtual Odd loses, but no real order on this settlement tick
+        expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('Wait for the next real recovery signal');
+        expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1);
+        expect(mockJournalPush).toHaveBeenCalledWith(expect.stringContaining('[VIRTUAL]'), 'notify', '');
+        tick(15000, 2); // new even streak → real Odd recovery, same martingale step as real loss
+        await waitFor(() => expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(2));
+        expect(mockExecuteLiveDerivTrade.mock.calls[1][0]).toMatchObject({ contractType: 'DIGITODD', stake: 1 });
+        act(() => settlements[1]({ profit: 0.9 }, true));
+        expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('Total P/L +0.40');
+        expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('SCANNER ACTIVE');
+        tick(16000, 8); tick(17000, 9); // back to Under 7 at base stake
+        await waitFor(() => expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(3));
+        expect(mockExecuteLiveDerivTrade.mock.calls[2][0]).toMatchObject({ contractType: 'DIGITUNDER', barrier: 7, stake: 0.5 });
+        act(() => settlements[2]({ profit: 0.2 }, true));
+    });
+
+    it('cancels pending virtual trades on stop and never places a real trade from their later ticks', async () => {
+        mockTickBuffers.R_10 = [{ t: 1000, price: 100.08 }, { t: 2000, price: 100.09 }];
+        let settle: ((poc: any, terminal: boolean) => void) | undefined;
+        mockExecuteLiveDerivTrade.mockImplementation(async (params: any) => {
+            settle = params.onContractUpdate;
+            return { contractId: 9001, buyPrice: params.stake, payout: 1, longcode: 'test' };
+        });
+        const tick = (t: number, digit: number) => {
+            const item = { t, price: Number((100 + digit / 100).toFixed(2)) };
+            mockTickBuffers.R_10.push(item);
+            act(() => mockTickListener?.('R_10', item));
+        };
+        render(<AIBots />);
+        fireEvent.click(screen.getAllByRole('button', { name: /Load AI Bot/i })[7]);
+        fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+        await waitFor(() => expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1));
+        act(() => settle?.({ profit: -0.5 }, true));
+        tick(3000, 2); tick(4000, 4); tick(5000, 6);
+        expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('VIRTUAL TRADE');
+        fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+        tick(6000, 8); tick(7000, 2);
+        expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('SCANNER IDLE');
+        expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1);
+        fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+        expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('VIRTUAL SCANNING');
+        expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1);
+        tick(8000, 4); // next new tick triggers a new virtual Odd
+        expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('VIRTUAL TRADE');
+        tick(9000, 6); // virtual loss permits a later real signal
+        expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1);
+        tick(10000, 8);
+        await waitFor(() => expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(2));
+        expect(mockExecuteLiveDerivTrade.mock.calls[1][0]).toMatchObject({ stake: 1, contractType: 'DIGITODD' });
+        act(() => settle?.({ profit: 0.9 }, true));
+    });
+
+    it('blocks restart while a real contract remains unsettled', async () => {
+        mockTickBuffers.R_10 = [{ t: 1000, price: 100.08 }, { t: 2000, price: 100.09 }];
+        let settle: ((poc: any, terminal: boolean) => void) | undefined;
+        mockExecuteLiveDerivTrade.mockImplementation(async (params: any) => {
+            settle = params.onContractUpdate;
+            return { contractId: 9001, buyPrice: params.stake, payout: 1, longcode: 'test' };
+        });
+        render(<AIBots />);
+        fireEvent.click(screen.getAllByRole('button', { name: /Load AI Bot/i })[7]);
+        fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+        await waitFor(() => expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1));
+        fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+        fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+        expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('still unsettled');
+        expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1);
+        act(() => settle?.({ profit: -0.5 }, true));
+        expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('SCANNER IDLE');
+    });
+
+    it('settles virtual trades using the configured tick duration', async () => {
+        mockTickBuffers.R_10 = [{ t: 1000, price: 100.08 }, { t: 2000, price: 100.09 }];
+        let settle: ((poc: any, terminal: boolean) => void) | undefined;
+        mockExecuteLiveDerivTrade.mockImplementation(async (params: any) => {
+            settle = params.onContractUpdate;
+            return { contractId: 9001, buyPrice: params.stake, payout: 1, longcode: 'test' };
+        });
+        const tick = (t: number, digit: number) => {
+            const item = { t, price: Number((100 + digit / 100).toFixed(2)) };
+            mockTickBuffers.R_10.push(item);
+            act(() => mockTickListener?.('R_10', item));
+        };
+        render(<AIBots />);
+        fireEvent.click(screen.getAllByRole('button', { name: /Load AI Bot/i })[7]);
+        fireEvent.change(screen.getByLabelText('TICKS'), { target: { value: '2' } });
+        fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+        await waitFor(() => expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1));
+        expect(mockExecuteLiveDerivTrade.mock.calls[0][0].duration).toBe(2);
+        act(() => settle?.({ profit: -0.5 }, true));
+        tick(3000, 2); tick(4000, 4); tick(5000, 6);
+        tick(6000, 8);
+        expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('VIRTUAL TRADE');
+        tick(7000, 1); // Odd wins on the second tick, not the first
+        expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('VIRTUAL SCANNING');
+        expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1);
+    });
+
+    it('stops on a real settlement timeout, retains the lock, and resumes recovery after a late loss', async () => {
+        mockTickBuffers.R_10 = [{ t: 1000, price: 100.08 }, { t: 2000, price: 100.09 }];
+        let settle: ((poc: any, terminal: boolean) => void) | undefined;
+        mockExecuteLiveDerivTrade.mockImplementation(async (params: any) => {
+            settle = params.onContractUpdate;
+            return { contractId: 9001, buyPrice: params.stake, payout: 1, longcode: 'test' };
+        });
+        jest.useFakeTimers();
+        try {
+            render(<AIBots />);
+            fireEvent.click(screen.getAllByRole('button', { name: /Load AI Bot/i })[7]);
+            fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+            expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1);
+            await act(async () => { jest.advanceTimersByTime(25000); });
+            expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('settlement timed out');
+            fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+            expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('still unsettled');
+            act(() => settle?.({ profit: -0.5 }, true));
+            fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+            expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('VIRTUAL SCANNING');
+            expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('Total P/L -0.50');
+            // Duplicate or malformed late terminal updates cannot stop a restarted run.
+            act(() => settle?.({}, true));
+            expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('VIRTUAL SCANNING');
+            expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1);
+        } finally {
+            jest.useRealTimers();
+        }
     });
 
     it('evaluates all 7 scanner strategies accurately across Initial and Recovery modes', () => {
@@ -314,7 +500,8 @@ describe('AI Bots (riskmanagers.site 7-card suite & in-page AI Scanner workspace
             'ai_purchase_barrier',
         ]);
 
-        for (const bot of RISK_MANAGER_AI_BOTS) {
+        expect(() => buildRiskManagerAIBotXml('under7-rec-evenodd-virtual')).toThrow(/AI Scanner only/);
+        for (const bot of RISK_MANAGER_AI_BOTS.filter(item => item.id !== 'under7-rec-evenodd-virtual')) {
             const xml = buildRiskManagerAIBotXml(bot.id);
             const doc = new DOMParser().parseFromString(xml, 'text/xml');
             expect(doc.querySelector('parsererror')).toBeNull();
