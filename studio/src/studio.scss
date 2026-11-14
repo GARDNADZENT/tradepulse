@@ -1438,3 +1438,18 @@ body,
     text-align: right;
   }
 }
+
+/* Site Editor: changes are staged in the selected site's existing preview. */
+.studio-editor {
+  &__heading h3 { margin: 12px 0 6px; font-size: 21px; color: #f8fafc; }
+  &__heading p, &__examples p { color: #a8b8ce; line-height: 1.6; }
+  &__notice { padding: 12px 14px; color: #bfdbfe; background: rgba(37, 99, 235, .12); border: 1px solid rgba(96, 165, 250, .3); border-radius: 9px; line-height: 1.5; }
+  form { display: grid; gap: 12px; justify-items: start; margin: 20px 0; }
+  form .studio-field { width: 100%; }
+  textarea { width: 100%; resize: vertical; border: 1px solid #334155; border-radius: 8px; background: #0b1220; color: #f8fafc; padding: 12px; font: inherit; line-height: 1.5; }
+  textarea:focus { outline: 2px solid #3b82f6; outline-offset: 2px; }
+  &__feedback { padding: 12px 14px; border-radius: 8px; line-height: 1.5; }
+  &__feedback.is-success { color: #a7f3d0; background: rgba(16, 185, 129, .12); }
+  &__feedback.is-error { color: #fecaca; background: rgba(239, 68, 68, .12); }
+  &__examples { margin-top: 24px; padding-top: 18px; border-top: 1px solid #263447; }
+}

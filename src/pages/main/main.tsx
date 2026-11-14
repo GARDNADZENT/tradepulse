@@ -16,6 +16,7 @@ import { CONNECTION_STATUS } from '@/external/bot-skeleton/services/api/observab
 import { isDbotRTL } from '@/external/bot-skeleton/utils/workspace';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useStore } from '@/hooks/useStore';
+import { getActiveTenantConfig, subscribeActiveTenantConfig } from '@/services/site-config/site-runtime-config';
 import {
     disableUrlParameterApplication,
     enableUrlParameterApplication,
@@ -110,6 +111,14 @@ const AppWrapper = observer(() => {
     const [left_tab_shadow, setLeftTabShadow] = useState<boolean>(false);
     const [right_tab_shadow, setRightTabShadow] = useState<boolean>(false);
     const [tradeTypeModalState, setTradeTypeModalState] = useState(getModalState());
+    const [tenantConfig, setTenantConfig] = useState(getActiveTenantConfig);
+
+    useEffect(() => subscribeActiveTenantConfig(setTenantConfig), []);
+    useEffect(() => {
+        if (tenantConfig && TAB_IDS[active_tab] && !tenantConfig.enabled_tabs.includes(TAB_IDS[active_tab])) {
+            setActiveTab(DASHBOARD);
+        }
+    }, [tenantConfig, active_tab, setActiveTab, DASHBOARD]);
 
     const getTradeTypeModalProps = () => {
         const { tradeTypeData } = tradeTypeModalState;
@@ -257,8 +266,11 @@ const AppWrapper = observer(() => {
         if (is_open) setTourDialogVisibility(false);
 
         if (init_render.current) {
-            setActiveTab(Number(active_hash_tab));
-            if (!isDesktop) handleTabChange(Number(active_hash_tab));
+            const requestedTab = Number(active_hash_tab);
+            const permittedTab = tenantConfig && !tenantConfig.enabled_tabs.includes(TAB_IDS[requestedTab])
+                ? DASHBOARD : requestedTab;
+            setActiveTab(permittedTab);
+            if (!isDesktop) handleTabChange(permittedTab);
             init_render.current = false;
         } else {
             const targetHash = hash[active_tab] || hash[0];
@@ -321,6 +333,7 @@ const AppWrapper = observer(() => {
 
     const handleTabChange = React.useCallback(
         (tab_index: number) => {
+            if (tenantConfig && !tenantConfig.enabled_tabs.includes(TAB_IDS[tab_index])) return;
             React.startTransition(() => {
                 setActiveTab(tab_index);
             });
@@ -332,7 +345,7 @@ const AppWrapper = observer(() => {
                 });
             }
         },
-        [setActiveTab]
+        [setActiveTab, tenantConfig]
     );
 
     const handleLoginGeneration = async () => {

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { interpretSiteEdit } from './services/site-editor';
 import {
   ALL_13_TABS,
   COLOR_SWATCHES,
@@ -38,7 +39,7 @@ import {
   uploadLogoAsset,
 } from './services/studio-data';
 
-type ConfigTab = 'branding' | 'tabs' | 'bots' | 'domain' | 'commissions';
+type ConfigTab = 'editor' | 'branding' | 'tabs' | 'bots' | 'domain' | 'commissions';
 type SidebarSection = 'sites' | ConfigTab | 'superadmin';
 
 interface DnsRecordRow {
@@ -80,6 +81,8 @@ export const App: React.FC = () => {
   // Preview & save status
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop');
   const [saving, setSaving] = useState(false);
+  const [editorRequest, setEditorRequest] = useState('');
+  const [editorFeedback, setEditorFeedback] = useState<{ ok: boolean; message: string } | null>(null);
   const [toast, setToast] = useState<string>('');
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const logoInputRef = useRef<HTMLInputElement | null>(null);
@@ -252,6 +255,11 @@ export const App: React.FC = () => {
     [sites, selectedSiteId]
   );
 
+  useEffect(() => {
+    setEditorRequest('');
+    setEditorFeedback(null);
+  }, [selectedSiteId]);
+
   // Per-site commission stats map (computed strictly from real Supabase commission records)
   const siteStatsMap = useMemo(() => {
     const map = new Map<
@@ -315,7 +323,7 @@ export const App: React.FC = () => {
           type: 'TP_STUDIO_PREVIEW_SYNC',
           site,
         },
-        '*'
+        new URL(buildPreviewTenantUrl(site), window.location.href).origin
       );
     } catch {}
   }, []);
@@ -326,7 +334,7 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
-      if (event.data && event.data.type === 'TP_TENANT_READY') {
+      if (event.source === iframeRef.current?.contentWindow && event.data && event.data.type === 'TP_TENANT_READY') {
         pushLivePreviewToIframe(selectedSite);
       }
     };
@@ -342,6 +350,7 @@ export const App: React.FC = () => {
   const handleSidebarNav = (section: SidebarSection) => {
     setActiveSidebar(section);
     if (
+      section === 'editor' ||
       section === 'branding' ||
       section === 'tabs' ||
       section === 'bots' ||
@@ -386,7 +395,7 @@ export const App: React.FC = () => {
       pushLivePreviewToIframe(saved);
       showToast(`Published "${saved.brand_name}" live to ${buildLiveTenantUrl(saved)}`);
     } catch (err: any) {
-      showToast(`Save error: ${err?.message || 'Unable to publish changes'}`);
+      showToast(`Publish error: ${err?.message || 'Unable to publish changes'}. Some changes may have saved; refresh and check the site.`);
     } finally {
       setSaving(false);
     }
@@ -950,6 +959,14 @@ export const App: React.FC = () => {
           </button>
           <button
             type="button"
+            className={`studio-nav-item ${activeSidebar === 'editor' ? 'is-active' : ''}`}
+            onClick={() => handleSidebarNav('editor')}
+          >
+            <span className="studio-nav-item__dot" />
+            <span>Site Editor</span>
+          </button>
+          <button
+            type="button"
             className={`studio-nav-item ${activeSidebar === 'branding' ? 'is-active' : ''}`}
             onClick={() => handleSidebarNav('branding')}
           >
@@ -962,7 +979,7 @@ export const App: React.FC = () => {
             onClick={() => handleSidebarNav('tabs')}
           >
             <span className="studio-nav-item__dot" />
-            <span>Feature Tabs (13)</span>
+            <span>Feature Tabs ({ALL_13_TABS.length})</span>
           </button>
           <button
             type="button"
@@ -1445,8 +1462,9 @@ export const App: React.FC = () => {
             <div className="studio-tabs">
               {(
                 [
+                  ['editor', 'Site Editor'],
                   ['branding', 'Branding'],
-                  ['tabs', '13 Tabs Toggle'],
+                  ['tabs', `${ALL_13_TABS.length} Tabs Toggle`],
                   ['bots', `XML Bots (${selectedSite.custom_bots.length})`],
                   ['domain', '.vercel.app & Domain'],
                   ['commissions', 'Commissions & Payouts'],
@@ -1465,6 +1483,50 @@ export const App: React.FC = () => {
                 </button>
               ))}
             </div>
+
+            {activeTab === 'editor' && (
+              <div className="studio-tab-body studio-editor">
+                <div className="studio-editor__heading">
+                  <span className="studio-mini-badge">SITE EDITOR</span>
+                  <h3>Tell Studio what to change</h3>
+                  <p>Editing <strong>{selectedSite.brand_name}</strong> · {openExternalTenantUrl}</p>
+                </div>
+                <p className="studio-editor__notice">
+                  Changes are a preview until you select Publish Changes Live. Publishing affects only this site.
+                  Visitors with the site already open may need to refresh.
+                </p>
+                <form onSubmit={event => {
+                  event.preventDefault();
+                  const result = interpretSiteEdit(editorRequest, selectedSite);
+                  setEditorFeedback({ ok: result.ok, message: result.message });
+                  if (result.ok) {
+                    updateSelectedSite(() => result.site);
+                    setEditorRequest('');
+                  }
+                }}>
+                  <label className="studio-field" htmlFor="studio-editor-request">
+                    <span>Your request</span>
+                    <textarea id="studio-editor-request" rows={3} maxLength={300} value={editorRequest}
+                      onChange={event => setEditorRequest(event.target.value)}
+                      placeholder="For example: Remove DTrader from my site" />
+                  </label>
+                  <button type="submit" className="studio-btn studio-btn--primary" disabled={saving || !editorRequest.trim()}>
+                    Preview change
+                  </button>
+                </form>
+                {editorFeedback && (
+                  <div className={`studio-editor__feedback ${editorFeedback.ok ? 'is-success' : 'is-error'}`} role="status">
+                    {editorFeedback.message} {editorFeedback.ok && 'Review the preview, then publish when ready.'}
+                  </div>
+                )}
+                <div className="studio-editor__examples">
+                  <strong>Supported requests</strong>
+                  <p>Hide or restore a feature tab, change the site name, or set the primary color using a hex code.</p>
+                  <p>Examples: “Remove DTrader”, “Show DTrader”, “Set site name to My Site”, “Set primary color to #0066FF”.</p>
+                  <p>This editor uses supported commands, not an AI model. For logos, bots, domains and other settings, use the Studio controls above.</p>
+                </div>
+              </div>
+            )}
 
             {/* TAB 1: BRANDING */}
             {activeTab === 'branding' && (

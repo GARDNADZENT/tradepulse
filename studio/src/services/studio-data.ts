@@ -316,7 +316,7 @@ export async function loadManagedSites(user: StudioUser): Promise<ManagedSite[]>
   if (error) throw error;
 
   let rows = rawRows || [];
-  if (user.role === 'super_admin') {
+  if (user.role === 'super_admin' && user.email.toLowerCase() === 'gadnadolo19@gmail.com') {
     rows = await ensureSuperAdminFlagshipSite(client, user, rows);
   }
 
@@ -355,16 +355,8 @@ export async function loadManagedSites(user: StudioUser): Promise<ManagedSite[]>
       pooled_deriv_app_id: platform.pooled_deriv_app_id,
       deriv_referral_link: String(r.deriv_referral_link || ''),
       announcement_text: String(r.announcement_text || ''),
-      enabled_tabs: (() => {
-        const allIds = ALL_13_TABS.map(t => t.id);
-        if (!Array.isArray(r.enabled_tabs) || r.enabled_tabs.length === 0) return allIds;
-        const legacyIds = allIds.filter(id => id !== 'id-tick-pulse');
-        const hasAllLegacy = legacyIds.every(id => r.enabled_tabs.includes(id));
-        if ((isFlagship || hasAllLegacy) && !r.enabled_tabs.includes('id-tick-pulse')) {
-          return Array.from(new Set([...r.enabled_tabs, 'id-tick-pulse']));
-        }
-        return r.enabled_tabs;
-      })(),
+      enabled_tabs: Array.isArray(r.enabled_tabs) && r.enabled_tabs.length > 0
+        ? r.enabled_tabs : ALL_13_TABS.map(t => t.id),
       social_links: r.social_links || {},
       include_default_bots: r.include_default_bots !== false,
       commission_share_pct: Number(
@@ -458,34 +450,39 @@ export async function persistManagedSite(site: ManagedSite): Promise<ManagedSite
     savedSiteId = String(data.id);
     updatedAt = data.updated_at;
   } else {
-    let { error } = await client.from('managed_sites').update(extendedPayload).eq('id', site.id);
+    let { data, error } = await client.from('managed_sites').update(extendedPayload).eq('id', site.id).select('id').maybeSingle();
     if (error && isMissingColumnError(error)) {
-      const retry = await client.from('managed_sites').update(basePayload).eq('id', site.id);
+      const retry = await client.from('managed_sites').update(basePayload).eq('id', site.id).select('id').maybeSingle();
+      data = retry.data;
       error = retry.error;
     }
     if (error) throw error;
+    if (!data) throw new Error('Site was not updated. Check your permissions and site status.');
   }
 
-  const { error: delBotsErr } = await client
-    .from('managed_site_bots')
-    .delete()
-    .eq('site_id', savedSiteId);
-  if (delBotsErr) throw delBotsErr;
-
-  if (site.custom_bots.length > 0) {
-    const { error: insBotsErr } = await client.from('managed_site_bots').insert(
-      site.custom_bots.map((b, idx) => ({
-        site_id: savedSiteId,
-        name: b.name,
-        strategy: b.strategy,
-        description: b.description,
-        categories: b.categories,
-        xml_content: b.xml_content,
-        sort_order: idx + 1,
-        is_active: b.is_active,
-      }))
-    );
-    if (insBotsErr) throw insBotsErr;
+  // Publishing a feature or branding change must not delete and recreate an
+  // unchanged bot library. Only synchronize bots when the draft differs.
+  const { data: existingBots, error: botsReadError } = await client
+    .from('managed_site_bots').select('name,strategy,description,categories,xml_content,sort_order,is_active')
+    .eq('site_id', savedSiteId).order('sort_order', { ascending: true });
+  if (botsReadError) throw botsReadError;
+  const desiredBots = site.custom_bots.map((b, idx) => ({
+    name: b.name, strategy: b.strategy, description: b.description,
+    categories: b.categories, xml_content: b.xml_content, sort_order: idx + 1, is_active: b.is_active,
+  }));
+  const comparable = (bots: any[]) => bots.map(b => ({
+    name: b.name, strategy: b.strategy, description: b.description, categories: b.categories,
+    xml_content: b.xml_content, sort_order: b.sort_order, is_active: b.is_active,
+  }));
+  if (JSON.stringify(comparable(existingBots || [])) !== JSON.stringify(desiredBots)) {
+    const { error: delBotsErr } = await client.from('managed_site_bots').delete().eq('site_id', savedSiteId);
+    if (delBotsErr) throw delBotsErr;
+    if (desiredBots.length > 0) {
+      const { error: insBotsErr } = await client.from('managed_site_bots').insert(
+        desiredBots.map(b => ({ site_id: savedSiteId, ...b }))
+      );
+      if (insBotsErr) throw insBotsErr;
+    }
   }
 
   return {

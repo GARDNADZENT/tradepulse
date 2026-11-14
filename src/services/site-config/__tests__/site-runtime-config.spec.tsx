@@ -88,6 +88,12 @@ describe('Multi-Tenant Site Runtime Config, OAuth Relay & Commission Filter', ()
         expect(tabStyle?.textContent).not.toContain('#id-dbot-dashboard');
     });
 
+    it('respects disabling TickPulse and DTrader on the flagship site', () => {
+        setActiveTenantConfig({ ...MOCK_SITE, slug: 'tradepulse-lovat', enabled_tabs: ['id-dbot-dashboard', 'id-bot-builder'] });
+        expect(getActiveTenantConfig()?.enabled_tabs).not.toContain('id-tick-pulse');
+        expect(document.getElementById('tp-tenant-tabs-css')?.textContent).toContain('#id-dtrader');
+    });
+
     it('routes OAuth login through Central OAuth Callback Relay when tenant origin differs from Callback Hub', async () => {
         setActiveTenantConfig(MOCK_SITE);
         // jsdom default origin is http://localhost, which differs from https://tradepulse-lovat.vercel.app
@@ -108,24 +114,35 @@ describe('Multi-Tenant Site Runtime Config, OAuth Relay & Commission Filter', ()
         expect(recordedDemo).toBe(false);
     });
 
-    it('accepts live TP_STUDIO_PREVIEW_SYNC postMessage updates from Site Studio', async () => {
+    it('ignores preview messages on the top-level site', async () => {
         await initializeTenantRuntime();
-
         act(() => {
-            window.dispatchEvent(
-                new MessageEvent('message', {
-                    data: {
-                        type: 'TP_STUDIO_PREVIEW_SYNC',
-                        site: {
-                            ...MOCK_SITE,
-                            brand_name: 'Nairobi Quant Hub',
-                        },
-                    },
-                })
-            );
+            window.dispatchEvent(new MessageEvent('message', {
+                data: { type: 'TP_STUDIO_PREVIEW_SYNC', site: { ...MOCK_SITE, brand_name: 'Injected' } },
+                source: window,
+            }));
         });
+        expect(getTenantBrandName()).toBe('TradersPulse');
+    });
 
-        expect(getTenantBrandName()).toBe('Nairobi Quant Hub');
+    it('accepts preview updates from the embedding parent', async () => {
+        const iframe = document.createElement('iframe');
+        document.body.appendChild(iframe);
+        const parentDescriptor = Object.getOwnPropertyDescriptor(window, 'parent');
+        Object.defineProperty(window, 'parent', { configurable: true, value: iframe.contentWindow });
+        try {
+            await initializeTenantRuntime();
+            act(() => {
+                window.dispatchEvent(new MessageEvent('message', {
+                    source: iframe.contentWindow,
+                    data: { type: 'TP_STUDIO_PREVIEW_SYNC', site: { ...MOCK_SITE, brand_name: 'Nairobi Quant Hub' } },
+                }));
+            });
+            expect(getTenantBrandName()).toBe('Nairobi Quant Hub');
+        } finally {
+            if (parentDescriptor) Object.defineProperty(window, 'parent', parentDescriptor);
+            iframe.remove();
+        }
     });
 
     it('renders announcement banner when active and blocks access when status is suspended', () => {

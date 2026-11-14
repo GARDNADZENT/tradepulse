@@ -65,11 +65,7 @@ begin
         coalesce(new.email, ''),
         resolved_name,
         resolved_name,
-        case
-            when not exists (select 1 from public.studio_profiles where role = 'super_admin')
-                then 'super_admin'
-            else 'operator'
-        end
+        'operator'
     )
     on conflict (id) do nothing;
     return new;
@@ -87,12 +83,7 @@ select
     coalesce(u.email, ''),
     coalesce(u.raw_user_meta_data->>'full_name', split_part(coalesce(u.email, 'operator'), '@', 1)),
     coalesce(u.raw_user_meta_data->>'full_name', split_part(coalesce(u.email, 'operator'), '@', 1)),
-    case
-        when row_number() over (order by u.created_at asc) = 1
-             and not exists (select 1 from public.studio_profiles where role = 'super_admin')
-            then 'super_admin'
-        else 'operator'
-    end
+    'operator'
 from auth.users u
 on conflict (id) do nothing;
 
@@ -152,11 +143,6 @@ alter table public.managed_sites add column if not exists payout_wallet text not
 update public.managed_sites
 set vercel_domain = lower(slug) || '.vercel.app'
 where vercel_domain is null or vercel_domain = '';
-
-update public.managed_sites
-set enabled_tabs = array_append(enabled_tabs, 'id-tick-pulse')
-where lower(slug) = 'tradepulse-lovat'
-  and not ('id-tick-pulse' = any(enabled_tabs));
 
 create index if not exists idx_managed_sites_owner on public.managed_sites(owner_id);
 create index if not exists idx_managed_sites_vercel_domain on public.managed_sites(lower(vercel_domain));
@@ -227,7 +213,7 @@ select
     true,
     0
 from public.studio_profiles p
-where p.role = 'super_admin'
+where p.role = 'super_admin' and lower(p.email) = 'gadnadolo19@gmail.com'
 order by p.created_at asc
 limit 1
 on conflict (slug) do nothing;

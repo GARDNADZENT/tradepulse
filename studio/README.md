@@ -69,3 +69,21 @@ pnpm run dev
 # Start Site Studio Control Plane on port 4004
 pnpm run studio:dev
 ```
+
+## Site Editor and publishing
+
+Select a site, open **Site Editor**, and preview a supported request such as
+“Remove DTrader” or “Show DTrader”. You can also change a site name or set a
+six-digit hex primary color. This is a limited command interpreter, not a
+connected AI coding assistant; unsupported requests do not change the site.
+Use the existing configurator for logos, bots, domains and other settings.
+Preview changes are drafts until **Publish Changes Live** is pressed. Existing
+visitors may need to refresh. Feature toggles hide UI; they are not a security
+or trading permission boundary.
+
+Signup creates operator accounts only. A trusted database administrator must
+apply `supabase/migrations/20261012-studio-admin-bootstrap.sql` after the
+specified super-admin account registers and confirms its email. Review existing
+super-admin assignments separately; the migration does not revoke them. Deploy
+both Studio and the runtime with the same Supabase project and configure the
+runtime preview URL. Deployment and database changes are not automatic.
