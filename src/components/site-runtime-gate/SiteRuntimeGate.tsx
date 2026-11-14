@@ -30,7 +30,7 @@ export const SiteRuntimeGate: React.FC<{ children: React.ReactNode }> = ({ child
                     <h1 className='tp-runtime-gate__title'>{brandName}</h1>
                     <p className='tp-runtime-gate__desc'>
                         {isSuspended
-                            ? 'This trading site is temporarily offline. If you are the site operator, sign into Site Studio to review your account status.'
+                            ? 'This trading site is temporarily offline. Please try again later.'
                             : tenant.announcement_text ||
                               'We are performing a quick platform upgrade. Please check back in a few minutes.'}
                     </p>

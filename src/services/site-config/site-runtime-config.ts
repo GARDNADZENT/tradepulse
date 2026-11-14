@@ -389,34 +389,13 @@ export async function verifyAuthorizedRelayReturnOrigin(returnTo: string): Promi
 export async function initializeTenantRuntime(): Promise<void> {
     if (typeof window === 'undefined') return;
 
-    try {
-        localStorage.removeItem('tp_studio_published_sites_v1');
-    } catch {}
-
-    // Install passive real-account commission observer for tenant sites
+    // Keep the existing site settings and commission observer in place so
+    // removing the management UI does not change live trading behavior.
     installTenantCommissionTracker();
-
-    // 1. Live Studio iframe preview listener (`postMessage`)
-    let hasPreviewOverride = false;
-    window.addEventListener('message', (event: MessageEvent) => {
-        const data = event.data;
-        if (window.parent !== window && event.source === window.parent && data && typeof data === 'object' && data.type === 'TP_STUDIO_PREVIEW_SYNC') {
-            if (data.site && typeof data.site === 'object') {
-                hasPreviewOverride = true;
-                setActiveTenantConfig(data.site as TenantSiteConfig);
-            }
-        }
-    });
-
-    if (window.parent && window.parent !== window) {
-        try {
-            window.parent.postMessage({ type: 'TP_TENANT_READY' }, '*');
-        } catch {}
-    }
 
     const { slug, hostname } = resolveRequestedTenantKey();
 
-    // 2. Instant zero-flicker hydration from cached Supabase config
+    // Instant zero-flicker hydration from cached Supabase config
     if (slug || !isMasterUntenantedHost(hostname)) {
         try {
             const cachedRaw = localStorage.getItem(`${TENANT_CACHE_PREFIX}${slug || hostname}`);
@@ -426,9 +405,9 @@ export async function initializeTenantRuntime(): Promise<void> {
         } catch {}
     }
 
-    // 3. Authoritative background refresh from Supabase multi-tenant tables
+    // Authoritative background refresh from Supabase site settings
     const remoteMatch = await fetchSupabaseTenantSite(slug, hostname);
-    if (remoteMatch && !hasPreviewOverride) {
+    if (remoteMatch) {
         setActiveTenantConfig(remoteMatch);
     }
 }

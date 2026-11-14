@@ -26,7 +26,7 @@ applyFaviconFromLogo();
 applyBrandFontFromConfig();
 applyPrimaryColorFromConfig();
 
-// Hydrate multi-tenant site configuration (custom domain, ?site=<slug>, or Studio live preview).
+// Hydrate existing site configuration for branding, OAuth, and site settings.
 void initializeTenantRuntime();
 
 // Removed AnalyticsInitializer() call - analytics dependency removed

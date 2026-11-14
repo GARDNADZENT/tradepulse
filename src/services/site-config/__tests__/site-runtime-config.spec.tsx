@@ -125,7 +125,7 @@ describe('Multi-Tenant Site Runtime Config, OAuth Relay & Commission Filter', ()
         expect(getTenantBrandName()).toBe('TradersPulse');
     });
 
-    it('accepts preview updates from the embedding parent', async () => {
+    it('ignores retired preview updates from an embedding parent', async () => {
         const iframe = document.createElement('iframe');
         document.body.appendChild(iframe);
         const parentDescriptor = Object.getOwnPropertyDescriptor(window, 'parent');
@@ -138,7 +138,7 @@ describe('Multi-Tenant Site Runtime Config, OAuth Relay & Commission Filter', ()
                     data: { type: 'TP_STUDIO_PREVIEW_SYNC', site: { ...MOCK_SITE, brand_name: 'Nairobi Quant Hub' } },
                 }));
             });
-            expect(getTenantBrandName()).toBe('Nairobi Quant Hub');
+            expect(getTenantBrandName()).toBe('TradersPulse');
         } finally {
             if (parentDescriptor) Object.defineProperty(window, 'parent', parentDescriptor);
             iframe.remove();
