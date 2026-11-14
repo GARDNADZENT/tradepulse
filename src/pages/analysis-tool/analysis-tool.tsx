@@ -55,7 +55,7 @@ const lastDigitOf = (q: number, pip: number) => {
 };
 
 const AnalysisTool = observer(() => {
-    const { client, dashboard, load_modal, run_panel, transactions } = useStore();
+    const { client, dashboard, journal, load_modal, run_panel, summary_card, transactions } = useStore();
     const [viewMode, setViewMode] = useState<'native' | 'binarytool'>('native');
     const [symbol, setSymbol] = useState('R_50');
     const [mode, setMode] = useState<AnalysisMode>('over_under');
@@ -214,6 +214,8 @@ const AnalysisTool = observer(() => {
         if (!intelligence) return;
         setBusy(true);
         setTradeFeedback(null);
+        setRecordOpen(true);
+        setRecordTab('transactions');
         try {
             const activeCurr = client?.currency || 'USD';
             const res = await executeLiveDerivTrade({
@@ -226,7 +228,7 @@ const AnalysisTool = observer(() => {
                     : undefined,
                 currency: activeCurr,
                 tabNamespace: 'analysis',
-                stores: { transactions },
+                stores: { journal, transactions, summary_card, run_panel },
                 onContractUpdate: (poc, isTerminal) => {
                     if (!isTerminal) return;
                     const pl = Number(poc.profit ?? 0);

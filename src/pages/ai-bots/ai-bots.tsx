@@ -4,6 +4,7 @@ import { api_base } from '@/external/bot-skeleton';
 import { useStore } from '@/hooks/useStore';
 import { derivBus } from '@/lib/deriv/tick-bus';
 import { executeLiveDerivTrade } from '@/utils/ai-bot-xml-builder';
+import { autoDockRunPanel, triggerTpSlModal } from '@/components/tp-sl-modal';
 import {
     AI_SCANNER_MARKETS,
     AIScannerRowEvaluation,
@@ -325,6 +326,12 @@ const AIBots = observer(() => {
                     inRecoveryRef.current = false;
                     setInRecovery(false);
                     stopScannerInternal(`Take profit reached: +${nextPL.toFixed(2)}`);
+                    triggerTpSlModal({
+                        type: 'tp',
+                        amount: nextPL,
+                        currency: cfg.currency,
+                        source: 'ai-bots',
+                    });
                     return;
                 }
 
@@ -332,6 +339,12 @@ const AIBots = observer(() => {
                     inRecoveryRef.current = false;
                     setInRecovery(false);
                     stopScannerInternal(`Stop loss reached: ${nextPL.toFixed(2)}`);
+                    triggerTpSlModal({
+                        type: 'sl',
+                        amount: nextPL,
+                        currency: cfg.currency,
+                        source: 'ai-bots',
+                    });
                     return;
                 }
 
@@ -456,6 +469,7 @@ const AIBots = observer(() => {
         inFlightRef.current = false;
         runningRef.current = true;
         setIsRunning(true);
+        autoDockRunPanel(run_panel, 1);
         setFooterMessage(
             `Scanning ${marketScope === 'ALL' ? 'All Markets' : marketScope} for confirmed ${selectedBot?.title || 'AI'} signal…`
         );

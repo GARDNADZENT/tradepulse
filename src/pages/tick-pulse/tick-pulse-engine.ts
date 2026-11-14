@@ -10,8 +10,6 @@ export type TickPulseContractKey =
     | 'ONLY_UPS'
     | 'ONLY_DOWNS';
 
-export type TickPulseSplitCount = 1 | 2 | 3;
-
 export type TickPulseEntryCondition =
     | 'NONE'
     | 'OPPOSITE_1'
@@ -265,88 +263,69 @@ export function estimateNetProfitRatio(key: TickPulseContractKey, prediction: nu
 
 export interface TickPulseRecoveryState {
     inRecovery: boolean;
+    consecutiveLosses: number;
+    lastLossStake: number;
     unrecoveredLoss: number;
-    remainingSplits: number;
-    totalSplits: TickPulseSplitCount;
 }
 
-export function createInitialRecoveryState(totalSplits: TickPulseSplitCount): TickPulseRecoveryState {
+export function createInitialRecoveryState(): TickPulseRecoveryState {
     return {
         inRecovery: false,
+        consecutiveLosses: 0,
+        lastLossStake: 0,
         unrecoveredLoss: 0,
-        remainingSplits: totalSplits,
-        totalSplits,
     };
+}
+
+export function sanitizeMartingaleMultiplier(raw: number | string | undefined | null): number {
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed <= 0) return 2;
+    return Math.max(0.1, Number(parsed.toFixed(4)));
 }
 
 export function computeNextTickPulseStake(params: {
     initialStake: number;
+    martingaleMultiplier: number;
     recoveryState: TickPulseRecoveryState;
-    afterNetProfitRatio: number;
 }): number {
     const safeInitial = Math.max(0.35, Number(params.initialStake) || 1);
+    const safeMartingale = sanitizeMartingaleMultiplier(params.martingaleMultiplier);
     const { recoveryState } = params;
-    if (!recoveryState.inRecovery || recoveryState.unrecoveredLoss <= 0.009) {
+    if (!recoveryState.inRecovery || recoveryState.consecutiveLosses <= 0) {
         return Number(safeInitial.toFixed(2));
     }
 
-    const splitsLeft = Math.max(1, Math.min(3, Math.round(recoveryState.remainingSplits || 1)));
-    const safeRatio = Math.max(0.08, Number(params.afterNetProfitRatio) || 0.95);
-    const targetLegProfit = recoveryState.unrecoveredLoss / splitsLeft;
-    const rawStake = targetLegProfit / safeRatio;
-    const roundedUp = Math.ceil(rawStake * 100) / 100;
-    return Math.max(0.35, Number(roundedUp.toFixed(2)));
+    const baseStake =
+        recoveryState.lastLossStake > 0
+            ? recoveryState.lastLossStake * safeMartingale
+            : safeInitial * Math.pow(safeMartingale, recoveryState.consecutiveLosses);
+    return Math.max(0.35, Number(baseStake.toFixed(2)));
 }
 
 export function settleTickPulseRecoveryState(params: {
     prev: TickPulseRecoveryState;
     profit: number;
-    configuredSplits: TickPulseSplitCount;
+    stake?: number;
 }): TickPulseRecoveryState {
-    const { prev, profit, configuredSplits } = params;
+    const { prev, profit } = params;
+    const executedStake = Math.max(0.35, Number(params.stake) || Math.abs(profit) || 1);
 
-    if (!prev.inRecovery) {
-        if (profit >= 0) {
-            return {
-                inRecovery: false,
-                unrecoveredLoss: 0,
-                remainingSplits: configuredSplits,
-                totalSplits: configuredSplits,
-            };
-        }
+    if (profit >= 0) {
         return {
-            inRecovery: true,
-            unrecoveredLoss: Number(Math.abs(profit).toFixed(2)),
-            remainingSplits: configuredSplits,
-            totalSplits: configuredSplits,
+            inRecovery: false,
+            consecutiveLosses: 0,
+            lastLossStake: 0,
+            unrecoveredLoss: 0,
         };
     }
 
-    // Settling an After-loss recovery trade
-    if (profit > 0) {
-        const remainingLoss = Number((prev.unrecoveredLoss - profit).toFixed(2));
-        if (remainingLoss <= 0.01) {
-            return {
-                inRecovery: false,
-                unrecoveredLoss: 0,
-                remainingSplits: configuredSplits,
-                totalSplits: configuredSplits,
-            };
-        }
-        return {
-            inRecovery: true,
-            unrecoveredLoss: remainingLoss,
-            remainingSplits: Math.max(1, prev.remainingSplits - 1),
-            totalSplits: configuredSplits,
-        };
-    }
-
-    const accumulatedLoss = Number((prev.unrecoveredLoss + Math.abs(profit)).toFixed(2));
     return {
         inRecovery: true,
-        unrecoveredLoss: accumulatedLoss,
-        remainingSplits: configuredSplits,
-        totalSplits: configuredSplits,
+        consecutiveLosses: (prev.inRecovery ? prev.consecutiveLosses : 0) + 1,
+        lastLossStake: Number(executedStake.toFixed(2)),
+        unrecoveredLoss: Number(
+            ((prev.inRecovery ? prev.unrecoveredLoss : 0) + Math.abs(profit)).toFixed(2)
+        ),
     };
 }
 
@@ -565,3 +544,54 @@ export function checkTickPulseEntryCondition(params: {
 
     return true;
 }
+
+export function selectBestReadyTickPulseMarket(params: {
+    getTicks: (symbol: string) => { t: number; price: number }[];
+    getPipSize: (symbol: string) => number;
+    contractKey: TickPulseContractKey;
+    prediction: number;
+    condition: TickPulseEntryCondition;
+    lastTradedEpochs?: Record<string, number>;
+    pinnedSymbol?: string | null;
+}): { ranking: TickPulseMarketRanking; latestEpoch: number } | null {
+    const ranked = rankTickPulseMarkets({
+        getTicks: params.getTicks,
+        getPipSize: params.getPipSize,
+        contractKey: params.contractKey,
+        prediction: params.prediction,
+    });
+
+    const candidates = params.pinnedSymbol
+        ? ranked.filter(r => r.symbol === params.pinnedSymbol)
+        : ranked;
+
+    for (const candidate of candidates) {
+        const rawTicks = params.getTicks(candidate.symbol);
+        if (!rawTicks.length) continue;
+
+        const latestEpoch = rawTicks[rawTicks.length - 1]?.t ?? 0;
+        if (
+            latestEpoch &&
+            params.lastTradedEpochs &&
+            params.lastTradedEpochs[candidate.symbol] === latestEpoch
+        ) {
+            continue;
+        }
+
+        const pipSize = params.getPipSize(candidate.symbol);
+        const conditionMet = checkTickPulseEntryCondition({
+            condition: params.condition,
+            contractKey: params.contractKey,
+            prediction: params.prediction,
+            rawTicks,
+            pipSize,
+        });
+
+        if (conditionMet) {
+            return { ranking: candidate, latestEpoch };
+        }
+    }
+
+    return null;
+}
+

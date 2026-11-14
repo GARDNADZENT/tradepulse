@@ -16,6 +16,7 @@ import { CONNECTION_STATUS } from '@/external/bot-skeleton/services/api/observab
 import { isDbotRTL } from '@/external/bot-skeleton/utils/workspace';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useStore } from '@/hooks/useStore';
+import { getActiveTenantConfig, subscribeActiveTenantConfig } from '@/services/site-config/site-runtime-config';
 import {
     disableUrlParameterApplication,
     enableUrlParameterApplication,
@@ -38,6 +39,7 @@ import {
 import { Localize, localize } from '@deriv-com/translations';
 import { useDevice } from '@deriv-com/ui';
 import RunPanel from '../../components/run-panel';
+import { TpSlResultModal } from '../../components/tp-sl-modal';
 import ChartModal from '../chart/chart-modal';
 import Dashboard from '../dashboard';
 import RunStrategy from '../dashboard/run-strategy';
@@ -109,6 +111,14 @@ const AppWrapper = observer(() => {
     const [left_tab_shadow, setLeftTabShadow] = useState<boolean>(false);
     const [right_tab_shadow, setRightTabShadow] = useState<boolean>(false);
     const [tradeTypeModalState, setTradeTypeModalState] = useState(getModalState());
+    const [tenantConfig, setTenantConfig] = useState(getActiveTenantConfig);
+
+    useEffect(() => subscribeActiveTenantConfig(setTenantConfig), []);
+    useEffect(() => {
+        if (tenantConfig && TAB_IDS[active_tab] && !tenantConfig.enabled_tabs.includes(TAB_IDS[active_tab])) {
+            setActiveTab(DASHBOARD);
+        }
+    }, [tenantConfig, active_tab, setActiveTab, DASHBOARD]);
 
     const getTradeTypeModalProps = () => {
         const { tradeTypeData } = tradeTypeModalState;
@@ -256,8 +266,11 @@ const AppWrapper = observer(() => {
         if (is_open) setTourDialogVisibility(false);
 
         if (init_render.current) {
-            setActiveTab(Number(active_hash_tab));
-            if (!isDesktop) handleTabChange(Number(active_hash_tab));
+            const requestedTab = Number(active_hash_tab);
+            const permittedTab = tenantConfig && !tenantConfig.enabled_tabs.includes(TAB_IDS[requestedTab])
+                ? DASHBOARD : requestedTab;
+            setActiveTab(permittedTab);
+            if (!isDesktop) handleTabChange(permittedTab);
             init_render.current = false;
         } else {
             const targetHash = hash[active_tab] || hash[0];
@@ -320,6 +333,7 @@ const AppWrapper = observer(() => {
 
     const handleTabChange = React.useCallback(
         (tab_index: number) => {
+            if (tenantConfig && !tenantConfig.enabled_tabs.includes(TAB_IDS[tab_index])) return;
             React.startTransition(() => {
                 setActiveTab(tab_index);
             });
@@ -331,7 +345,7 @@ const AppWrapper = observer(() => {
                 });
             }
         },
-        [setActiveTab]
+        [setActiveTab, tenantConfig]
     );
 
     const handleLoginGeneration = async () => {
@@ -347,8 +361,9 @@ const AppWrapper = observer(() => {
         listEl.scrollBy({ left: dir === 'left' ? -260 : 260, behavior: 'smooth' });
     };
 
-    const isExecSurface = [BOT_BUILDER, FREE_BOTS].includes(active_tab);
-    const isExecScrollTab = active_tab === FREE_BOTS;
+    const isExecSurface = [BOT_BUILDER, FREE_BOTS, DBOT_TABS.DTRADER].includes(active_tab);
+    const isExecScrollTab = [FREE_BOTS, DBOT_TABS.DTRADER].includes(active_tab);
+    const isDockablePageTab = ![BOT_BUILDER, DBOT_TABS.ANALYSIS_TOOL].includes(active_tab);
 
     return (
         <React.Fragment>
@@ -356,7 +371,7 @@ const AppWrapper = observer(() => {
                 className={classNames('main', {
                     'main--has-exec-dock': isExecSurface,
                     'main--exec-scroll-tab': isExecScrollTab,
-                    'main--drawer-open': isExecScrollTab && is_drawer_open && isDesktop,
+                    'main--drawer-open': isDockablePageTab && is_drawer_open && isDesktop,
                     'main--full-page-tab': !isExecSurface,
                 })}
             >
@@ -629,6 +644,7 @@ const AppWrapper = observer(() => {
                 </DesktopWrapper>
             )}
             {(!is_open || isDesktop) && <RunPanel />}
+            <TpSlResultModal />
 
             <Dialog
                 cancel_button_text={cancel_button_text || localize('Cancel')}

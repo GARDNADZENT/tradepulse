@@ -1,7 +1,7 @@
 // @ts-nocheck — vendored bot code with known upstream type gaps; see AGENTS.md
 import { action, computed, makeObservable, observable, reaction } from 'mobx';
 import { formatDate, isEnded } from '@/components/shared';
-import { LogTypes } from '@/external/bot-skeleton';
+import { api_base, LogTypes } from '@/external/bot-skeleton';
 import { ProposalOpenContract } from '@deriv/api-types';
 import { TPortfolioPosition, TStores } from '@deriv/stores/types';
 import { TContractInfo } from '../components/summary/summary-card.types';
@@ -56,9 +56,18 @@ export default class TransactionsStore {
     is_called_proposal_open_contract = false;
     is_transaction_details_modal_open = false;
 
+    resolveAccountKey(): string {
+        return (
+            this.core?.client?.loginid ||
+            (api_base?.account_info as any)?.loginid ||
+            (typeof window !== 'undefined' && window.localStorage?.getItem('active_loginid')) ||
+            'default'
+        );
+    }
+
     get transactions(): TTransaction[] {
-        if (this.core?.client?.loginid) return this.elements[this.core?.client?.loginid] ?? [];
-        return [];
+        const key = this.resolveAccountKey();
+        return this.elements[key] ?? [];
     }
 
     get statistics() {
@@ -113,7 +122,7 @@ export default class TransactionsStore {
     pushTransaction(data: TContractInfo) {
         const is_completed = data.is_completed || isEnded(data as ProposalOpenContract);
         const { run_id } = this.root_store.run_panel;
-        const current_account = this.core?.client?.loginid as string;
+        const current_account = this.resolveAccountKey();
 
         const contract: TContractInfo = {
             ...data,
@@ -177,8 +186,9 @@ export default class TransactionsStore {
     }
 
     clear() {
-        if (this.elements && this.elements[this.core?.client?.loginid as string]?.length > 0) {
-            this.elements[this.core?.client?.loginid as string] = [];
+        const key = this.resolveAccountKey();
+        if (this.elements && this.elements[key]?.length > 0) {
+            this.elements[key] = [];
         }
         this.recovered_completed_transactions = this.recovered_completed_transactions?.slice(0, 0);
         this.recovered_transactions = this.recovered_transactions?.slice(0, 0);

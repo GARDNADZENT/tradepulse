@@ -5,8 +5,6 @@ node_modules/
 
 # build output
 dist/
-studio/dist/
-studio/node_modules/
 coverage/
 
 # misc

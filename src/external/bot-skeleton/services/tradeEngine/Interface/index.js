@@ -1,3 +1,5 @@
+import { classifyBotAlertForTpSl, triggerTpSlModal } from '@/components/tp-sl-modal';
+import { observer as globalObserver } from '../../../utils/observer';
 import TradeEngine from '../trade';
 import getBotInterface from './BotInterface';
 import getTicksInterface from './TicksInterface';
@@ -28,7 +30,27 @@ const Interface = $scope => {
             getTicksInterface: getTicksInterface(tradeEngine),
             watch: (...args) => tradeEngine.watch(...args),
             sleep: (...args) => sleep(observer, ...args),
-            alert: (...args) => alert(...args), // eslint-disable-line no-alert
+            alert: (...args) => {
+                const rawMsg = args[0];
+                const sessionRuns = Number(tradeEngine?.sessionRuns || 0);
+                const sessionProfit = Number(tradeEngine?.sessionProfit || 0);
+                const currency = tradeEngine?.accountInfo?.currency || 'USD';
+                const kind = classifyBotAlertForTpSl(rawMsg, sessionProfit, sessionRuns);
+
+                if (kind) {
+                    triggerTpSlModal({
+                        type: kind,
+                        amount: sessionProfit,
+                        currency,
+                        source: 'dbot-alert',
+                    });
+                    return;
+                }
+
+                if (rawMsg !== undefined && rawMsg !== null && String(rawMsg).trim()) {
+                    globalObserver.emit('Notify', ['info', String(rawMsg)]);
+                }
+            },
             prompt: (...args) => prompt(...args), // eslint-disable-line no-alert
             console: {
                 log(...args) {

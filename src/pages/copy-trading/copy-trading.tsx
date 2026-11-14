@@ -8,6 +8,8 @@ import {
 } from '@/components/shared';
 import { api_base } from '@/external/bot-skeleton';
 import { getAuthInfo } from '@/external/deriv-core';
+import { autoDockRunPanel } from '@/components/tp-sl-modal';
+import { useStore } from '@/hooks/useStore';
 import { DerivAccount, DerivWSAccountsService } from '@/services/derivws-accounts.service';
 import { getAccountId, isDemoAccount } from '@/utils/account-helpers';
 import brandConfig from '../../../brand.config.json';
@@ -378,6 +380,7 @@ const parseRawTokensInput = (input: string): string[] =>
         .filter(Boolean);
 
 export const CopyTrading: React.FC = () => {
+    const store = useStore();
     const [tokensInput, setTokensInput] = useState('');
     const [syncing, setSyncing] = useState(false);
     const [syncMessage, setSyncMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
@@ -967,6 +970,12 @@ export const CopyTrading: React.FC = () => {
         };
     }, [isCopyActive, mirrorContractToFollower]);
 
+    useEffect(() => {
+        if (isCopyActive) {
+            autoDockRunPanel(store?.run_panel, 1);
+        }
+    }, [isCopyActive, store?.run_panel]);
+
     const handleLeaderToggle = async () => {
         const v2Session = getMasterV2Session();
         const masterV3Token = getMasterV3Token();
@@ -1035,6 +1044,9 @@ export const CopyTrading: React.FC = () => {
                             } else {
                                 const next = msg.msg_type === 'copy_start';
                                 setLeaderFollowing(next);
+                                if (next) {
+                                    autoDockRunPanel(store?.run_panel, 1);
+                                }
                                 setLeaderFeedback(
                                     next
                                         ? 'Now copying external Deriv trader.'

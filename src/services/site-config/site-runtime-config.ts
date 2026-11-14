@@ -51,36 +51,9 @@ export interface TenantSiteConfig {
 
 const TENANT_CACHE_PREFIX = 'tp_tenant_runtime_cache_v2:';
 const STICKY_SITE_SLUG_KEY = 'tp_active_tenant_slug';
-const FLAGSHIP_SITE_SLUG = 'tradepulse-lovat';
-
-const LEGACY_13_TAB_IDS = [
-    'id-dbot-dashboard',
-    'id-bot-builder',
-    'id-ai-developer',
-    'id-trading-bots',
-    'id-dtrader',
-    'id-ai-bots',
-    'id-auto-trades',
-    'id-trading-view',
-    'id-copy-trading',
-    'id-calculator',
-    'id-analysis-tool',
-    'id-digits-analysis',
-    'id-tradepulse',
-];
-
-function normalizeTenantEnabledTabs(rawTabs: unknown, slug?: string): string[] {
-    if (!Array.isArray(rawTabs) || rawTabs.length === 0) {
-        return [...TAB_IDS];
-    }
-    const clean = rawTabs.filter((id): id is string => typeof id === 'string');
-    const isFlagship = (slug || '').trim().toLowerCase() === FLAGSHIP_SITE_SLUG;
-    const hadAllLegacyDefaults = LEGACY_13_TAB_IDS.every(id => clean.includes(id));
-
-    if ((isFlagship || hadAllLegacyDefaults) && !clean.includes('id-tick-pulse')) {
-        return Array.from(new Set([...clean, 'id-tick-pulse']));
-    }
-    return clean;
+function normalizeTenantEnabledTabs(rawTabs: unknown): string[] {
+    if (!Array.isArray(rawTabs) || rawTabs.length === 0) return [...TAB_IDS];
+    return rawTabs.filter((id): id is string => typeof id === 'string');
 }
 
 const DEV_LOCAL_HOSTS = new Set([
@@ -187,7 +160,7 @@ export function applyTenantDomEffects(config: TenantSiteConfig | null): void {
     setPreviewLogo(resolvedLogo);
     setFaviconHref(resolvedLogo);
 
-    const normalizedTabs = normalizeTenantEnabledTabs(config.enabled_tabs, config.slug);
+    const normalizedTabs = normalizeTenantEnabledTabs(config.enabled_tabs);
     const enabledSet = new Set(normalizedTabs);
     const hiddenTabIds = TAB_IDS.filter(id => !enabledSet.has(id));
 
@@ -208,7 +181,7 @@ export function setActiveTenantConfig(config: TenantSiteConfig | null): void {
     activeTenantConfig = config
         ? {
               ...config,
-              enabled_tabs: normalizeTenantEnabledTabs(config.enabled_tabs, config.slug),
+              enabled_tabs: normalizeTenantEnabledTabs(config.enabled_tabs),
           }
         : null;
     applyTenantDomEffects(activeTenantConfig);
@@ -332,7 +305,7 @@ async function fetchSupabaseTenantSite(
             oauth_callback_hub_url: String(platformRow?.oauth_callback_hub_url || ''),
             deriv_referral_link: String(siteRow.deriv_referral_link || ''),
             announcement_text: String(siteRow.announcement_text || ''),
-            enabled_tabs: normalizeTenantEnabledTabs(siteRow.enabled_tabs, String(siteRow.slug || '')),
+            enabled_tabs: normalizeTenantEnabledTabs(siteRow.enabled_tabs),
             social_links: (siteRow.social_links as Record<string, string>) || {},
             include_default_bots: siteRow.include_default_bots !== false,
             commission_share_pct: Number(siteRow.commission_share_pct ?? 50),
@@ -416,32 +389,13 @@ export async function verifyAuthorizedRelayReturnOrigin(returnTo: string): Promi
 export async function initializeTenantRuntime(): Promise<void> {
     if (typeof window === 'undefined') return;
 
-    try {
-        localStorage.removeItem('tp_studio_published_sites_v1');
-    } catch {}
-
-    // Install passive real-account commission observer for tenant sites
+    // Keep the existing site settings and commission observer in place so
+    // removing the management UI does not change live trading behavior.
     installTenantCommissionTracker();
-
-    // 1. Live Studio iframe preview listener (`postMessage`)
-    window.addEventListener('message', (event: MessageEvent) => {
-        const data = event.data;
-        if (data && typeof data === 'object' && data.type === 'TP_STUDIO_PREVIEW_SYNC') {
-            if (data.site && typeof data.site === 'object') {
-                setActiveTenantConfig(data.site as TenantSiteConfig);
-            }
-        }
-    });
-
-    if (window.parent && window.parent !== window) {
-        try {
-            window.parent.postMessage({ type: 'TP_TENANT_READY' }, '*');
-        } catch {}
-    }
 
     const { slug, hostname } = resolveRequestedTenantKey();
 
-    // 2. Instant zero-flicker hydration from cached Supabase config
+    // Instant zero-flicker hydration from cached Supabase config
     if (slug || !isMasterUntenantedHost(hostname)) {
         try {
             const cachedRaw = localStorage.getItem(`${TENANT_CACHE_PREFIX}${slug || hostname}`);
@@ -451,7 +405,7 @@ export async function initializeTenantRuntime(): Promise<void> {
         } catch {}
     }
 
-    // 3. Authoritative background refresh from Supabase multi-tenant tables
+    // Authoritative background refresh from Supabase site settings
     const remoteMatch = await fetchSupabaseTenantSite(slug, hostname);
     if (remoteMatch) {
         setActiveTenantConfig(remoteMatch);

@@ -15,6 +15,8 @@ const getBotInterface = tradeEngine => {
         start: (...args) => tradeEngine.start(...args),
         stop: (...args) => tradeEngine.stop(...args),
         purchase: (contract_type, custom_prediction) => tradeEngine.purchase(contract_type, custom_prediction),
+        purchaseHedge: (contract_type_1, pred_1, contract_type_2, pred_2) =>
+            tradeEngine.purchaseHedge(contract_type_1, pred_1, contract_type_2, pred_2),
         setPrediction: value => {
             if (tradeEngine && value !== undefined && value !== null && Number.isFinite(Number(value))) {
                 tradeEngine._overridePrediction = Number(value);

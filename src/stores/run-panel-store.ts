@@ -4,8 +4,10 @@ import { botNotification } from '@/components/bot-notification/bot-notification'
 import { notification_message } from '@/components/bot-notification/bot-notification-utils';
 import { generateOAuthURL, isSafari, mobileOSDetect, standalone_routes } from '@/components/shared';
 import { contract_stages, TContractStage } from '@/constants/contract-stage';
+import { DBOT_TABS } from '@/constants/bot-contents';
 import { run_panel } from '@/constants/run-panel';
 import { ErrorTypes, MessageTypes, observer, unrecoverable_errors } from '@/external/bot-skeleton';
+import { autoDockRunPanel, triggerTpSlModal } from '@/components/tp-sl-modal';
 import { api_base } from '@/external/bot-skeleton/services/api/api-base';
 import {
     hasStoredAuthCredentials,
@@ -113,6 +115,7 @@ export default class RunPanelStore {
     is_running = false;
     is_statistics_info_modal_open = false;
     is_drawer_open = false;
+    manual_stop_requested = false;
     is_dialog_open = false;
     is_sell_requested = false;
     show_bot_stop_message = false;
@@ -170,6 +173,13 @@ export default class RunPanelStore {
     };
 
     onRunButtonClick = async () => {
+        if (this.root_store?.dashboard?.active_tab === DBOT_TABS.DTRADER) {
+            autoDockRunPanel(this, 1);
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('tp-dtrader-run-bar', { detail: { action: 'toggle' } }));
+            }
+            return;
+        }
         let timer_counter = 1;
         if (window.sendRequestsStatistic) {
             performance.clearMeasures();
@@ -226,9 +236,12 @@ export default class RunPanelStore {
             )
         );
         runInAction(() => {
+            this.manual_stop_requested = false;
             this.setIsRunning(true);
             ui.setPromptHandler(true);
             this.run_id = `run-${Date.now()}`;
+
+            autoDockRunPanel(this, 1);
 
             summary_card.clear();
             this.setContractStage(contract_stages.STARTING);
@@ -238,6 +251,7 @@ export default class RunPanelStore {
     };
 
     onStopButtonClick = () => {
+        this.manual_stop_requested = true;
         this.is_contract_buying_in_progress = false;
         const { is_multiplier } = this.root_store.summary_card;
 
@@ -249,6 +263,7 @@ export default class RunPanelStore {
     };
 
     onStopBotClick = () => {
+        this.manual_stop_requested = true;
         this.is_contract_buying_in_progress = false;
         this.is_paused = false;
 
@@ -610,6 +625,19 @@ export default class RunPanelStore {
 
     onBotTradeAgain = (is_trade_again: boolean) => {
         if (!is_trade_again) {
+            if (!this.manual_stop_requested) {
+                const engineProfit = Number(
+                    this.dbot?.interpreter?.bot?.tradeEngine?.sessionProfit ??
+                        this.root_store.transactions?.statistics?.total_profit ??
+                        0
+                );
+                const currency = this.core?.client?.currency || 'USD';
+                if (engineProfit > 0) {
+                    triggerTpSlModal({ type: 'tp', amount: engineProfit, currency, source: 'dbot' });
+                } else if (engineProfit < 0) {
+                    triggerTpSlModal({ type: 'sl', amount: engineProfit, currency, source: 'dbot' });
+                }
+            }
             this.stopBot();
         }
     };
@@ -702,6 +730,20 @@ export default class RunPanelStore {
                 details: error.code_args ? { code_args: error.code_args } : error.details,
             };
             error_message = handleBackendError(backendError);
+        }
+
+        if (error?.name === 'CustomLimitsReached') {
+            const engineProfit = Number(
+                this.dbot?.interpreter?.bot?.tradeEngine?.sessionProfit ??
+                    this.root_store.transactions?.statistics?.total_profit ??
+                    0
+            );
+            const currency = this.core?.client?.currency || 'USD';
+            if (engineProfit < 0) {
+                triggerTpSlModal({ type: 'sl', amount: engineProfit, currency, source: 'dbot-limits' });
+            } else if (engineProfit > 0) {
+                triggerTpSlModal({ type: 'tp', amount: engineProfit, currency, source: 'dbot-limits' });
+            }
         }
 
         this.showErrorMessage(error_message, error);

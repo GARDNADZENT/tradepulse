@@ -219,6 +219,13 @@ export default Engine =>
             return this.realPurchase(contract_type, custom_prediction);
         }
 
+        async purchaseHedge(contract_type_1, pred_1, contract_type_2, pred_2) {
+            if (this.vh_state.enabled && this.vh_state.is_virtual) {
+                return this.virtualPurchase(contract_type_1, pred_1);
+            }
+            return this.realPurchaseHedge(contract_type_1, pred_1, contract_type_2, pred_2);
+        }
+
         async virtualPurchase(contract_type, custom_prediction) {
             this.applyAlternateMarketsToCurrentTradeOptions();
 
@@ -769,4 +776,83 @@ export default Engine =>
         regeneratePurchaseReference = () => {
             purchase_reference = getUUID();
         };
+
+        async realPurchaseHedge(contract_type_1, pred_1, contract_type_2, pred_2) {
+            this.setInterpreterVariable('BinaryBotPrivateLastTradeVirtual', false);
+
+            if (this.store.getState().scope !== BEFORE_PURCHASE) {
+                return Promise.resolve();
+            }
+
+            this.applyAlternateMarketsToCurrentTradeOptions();
+
+            if (this.vh_state.needs_stake_reset) {
+                this.tradeOptions.amount = this.vh_state.initial_stake || this.tradeOptions.amount || 1;
+            }
+
+            const p1 = pred_1 !== undefined && pred_1 !== null && Number.isFinite(Number(pred_1)) ? Number(pred_1) : undefined;
+            const p2 = pred_2 !== undefined && pred_2 !== null && Number.isFinite(Number(pred_2)) ? Number(pred_2) : undefined;
+
+            const opts1 = p1 !== undefined ? { ...this.tradeOptions, prediction: p1 } : { ...this.tradeOptions };
+            const opts2 = p2 !== undefined ? { ...this.tradeOptions, prediction: p2 } : { ...this.tradeOptions };
+
+            const buyReq1 = tradeOptionToBuy(contract_type_1, opts1);
+            const buyReq2 = tradeOptionToBuy(contract_type_2, opts2);
+
+            this.isSold = false;
+            this.expectedHedgeIds = new Set();
+            this.hedgeSettledContracts = [];
+
+            contractStatus({
+                id: 'contract.purchase_sent',
+                data: Number(this.tradeOptions.amount || 0) * 2,
+            });
+
+            // Fire BOTH leg purchases at the exact same time in parallel
+            const [res1, res2] = await Promise.all([
+                doUntilDone(() => api_base.api.send(buyReq1)),
+                doUntilDone(() => api_base.api.send(buyReq2)),
+            ]);
+
+            const legs = [
+                { buy: res1?.buy, contract_type: contract_type_1, opts: opts1 },
+                { buy: res2?.buy, contract_type: contract_type_2, opts: opts2 },
+            ].filter(item => item.buy && item.buy.contract_id);
+
+            legs.forEach(item => {
+                this.expectedHedgeIds.add(item.buy.contract_id);
+            });
+
+            this.contractId = legs[0]?.buy?.contract_id || '';
+
+            legs.forEach(({ buy, contract_type, opts }) => {
+                contractStatus({
+                    id: 'contract.purchase_received',
+                    data: buy.transaction_id,
+                    buy,
+                });
+
+                const resolvedLongcode = buy.longcode || buildPurchaseLongcode(contract_type, opts);
+                log(LogTypes.PURCHASE, {
+                    longcode: resolvedLongcode,
+                    transaction_id: buy.transaction_id,
+                });
+                info({
+                    accountID: this.accountInfo.loginid,
+                    totalRuns: this.updateAndReturnTotalRuns(),
+                    transaction_ids: { buy: buy.transaction_id },
+                    contract_type,
+                    buy_price: buy.buy_price,
+                });
+            });
+
+            delayIndex = 0;
+            this.store.dispatch(purchaseSuccessful());
+
+            if (this.is_proposal_subscription_required) {
+                this.renewProposalsOnPurchase();
+            }
+
+            return [res1, res2];
+        }
     };

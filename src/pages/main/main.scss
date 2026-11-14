@@ -94,9 +94,10 @@
         }
     }
 
-    &--drawer-open#{&}--exec-scroll-tab &__container .dc-tabs__content {
+    &--drawer-open &__container .dc-tabs__content {
         @include desktop-screen {
             width: calc(100% - 36.6rem);
+            transition: width 0.25s ease;
         }
     }
 
