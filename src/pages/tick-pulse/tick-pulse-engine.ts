@@ -266,6 +266,8 @@ export interface TickPulseRecoveryState {
     consecutiveLosses: number;
     lastLossStake: number;
     unrecoveredLoss: number;
+    winningStake: number;
+    winningStakeTradesRemaining: number;
 }
 
 export function createInitialRecoveryState(): TickPulseRecoveryState {
@@ -274,6 +276,8 @@ export function createInitialRecoveryState(): TickPulseRecoveryState {
         consecutiveLosses: 0,
         lastLossStake: 0,
         unrecoveredLoss: 0,
+        winningStake: 0,
+        winningStakeTradesRemaining: 0,
     };
 }
 
@@ -292,6 +296,9 @@ export function computeNextTickPulseStake(params: {
     const safeMartingale = sanitizeMartingaleMultiplier(params.martingaleMultiplier);
     const { recoveryState } = params;
     if (!recoveryState.inRecovery || recoveryState.consecutiveLosses <= 0) {
+        if (recoveryState.winningStakeTradesRemaining > 0 && recoveryState.winningStake > 0) {
+            return Math.max(0.35, Number(recoveryState.winningStake.toFixed(2)));
+        }
         return Number(safeInitial.toFixed(2));
     }
 
@@ -311,11 +318,17 @@ export function settleTickPulseRecoveryState(params: {
     const executedStake = Math.max(0.35, Number(params.stake) || Math.abs(profit) || 1);
 
     if (profit >= 0) {
+        // A win starts a fixed two-trade hold; wins inside that hold do not restart it.
+        const isHolding = prev.winningStakeTradesRemaining > 0;
+        const remaining = isHolding ? prev.winningStakeTradesRemaining - 1 : 2;
+        const winningStake = isHolding ? prev.winningStake : Number(executedStake.toFixed(2));
         return {
             inRecovery: false,
             consecutiveLosses: 0,
             lastLossStake: 0,
             unrecoveredLoss: 0,
+            winningStake: remaining > 0 ? winningStake : 0,
+            winningStakeTradesRemaining: remaining,
         };
     }
 
@@ -323,6 +336,8 @@ export function settleTickPulseRecoveryState(params: {
         inRecovery: true,
         consecutiveLosses: (prev.inRecovery ? prev.consecutiveLosses : 0) + 1,
         lastLossStake: Number(executedStake.toFixed(2)),
+        winningStake: 0,
+        winningStakeTradesRemaining: 0,
         unrecoveredLoss: Number(
             ((prev.inRecovery ? prev.unrecoveredLoss : 0) + Math.abs(profit)).toFixed(2)
         ),

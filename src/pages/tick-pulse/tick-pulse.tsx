@@ -396,8 +396,11 @@ const TickPulse: React.FC = observer(() => {
         }
 
         setHasErrorBanner(false);
+        const holdLabel = rec.winningStakeTradesRemaining > 0
+            ? ` · Winning stake (${rec.winningStakeTradesRemaining} trade(s) remaining)`
+            : '';
         setStatusMessage(
-            `${cfg.autoBestMarket ? 'AUTO #1' : 'PINNED'} · ${phaseLabel}: ${orderSpec.displayLabel} on ${marketLabel} (${ranking.hitRatePct}% Hit · ${stakeToUse.toFixed(2)} ${cfg.currency})`
+            `${cfg.autoBestMarket ? 'AUTO #1' : 'PINNED'} · ${phaseLabel}${holdLabel}: ${orderSpec.displayLabel} on ${marketLabel} (${ranking.hitRatePct}% Hit · ${stakeToUse.toFixed(2)} ${cfg.currency})`
         );
 
         let settledOnce = false;
@@ -492,8 +495,11 @@ const TickPulse: React.FC = observer(() => {
                     `Martingale #${nextRecovery.consecutiveLosses} (×${runtimeCfgRef.current.martingale}) — Scanning all 13 markets for best ${formatTickPulseSelectionLabel(cfg.afterContract, cfg.afterPrediction)} setup (${nextStake.toFixed(2)} ${cfg.currency})…`
                 );
             } else {
+                const holdMessage = nextRecovery.winningStakeTradesRemaining > 0
+                    ? ` · Winning stake ${nextRecovery.winningStake.toFixed(2)} ${cfg.currency} for ${nextRecovery.winningStakeTradesRemaining} more trade(s)`
+                    : ' · Next stake resets to base';
                 setStatusMessage(
-                    `Won +${profit.toFixed(2)} ${cfg.currency} on ${marketLabel} — Auto-scanning all 13 markets for next #1 target…`
+                    `Won +${profit.toFixed(2)} ${cfg.currency} on ${marketLabel}${holdMessage} — Auto-scanning all 13 markets for next #1 target…`
                 );
             }
 
