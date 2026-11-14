@@ -15,6 +15,7 @@ import { Localize } from '@deriv-com/translations';
 import { useDevice } from '@deriv-com/ui';
 import ThemedScrollbars from '../shared_ui/themed-scrollbars';
 import Transaction from './transaction';
+import VirtualTransaction from './virtual-transaction';
 
 type TTransactions = {
     is_drawer_open: boolean;
@@ -40,6 +41,9 @@ const TransactionItem = ({ row = false, onClickTransaction, active_transaction_i
                     active_transaction_id={active_transaction_id}
                 />
             );
+        }
+        case transaction_elements.VIRTUAL_CONTRACT: {
+            return <VirtualTransaction trade={row.data} />;
         }
         case transaction_elements.DIVIDER: {
             return (
@@ -108,7 +112,7 @@ const Transactions = observer(({ is_drawer_open }: TTransactions) => {
                 <Button
                     id='download__container__view-detail-button'
                     className='download__container__view-detail-button'
-                    disabled={!transaction_list?.length}
+                    disabled={!transaction_list?.some(row => row.type === transaction_elements.CONTRACT)}
                     onClick={() => {
                         toggleTransactionDetailsModal(true);
                     }}
@@ -151,6 +155,9 @@ const Transactions = observer(({ is_drawer_open }: TTransactions) => {
                                     case transaction_elements.CONTRACT: {
                                         return row.data.transaction_ids.buy;
                                     }
+                                    case transaction_elements.VIRTUAL_CONTRACT: {
+                                        return row.data.virtual_id;
+                                    }
                                     case transaction_elements.DIVIDER: {
                                         return row.data;
                                     }
@@ -162,7 +169,8 @@ const Transactions = observer(({ is_drawer_open }: TTransactions) => {
                             getRowSize={({ index }) => {
                                 const row = transaction_list?.[index];
                                 switch (row.type) {
-                                    case transaction_elements.CONTRACT: {
+                                    case transaction_elements.CONTRACT:
+                                    case transaction_elements.VIRTUAL_CONTRACT: {
                                         return 50;
                                     }
                                     case transaction_elements.DIVIDER: {

@@ -35,6 +35,7 @@ const TransactionDetailsMobile = observer(() => {
                 {transaction_list?.map(({ data, type }) => {
                     if (type === transaction_elements.CONTRACT)
                         return <MobileTransactionCards transaction={data} key={data?.transaction_ids?.buy} />;
+                    if (type !== transaction_elements.DIVIDER) return null;
                     return (
                         <div
                             className='transaction-details-modal-mobile__divider'

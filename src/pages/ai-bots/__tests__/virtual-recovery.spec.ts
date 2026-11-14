@@ -2,7 +2,7 @@ import { advanceVirtualRecovery, VirtualRecoveryTrade } from '../virtual-recover
 
 const trade: VirtualRecoveryTrade = {
     symbol: 'R_10', marketLabel: 'Volatility 10 Index', contractType: 'DIGITEVEN',
-    pipSize: 2, ticksRemaining: 2, lastTickTime: 1000,
+    pipSize: 2, ticksRemaining: 2, lastTickTime: 1000, entrySpot: 100, currency: 'USD',
 };
 
 describe('virtual recovery settlement', () => {

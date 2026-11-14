@@ -13,7 +13,8 @@ const mockExecuteLiveDerivTrade = jest.fn();
 const mockSetActiveTab = jest.fn();
 const mockJournalPush = jest.fn();
 const mockJournal = { pushMessage: mockJournalPush };
-const mockTransactions = {};
+const mockPushVirtualTransaction = jest.fn();
+const mockTransactions = { pushVirtualTransaction: mockPushVirtualTransaction };
 const mockSummary = {};
 const mockRunPanel = {};
 let mockTickListener: ((symbol: string, tick: { t: number; price: number }) => void) | null = null;
@@ -259,11 +260,17 @@ describe('AI Bots (8-card suite & in-page AI Scanner workspace)', () => {
 
         tick(3000, 2); tick(4000, 4); tick(5000, 6); // Even streak → virtual Odd
         expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('VIRTUAL TRADE');
+        expect(mockPushVirtualTransaction).not.toHaveBeenCalled();
         tick(6000, 1, 'R_25'); // other market must not settle the virtual contract
         expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('VIRTUAL TRADE');
         tick(6000, 1); // virtual Odd wins; stay virtual, no money wagered
         expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('VIRTUAL SCANNING');
         expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1);
+        expect(mockPushVirtualTransaction).toHaveBeenCalledTimes(1);
+        expect(mockPushVirtualTransaction).toHaveBeenCalledWith({
+            display_name: 'Volatility 10 Index', underlying_symbol: 'R_10', contract_type: 'DIGITODD',
+            entry_spot: '100.06', exit_spot: '100.01', currency: 'USD', outcome: 'won',
+        }, mockLoginId);
         expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('Total P/L -0.50');
 
         tick(7000, 2); tick(8000, 4); tick(9000, 6); // next virtual Odd
@@ -274,6 +281,10 @@ describe('AI Bots (8-card suite & in-page AI Scanner workspace)', () => {
         expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('VIRTUAL TRADE');
         tick(14000, 8); // virtual Odd loses, but no real order on this settlement tick
         expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('Wait for the next real recovery signal');
+        expect(mockPushVirtualTransaction).toHaveBeenCalledTimes(3);
+        expect(mockPushVirtualTransaction).toHaveBeenLastCalledWith(expect.objectContaining({
+            entry_spot: '100.06', exit_spot: '100.08', outcome: 'lost',
+        }), mockLoginId);
         expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1);
         expect(mockJournalPush).toHaveBeenCalledWith(expect.stringContaining('[VIRTUAL]'), 'notify', '');
         tick(15000, 2); // new even streak → real Odd recovery, same martingale step as real loss
@@ -311,6 +322,7 @@ describe('AI Bots (8-card suite & in-page AI Scanner workspace)', () => {
         tick(6000, 8); tick(7000, 2);
         expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('SCANNER IDLE');
         expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1);
+        expect(mockPushVirtualTransaction).not.toHaveBeenCalled();
         fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
         expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('VIRTUAL SCANNING');
         expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1);
@@ -365,8 +377,12 @@ describe('AI Bots (8-card suite & in-page AI Scanner workspace)', () => {
         tick(3000, 2); tick(4000, 4); tick(5000, 6);
         tick(6000, 8);
         expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('VIRTUAL TRADE');
+        expect(mockPushVirtualTransaction).not.toHaveBeenCalled();
         tick(7000, 1); // Odd wins on the second tick, not the first
         expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('VIRTUAL SCANNING');
+        expect(mockPushVirtualTransaction).toHaveBeenCalledWith(expect.objectContaining({
+            entry_spot: '100.06', exit_spot: '100.01', outcome: 'won',
+        }), mockLoginId);
         expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1);
     });
 

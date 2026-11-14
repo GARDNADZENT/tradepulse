@@ -269,6 +269,33 @@
         }
     }
 
+    &__virtual-wrapper {
+        cursor: default;
+    }
+
+    &__virtual-type {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1px;
+    }
+
+    &__virtual-icons {
+        display: flex;
+        gap: 0.4rem;
+        height: 2rem;
+        align-items: center;
+    }
+
+    &__virtual-badge {
+        color: var(--text-less-prominent);
+        font-size: 9px;
+        line-height: 1;
+        text-transform: uppercase;
+    }
+
+    &__virtual-won { color: var(--text-profit-success); }
+    &__virtual-lost { color: var(--text-loss-danger); }
+
     &__info {
         &-header {
             font-weight: bold;

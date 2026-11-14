@@ -1,5 +1,6 @@
 import { observer } from 'mobx-react-lite';
 import { useStore } from '@/hooks/useStore';
+import { transaction_elements } from '@/constants/transactions';
 import { downloadFile, getSuccessJournalMessage } from '@/utils/download';
 import { getSymbolDisplayNameSync } from '@/utils/symbol-display-name';
 import { Localize, localize } from '@deriv-com/translations';
@@ -39,7 +40,9 @@ const Download = observer(({ tab }: TDownloadProps) => {
             if (typeof data === 'string') return;
 
             // Handle both old and new API structures
-            const market_name = data.display_name || getSymbolDisplayNameSync(data.underlying_symbol || '');
+            const market = data.display_name || getSymbolDisplayNameSync(data.underlying_symbol || '');
+            const is_virtual = transaction.type === transaction_elements.VIRTUAL_CONTRACT;
+            const market_name = is_virtual ? `${market} (Virtual ${data.outcome === 'won' ? 'Win' : 'Loss'})` : market;
 
             // Transaction IDs - new API structure
             const buy_ref_id = String(data.transaction_ids?.buy || data.id || '');
@@ -70,10 +73,10 @@ const Download = observer(({ tab }: TDownloadProps) => {
                 : String(data.exit_tick_time || '');
 
             // Buy Price
-            const buy_price = String(data.buy_price || '');
+            const buy_price = is_virtual ? '0.00' : String(data.buy_price || '');
 
             // Profit/Loss
-            const profit_loss = String(data.profit || '');
+            const profit_loss = is_virtual ? '0.00' : String(data.profit || '');
 
             items.push([
                 market_name,

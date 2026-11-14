@@ -339,6 +339,7 @@ const AIBots = observer(() => {
                 // Use the same scanner and tick duration, but never call the buy API.
                 if (
                     !latestEpoch || !Number.isFinite(latestEpoch) ||
+                    !Number.isFinite(latestTick?.price ?? rawTicks[rawTicks.length - 1]?.price) ||
                     !Number.isInteger(pipSize) || pipSize < 0 || pipSize > 10 ||
                     !['DIGITEVEN', 'DIGITODD'].includes(evalResult.contractType)
                 ) {
@@ -351,6 +352,8 @@ const AIBots = observer(() => {
                 virtualTradeRef.current = {
                     symbol: sym, marketLabel, contractType: evalResult.contractType as VirtualRecoveryContract,
                     pipSize, ticksRemaining: cfg.durationTicks, lastTickTime: latestEpoch,
+                    entrySpot: latestTick?.price ?? rawTicks[rawTicks.length - 1].price,
+                    currency: cfg.currency,
                 };
                 const message = `[VIRTUAL] Simulating ${evalResult.actionLabel.replace('Trade ', '')} on ${marketLabel} for ${cfg.durationTicks} tick(s). No contract purchased.`;
                 setFooterMessage(message);
@@ -564,6 +567,15 @@ const AIBots = observer(() => {
                     const saved = virtualRecoveryByAccount.get(runningAccountRef.current);
                     if (saved) virtualRecoveryByAccount.set(runningAccountRef.current, { ...saved, virtualMode: didWin });
                     setVirtualMode(didWin);
+                    transactions?.pushVirtualTransaction?.({
+                        display_name: pending.marketLabel,
+                        underlying_symbol: pending.symbol,
+                        contract_type: pending.contractType,
+                        entry_spot: pending.entrySpot.toFixed(pending.pipSize),
+                        exit_spot: tk.price.toFixed(pending.pipSize),
+                        currency: pending.currency,
+                        outcome: result.outcome,
+                    }, runningAccountRef.current);
                     const action = didWin ? 'Continue virtual scanning' : 'Wait for the next real recovery signal';
                     const message = `[VIRTUAL] ${pending.contractType === 'DIGITEVEN' ? 'Even' : 'Odd'} on ${pending.marketLabel} · digit ${result.digit} · ${didWin ? 'WIN' : 'LOSS'} · ${action}. No money wagered.`;
                     setFooterMessage(message);
@@ -581,7 +593,7 @@ const AIBots = observer(() => {
             unsubTick();
             release();
         };
-    }, [selectedBotId, attemptAutoTradeOnTick, journal]);
+    }, [selectedBotId, attemptAutoTradeOnTick, journal, transactions]);
 
     useEffect(() => {
         return () => {
