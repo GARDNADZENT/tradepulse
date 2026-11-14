@@ -904,14 +904,20 @@
 
     /*Responsive Mobile Stacking*/
     @media (max-width: 960px) {
-        overflow-y: auto;
+        // Let the tab's scroll container reach the entire chart and trade card.
+        // A shrinking workspace with hidden overflow clips the AUTO controls.
+        flex: 0 0 auto;
         height: auto;
+        overflow: visible;
 
         &__workspace {
+            flex: 0 0 auto;
             flex-direction: column;
+            overflow: visible;
         }
 
         &__chart-stage {
+            flex: 0 0 38rem;
             min-height: 38rem;
         }
 
