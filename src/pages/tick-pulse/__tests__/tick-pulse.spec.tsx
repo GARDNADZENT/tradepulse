@@ -54,6 +54,7 @@ jest.mock('@/external/bot-skeleton', () => ({
 
 const mockSubscribedLists: string[][] = [];
 let tickListeners: Array<(ev: any) => void> = [];
+let mockTickEpochOffset = 0;
 
 jest.mock('@/lib/deriv/tick-bus', () => {
     return {
@@ -62,19 +63,19 @@ jest.mock('@/lib/deriv/tick-bus', () => {
                 if (sym === '1HZ75V') {
                     // Last digit 9 (odd, > 2) -> 100% Over 2, 0% Even
                     return Array.from({ length: 40 }, (_, i) => ({
-                        t: 1700000000000 + i * 1000,
+                        t: 1700000000000 + i * 1000 + mockTickEpochOffset,
                         price: 250.09,
                     }));
                 }
                 if (sym === '1HZ10V') {
                     // Last digit 2 (even, <= 2) -> 0% Over 2, 100% Even!
                     return Array.from({ length: 40 }, (_, i) => ({
-                        t: 1700000000500 + i * 1000,
+                        t: 1700000000500 + i * 1000 + mockTickEpochOffset,
                         price: 120.02,
                     }));
                 }
                 return Array.from({ length: 40 }, (_, i) => ({
-                    t: 1700000000200 + i * 1000,
+                    t: 1700000000200 + i * 1000 + mockTickEpochOffset,
                     price: 100 + ((i * 7 + 1) % 10) / 100,
                 }));
             },
@@ -100,6 +101,7 @@ describe('TickPulse Engine, User Martingale & Zero Pre-Run KPIs', () => {
         mockExecuteLiveDerivTrade.mockReset();
         mockSubscribedLists.length = 0;
         tickListeners = [];
+        mockTickEpochOffset = 0;
     });
 
     it('defines all 10 TickPulse contracts and all 13 Volatility markets', () => {
@@ -148,7 +150,7 @@ describe('TickPulse Engine, User Martingale & Zero Pre-Run KPIs', () => {
         expect(clampPredictionForContract('UNDER', 0)).toBe(1);
     });
 
-    it('calculates user-chosen Martingale stakes on consecutive losses and resets to initial stake on win', () => {
+    it('keeps a winning recovery stake for exactly two trades before resetting to base', () => {
         let state = createInitialRecoveryState();
 
         expect(
@@ -191,7 +193,7 @@ describe('TickPulse Engine, User Martingale & Zero Pre-Run KPIs', () => {
             })
         ).toBe(6.25);
 
-        // Win (+$5.90) -> resets cleanly back to Before loss and Initial Stake ($1.00)
+        // Win (+$5.90) -> Before loss mode, but hold the winning $6.25 stake for two trades.
         state = settleTickPulseRecoveryState({
             prev: state,
             profit: 5.9,
@@ -199,13 +201,31 @@ describe('TickPulse Engine, User Martingale & Zero Pre-Run KPIs', () => {
         });
         expect(state.inRecovery).toBe(false);
         expect(state.consecutiveLosses).toBe(0);
-        expect(
-            computeNextTickPulseStake({
-                initialStake: 1,
-                martingaleMultiplier: 2.5,
-                recoveryState: state,
-            })
-        ).toBe(1);
+        expect(state.winningStakeTradesRemaining).toBe(2);
+        const nextStake = () => computeNextTickPulseStake({ initialStake: 1, martingaleMultiplier: 2.5, recoveryState: state });
+        expect(nextStake()).toBe(6.25);
+        state = settleTickPulseRecoveryState({ prev: state, profit: 1, stake: 6.25 });
+        expect(state.winningStakeTradesRemaining).toBe(1);
+        expect(nextStake()).toBe(6.25);
+        state = settleTickPulseRecoveryState({ prev: state, profit: 1, stake: 6.25 });
+        expect(state.winningStakeTradesRemaining).toBe(0);
+        expect(nextStake()).toBe(1);
+    });
+
+    it.each([0, 1])('cancels the winning-stake hold on follow-up loss %s and resumes martingale', winsBeforeLoss => {
+        let state = settleTickPulseRecoveryState({ prev: createInitialRecoveryState(), profit: 1, stake: 6.25 });
+        if (winsBeforeLoss) state = settleTickPulseRecoveryState({ prev: state, profit: 1, stake: 6.25 });
+        state = settleTickPulseRecoveryState({ prev: state, profit: -6.25, stake: 6.25 });
+        expect(state).toMatchObject({ inRecovery: true, consecutiveLosses: 1, winningStakeTradesRemaining: 0, winningStake: 0 });
+        expect(computeNextTickPulseStake({ initialStake: 1, martingaleMultiplier: 2, recoveryState: state })).toBe(12.5);
+        state = settleTickPulseRecoveryState({ prev: state, profit: 2, stake: 12.5 });
+        expect(state).toMatchObject({ inRecovery: false, winningStake: 12.5, winningStakeTradesRemaining: 2 });
+    });
+
+    it('clears the winning-stake hold in a fresh or reset session', () => {
+        const state = createInitialRecoveryState();
+        expect(state.winningStakeTradesRemaining).toBe(0);
+        expect(computeNextTickPulseStake({ initialStake: 1, martingaleMultiplier: 2, recoveryState: state })).toBe(1);
     });
 
     it('ranks all 13 markets and selects the #1 ready market dynamically per contract', () => {
@@ -251,6 +271,89 @@ describe('TickPulse Engine, User Martingale & Zero Pre-Run KPIs', () => {
                 pipSize: 2,
             })
         ).toBe(true);
+    });
+
+    it('places two follow-up orders at the actual winning stake before returning to base', async () => {
+        const callbacks: Array<(poc: any, terminal: boolean) => void> = [];
+        mockExecuteLiveDerivTrade.mockImplementation(async (params: any) => {
+            callbacks.push(params.onContractUpdate);
+            return { contractId: 9000 + callbacks.length, buyPrice: params.stake, longcode: 'test' };
+        });
+        render(<TickPulse />);
+        fireEvent.change(screen.getByTestId('tickpulse-martingale'), { target: { value: '3.2' } });
+        await act(async () => { fireEvent.click(screen.getByTestId('tickpulse-load-and-run')); });
+        expect(mockExecuteLiveDerivTrade.mock.calls[0][0]).toMatchObject({ stake: 1, contractType: 'DIGITOVER' });
+        const settle = async (index: number, profit: number, stake: number) => {
+            await act(async () => { callbacks[index]({ contract_id: 9001 + index, profit, buy_price: stake, currency: 'USD' }, true); });
+        };
+        const newTick = async () => {
+            mockTickEpochOffset += 1000;
+            await act(async () => { tickListeners.forEach(fn => fn({ symbol: '1HZ75V', price: 250.09, t: 1700000099000 + mockTickEpochOffset })); });
+        };
+        await settle(0, -1, 1);
+        await newTick();
+        expect(mockExecuteLiveDerivTrade.mock.calls[1][0]).toMatchObject({ stake: 3.2, contractType: 'DIGITEVEN' });
+        await settle(1, 0.5, 3.2);
+        expect(screen.getByTestId('tickpulse-status-banner')).toHaveTextContent('Winning stake 3.20 USD for 2 more trade(s)');
+        await newTick();
+        expect(mockExecuteLiveDerivTrade.mock.calls[2][0]).toMatchObject({ stake: 3.2, contractType: 'DIGITOVER' });
+        await settle(2, 0.5, 3.2);
+        expect(screen.getByTestId('tickpulse-status-banner')).toHaveTextContent('for 1 more trade(s)');
+        await newTick();
+        expect(mockExecuteLiveDerivTrade.mock.calls[3][0]).toMatchObject({ stake: 3.2, contractType: 'DIGITOVER' });
+        await settle(3, 0.5, 3.2);
+        expect(screen.getByTestId('tickpulse-status-banner')).toHaveTextContent('Next stake resets to base');
+        await newTick();
+        expect(mockExecuteLiveDerivTrade.mock.calls[4][0]).toMatchObject({ stake: 1, contractType: 'DIGITOVER' });
+        fireEvent.click(screen.getByTestId('tickpulse-load-and-run'));
+        await settle(4, 0.2, 1);
+    });
+
+    it('resumes the configured martingale immediately if a held-stake trade loses', async () => {
+        const callbacks: Array<(poc: any, terminal: boolean) => void> = [];
+        mockExecuteLiveDerivTrade.mockImplementation(async (params: any) => {
+            callbacks.push(params.onContractUpdate);
+            return { contractId: 9000 + callbacks.length, buyPrice: params.stake, longcode: 'test' };
+        });
+        render(<TickPulse />);
+        await act(async () => { fireEvent.click(screen.getByTestId('tickpulse-load-and-run')); });
+        const settle = async (index: number, profit: number, stake: number) => {
+            await act(async () => { callbacks[index]({ contract_id: 9001 + index, profit, buy_price: stake }, true); });
+        };
+        const newTick = async () => {
+            mockTickEpochOffset += 1000;
+            await act(async () => { tickListeners.forEach(fn => fn({ symbol: '1HZ75V' })); });
+        };
+        await settle(0, -1, 1);
+        await newTick();
+        expect(mockExecuteLiveDerivTrade.mock.calls[1][0]).toMatchObject({ stake: 2, contractType: 'DIGITEVEN' });
+        await settle(1, 0.5, 2);
+        await newTick();
+        expect(mockExecuteLiveDerivTrade.mock.calls[2][0]).toMatchObject({ stake: 2, contractType: 'DIGITOVER' });
+        await settle(2, -2, 2);
+        await newTick();
+        expect(mockExecuteLiveDerivTrade.mock.calls[3][0]).toMatchObject({ stake: 4, contractType: 'DIGITEVEN' });
+        fireEvent.click(screen.getByTestId('tickpulse-load-and-run'));
+        await settle(3, 0.5, 4);
+    });
+
+    it('does not place held-stake follow-ups after take profit is reached', async () => {
+        const callbacks: Array<(poc: any, terminal: boolean) => void> = [];
+        mockExecuteLiveDerivTrade.mockImplementation(async (params: any) => {
+            callbacks.push(params.onContractUpdate);
+            return { contractId: 9000 + callbacks.length, buyPrice: params.stake, longcode: 'test' };
+        });
+        render(<TickPulse />);
+        fireEvent.change(screen.getByTestId('tickpulse-take-profit'), { target: { value: '0.5' } });
+        await act(async () => { fireEvent.click(screen.getByTestId('tickpulse-load-and-run')); });
+        await act(async () => { callbacks[0]({ contract_id: 9001, profit: -1, buy_price: 1 }, true); });
+        mockTickEpochOffset += 1000;
+        await act(async () => { tickListeners.forEach(fn => fn({ symbol: '1HZ75V' })); });
+        await act(async () => { callbacks[1]({ contract_id: 9002, profit: 1.6, buy_price: 2 }, true); });
+        expect(screen.getByTestId('tickpulse-status-banner')).toHaveTextContent('Take profit reached');
+        mockTickEpochOffset += 1000;
+        await act(async () => { tickListeners.forEach(fn => fn({ symbol: '1HZ75V' })); });
+        expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(2);
     });
 
     it('starts strictly at zero KPIs before any run, removes Recovery Splits for user Martingale, and updates exact stats during run', async () => {
