@@ -350,7 +350,7 @@ export const RISK_MANAGER_AI_BOTS: RiskManagerAIBotCard[] = [
         id: 'under7-rec-evenodd-virtual',
         number: '08',
         title: 'Under 7 Recovery → Even–Odd Virtual',
-        description: 'After a real loss, simulate Even–Odd signals until a virtual loss, then resume real trading.',
+        description: 'After a real loss, simulate Even–Odd signals until your chosen number of virtual losses.',
         accent: 'pink',
         defaultEntryCount: 2,
         defaultRecoveryCount: 3,

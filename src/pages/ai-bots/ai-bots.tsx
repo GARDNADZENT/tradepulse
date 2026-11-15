@@ -41,7 +41,13 @@ const RobotIcon: React.FC = () => (
 // Keep the lock across AI Bots unmount/remounts while a real contract is unresolved.
 // A full page reload clears it, so traders should check open contracts before restarting.
 let virtualBotUnsettledOrder: symbol | null = null;
-type SuspendedVirtualRecovery = { virtualMode: boolean; stake: number; totalPL: number };
+type SuspendedVirtualRecovery = {
+    virtualMode: boolean;
+    virtualLosses: number;
+    virtualLossesRequired: number;
+    stake: number;
+    totalPL: number;
+};
 // Preserve a recovery gate across scanner stops and tab changes in this page session.
 const virtualRecoveryByAccount = new Map<string, SuspendedVirtualRecovery>();
 
@@ -182,12 +188,13 @@ const TradingRuleBox: React.FC<{
                 )}
             </p>
             <p className='rm-ai-scanner__rule-note'>
-                Resets to initial entry mode and base stake immediately after a recovery win.
+                Resets to initial entry mode and base stake immediately after a {bot.id === 'under7-rec-evenodd-virtual' ? 'real ' : ''}recovery win.
             </p>
             {bot.id === 'under7-rec-evenodd-virtual' && (
                 <p className='rm-ai-scanner__rule-note'>
-                    After a real loss, simulate each recovery signal until a virtual loss; then wait for the next
-                    recovery signal to trade real. Virtual results do not change real P/L, recovery mode or stake.
+                    After a real loss, simulate recovery signals until the chosen number of virtual losses;
+                    virtual wins do not count. Then wait for the next recovery signal to trade real.
+                    Virtual results do not change real P/L, recovery mode or stake.
                     Simulation uses subsequent market ticks and may differ from a real contract.
                     Stopping keeps the recovery gate while this page remains open; reloading resets it.
                     Check open contracts before restarting after a reload.
@@ -215,6 +222,7 @@ const AIBots = observer(() => {
     const [takeProfitInput, setTakeProfitInput] = useState('5');
     const [stopLossInput, setStopLossInput] = useState('30');
     const [martingaleInput, setMartingaleInput] = useState('2');
+    const [virtualLossesInput, setVirtualLossesInput] = useState('1');
 
     const [isRunning, setIsRunning] = useState(false);
     const [inRecovery, setInRecovery] = useState(false);
@@ -228,6 +236,8 @@ const AIBots = observer(() => {
     const inFlightRef = useRef(false);
     const inRecoveryRef = useRef(false);
     const virtualModeRef = useRef(false);
+    const virtualLossesRef = useRef(0);
+    const virtualLossesEditedRef = useRef(false);
     const virtualTradeRef = useRef<VirtualRecoveryTrade | null>(null);
     const virtualTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     // An unresolved real order must not be duplicated by stopping and restarting.
@@ -248,6 +258,7 @@ const AIBots = observer(() => {
         takeProfit: 5,
         stopLoss: 30,
         martingale: 2,
+        virtualLossesRequired: 1,
         currency: 'USD',
         accountKey: '',
     });
@@ -263,6 +274,7 @@ const AIBots = observer(() => {
         takeProfit: Math.max(0.5, Number(takeProfitInput) || 5),
         stopLoss: Math.max(0.5, Number(stopLossInput) || 30),
         martingale: Math.max(1, Number(martingaleInput) || 2),
+        virtualLossesRequired: Number(virtualLossesInput),
         currency,
         accountKey: String(client?.loginid || (api_base as any)?.account_info?.loginid ||
             (typeof window !== 'undefined' ? window.localStorage?.getItem('active_loginid') : '') || ''),
@@ -289,6 +301,11 @@ const AIBots = observer(() => {
         setSelectedBotId(bot.id);
         setEntryCount(bot.defaultEntryCount);
         setRecoveryCount(bot.defaultRecoveryCount);
+        if (bot.id === 'under7-rec-evenodd-virtual') {
+            const saved = virtualRecoveryByAccount.get(configRef.current.accountKey);
+            setVirtualLossesInput(String(saved?.virtualLossesRequired ?? 1));
+            virtualLossesEditedRef.current = false;
+        }
         setInRecovery(false);
         inRecoveryRef.current = false;
         setTotalPL(0);
@@ -355,7 +372,7 @@ const AIBots = observer(() => {
                     entrySpot: latestTick?.price ?? rawTicks[rawTicks.length - 1].price,
                     currency: cfg.currency,
                 };
-                const message = `[VIRTUAL] Simulating ${evalResult.actionLabel.replace('Trade ', '')} on ${marketLabel} for ${cfg.durationTicks} tick(s). No contract purchased.`;
+                const message = `[VIRTUAL] Simulating ${evalResult.actionLabel.replace('Trade ', '')} on ${marketLabel} for ${cfg.durationTicks} tick(s) · ${virtualLossesRef.current}/${cfg.virtualLossesRequired} virtual losses. No contract purchased.`;
                 setFooterMessage(message);
                 journal?.pushMessage?.(message, MessageTypes.NOTIFY, '');
                 virtualTimerRef.current = setTimeout(() => {
@@ -398,6 +415,8 @@ const AIBots = observer(() => {
                         if (profit > 0) virtualRecoveryByAccount.delete(cfg.accountKey);
                         else virtualRecoveryByAccount.set(cfg.accountKey, {
                             virtualMode: true,
+                            virtualLosses: 0,
+                            virtualLossesRequired: cfg.virtualLossesRequired,
                             stake: Number((stakeToUse * cfg.martingale).toFixed(2)),
                             totalPL: Number((orderPriorPL + profit).toFixed(2)),
                         });
@@ -455,11 +474,13 @@ const AIBots = observer(() => {
                         setInRecovery(true);
                         if (isVirtualBot) {
                             virtualModeRef.current = true;
+                            virtualLossesRef.current = 0;
                             virtualRecoveryByAccount.set(cfg.accountKey, {
-                                virtualMode: true, stake: currentStakeRef.current, totalPL: nextPL,
+                                virtualMode: true, virtualLosses: 0, virtualLossesRequired: cfg.virtualLossesRequired,
+                                stake: currentStakeRef.current, totalPL: nextPL,
                             });
                             setVirtualMode(true);
-                            const message = `Real loss ${profit.toFixed(2)} ${cfg.currency} on ${marketLabel} · Virtual recovery scanning (next real stake ${currentStakeRef.current.toFixed(2)})`;
+                            const message = `Real loss ${profit.toFixed(2)} ${cfg.currency} on ${marketLabel} · Virtual recovery scanning (0/${cfg.virtualLossesRequired} virtual losses; next real stake ${currentStakeRef.current.toFixed(2)})`;
                             setFooterMessage(message);
                             journal?.pushMessage?.(`[VIRTUAL] ${message}`, MessageTypes.NOTIFY, '');
                         } else {
@@ -563,10 +584,16 @@ const AIBots = observer(() => {
                     inFlightRef.current = false;
                     setIsExecutingTrade(false);
                     const didWin = result.outcome === 'won';
-                    virtualModeRef.current = didWin;
+                    const virtualLosses = virtualLossesRef.current + (didWin ? 0 : 1);
+                    const required = configRef.current.virtualLossesRequired;
+                    const keepVirtual = didWin || virtualLosses < required;
+                    virtualLossesRef.current = virtualLosses;
+                    virtualModeRef.current = keepVirtual;
                     const saved = virtualRecoveryByAccount.get(runningAccountRef.current);
-                    if (saved) virtualRecoveryByAccount.set(runningAccountRef.current, { ...saved, virtualMode: didWin });
-                    setVirtualMode(didWin);
+                    if (saved) virtualRecoveryByAccount.set(runningAccountRef.current, {
+                        ...saved, virtualMode: keepVirtual, virtualLosses, virtualLossesRequired: required,
+                    });
+                    setVirtualMode(keepVirtual);
                     transactions?.pushVirtualTransaction?.({
                         display_name: pending.marketLabel,
                         underlying_symbol: pending.symbol,
@@ -576,8 +603,8 @@ const AIBots = observer(() => {
                         currency: pending.currency,
                         outcome: result.outcome,
                     }, runningAccountRef.current);
-                    const action = didWin ? 'Continue virtual scanning' : 'Wait for the next real recovery signal';
-                    const message = `[VIRTUAL] ${pending.contractType === 'DIGITEVEN' ? 'Even' : 'Odd'} on ${pending.marketLabel} · digit ${result.digit} · ${didWin ? 'WIN' : 'LOSS'} · ${action}. No money wagered.`;
+                    const action = keepVirtual ? 'Continue virtual scanning' : 'Wait for the next real recovery signal';
+                    const message = `[VIRTUAL] ${pending.contractType === 'DIGITEVEN' ? 'Even' : 'Odd'} on ${pending.marketLabel} · digit ${result.digit} · ${didWin ? 'WIN' : 'LOSS'} · ${virtualLosses}/${required} virtual losses · ${action}. No money wagered.`;
                     setFooterMessage(message);
                     journal?.pushMessage?.(message, MessageTypes.NOTIFY, '');
                 }
@@ -634,10 +661,29 @@ const AIBots = observer(() => {
             return;
         }
         const saved = isVirtualBot ? virtualRecoveryByAccount.get(accountKey) : undefined;
+        // A late settlement may create a saved gate after the card was opened.
+        // Preserve its target unless the user explicitly edited it while stopped.
+        const required = saved && !virtualLossesEditedRef.current
+            ? saved.virtualLossesRequired
+            : configRef.current.virtualLossesRequired;
+        if (isVirtualBot && (!Number.isSafeInteger(required) || required < 1)) {
+            setFooterMessage('Virtual losses required must be a whole number of at least 1.');
+            return;
+        }
         if (saved && (saved.totalPL >= configRef.current.takeProfit || saved.totalPL <= -Math.abs(configRef.current.stopLoss))) {
             virtualRecoveryByAccount.delete(accountKey);
             setFooterMessage('The previous run reached its take profit or stop loss while stopped. Review it before starting a new run.');
             return;
+        }
+        if (isVirtualBot) {
+            configRef.current.virtualLossesRequired = required;
+            setVirtualLossesInput(String(required));
+            virtualLossesEditedRef.current = false;
+        }
+        if (saved) {
+            saved.virtualLossesRequired = required;
+            saved.virtualMode = saved.virtualLosses < required;
+            virtualRecoveryByAccount.set(accountKey, saved);
         }
         const baseStake = Math.max(0.35, Number(stakeInput) || 0.5);
         currentStakeRef.current = saved?.stake ?? baseStake;
@@ -647,6 +693,7 @@ const AIBots = observer(() => {
         setTotalPL(totalPLRef.current);
         inFlightRef.current = false;
         virtualModeRef.current = saved?.virtualMode ?? false;
+        virtualLossesRef.current = saved?.virtualLosses ?? 0;
         virtualTradeRef.current = null;
         setVirtualMode(virtualModeRef.current);
         runningAccountRef.current = accountKey;
@@ -655,7 +702,7 @@ const AIBots = observer(() => {
         setIsRunning(true);
         autoDockRunPanel(run_panel, 1);
         setFooterMessage(saved
-            ? `Resuming ${saved.virtualMode ? 'virtual' : 'real'} recovery scanning · next real stake ${saved.stake.toFixed(2)}. Waiting for a new signal.`
+            ? `Resuming ${saved.virtualMode ? 'virtual' : 'real'} recovery scanning · ${saved.virtualLosses}/${saved.virtualLossesRequired} virtual losses · next real stake ${saved.stake.toFixed(2)}. Waiting for a new signal.`
             : `Scanning ${marketScope === 'ALL' ? 'All Markets' : marketScope} for confirmed ${selectedBot?.title || 'AI'} signal…`
         );
         // A restarted recovery must wait for a new live tick, not reuse a stale signal.
@@ -917,6 +964,31 @@ const AIBots = observer(() => {
                                     onChange={e => setMartingaleInput(e.target.value)}
                                 />
                             </div>
+                            {selectedBot.id === 'under7-rec-evenodd-virtual' && (
+                                <div className='rm-ai-scanner__field'>
+                                    <label className='rm-ai-scanner__label' htmlFor='ai-scanner-virtual-losses'>
+                                        VIRTUAL LOSSES REQUIRED
+                                    </label>
+                                    <input
+                                        id='ai-scanner-virtual-losses'
+                                        className='rm-ai-scanner__input'
+                                        type='number'
+                                        min='1'
+                                        step='1'
+                                        disabled={isRunning}
+                                        value={virtualLossesInput}
+                                        onChange={e => {
+                                            virtualLossesEditedRef.current = true;
+                                            setVirtualLossesInput(e.target.value);
+                                        }}
+                                        aria-describedby='ai-scanner-virtual-losses-help'
+                                        data-testid='ai-scanner-virtual-losses'
+                                    />
+                                    <p id='ai-scanner-virtual-losses-help' className='rm-ai-scanner__rule-note'>
+                                        After this many virtual losses, wait for the next real signal. Wins do not count.
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </section>
 

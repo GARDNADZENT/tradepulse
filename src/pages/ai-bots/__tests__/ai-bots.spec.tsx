@@ -117,7 +117,7 @@ describe('AI Bots (8-card suite & in-page AI Scanner workspace)', () => {
             {
                 num: '08',
                 title: 'Under 7 Recovery → Even–Odd Virtual',
-                desc: 'After a real loss, simulate Even–Odd signals until a virtual loss, then resume real trading.',
+                desc: 'After a real loss, simulate Even–Odd signals until your chosen number of virtual losses.',
                 accent: 'rm-ai-bots__card--pink',
             },
         ];
@@ -297,6 +297,161 @@ describe('AI Bots (8-card suite & in-page AI Scanner workspace)', () => {
         await waitFor(() => expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(3));
         expect(mockExecuteLiveDerivTrade.mock.calls[2][0]).toMatchObject({ contractType: 'DIGITUNDER', barrier: 7, stake: 0.5 });
         act(() => settlements[2]({ profit: 0.2 }, true));
+    });
+
+    it('counts the chosen number of virtual losses without counting wins or changing real P/L or stake', async () => {
+        mockTickBuffers.R_10 = [{ t: 1000, price: 100.08 }, { t: 2000, price: 100.09 }];
+        const settlements: Array<(poc: any, terminal: boolean) => void> = [];
+        mockExecuteLiveDerivTrade.mockImplementation(async (params: any) => {
+            settlements.push(params.onContractUpdate);
+            return { contractId: 9000 + settlements.length, buyPrice: params.stake, payout: 1, longcode: 'test' };
+        });
+        const tick = (t: number, digit: number) => {
+            const item = { t, price: Number((100 + digit / 100).toFixed(2)) };
+            mockTickBuffers.R_10.push(item);
+            act(() => mockTickListener?.('R_10', item));
+        };
+        render(<AIBots />);
+        fireEvent.click(screen.getAllByRole('button', { name: /Load AI Bot/i })[7]);
+        const input = screen.getByTestId('ai-scanner-virtual-losses');
+        expect(input).toHaveValue(1);
+        fireEvent.change(input, { target: { value: '2' } });
+        fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+        expect(input).toBeDisabled();
+        await waitFor(() => expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1));
+        act(() => settlements[0]({ profit: -0.5 }, true));
+        expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('0/2 virtual losses');
+        tick(3000, 2); tick(4000, 4); tick(5000, 6); tick(6000, 8); // virtual loss #1
+        expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('1/2 virtual losses');
+        expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('VIRTUAL SCANNING');
+        tick(7000, 2); tick(8000, 1); // virtual Odd wins, loss count stays 1
+        expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('1/2 virtual losses');
+        tick(9000, 2); tick(10000, 4); tick(11000, 6); tick(12000, 8); // loss #2
+        expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('2/2 virtual losses');
+        expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('Wait for the next real recovery signal');
+        expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1);
+        expect(mockPushVirtualTransaction).toHaveBeenCalledTimes(3);
+        expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('Total P/L -0.50');
+        tick(13000, 2); // only this later signal may place a real order
+        await waitFor(() => expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(2));
+        expect(mockExecuteLiveDerivTrade.mock.calls[1][0]).toMatchObject({ stake: 1, contractType: 'DIGITODD' });
+        act(() => settlements[1]({ profit: -1 }, true));
+        expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('0/2 virtual losses');
+        expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('next real stake 2.00');
+    });
+
+    it('preserves virtual loss progress across navigation and applies an edited target on restart', async () => {
+        mockTickBuffers.R_10 = [{ t: 1000, price: 100.08 }, { t: 2000, price: 100.09 }];
+        let settle: ((poc: any, terminal: boolean) => void) | undefined;
+        mockExecuteLiveDerivTrade.mockImplementation(async (params: any) => {
+            settle = params.onContractUpdate;
+            return { contractId: 9001, buyPrice: params.stake, payout: 1, longcode: 'test' };
+        });
+        const tick = (t: number, digit: number) => {
+            const item = { t, price: Number((100 + digit / 100).toFixed(2)) };
+            mockTickBuffers.R_10.push(item);
+            act(() => mockTickListener?.('R_10', item));
+        };
+        render(<AIBots />);
+        fireEvent.click(screen.getAllByRole('button', { name: /Load AI Bot/i })[7]);
+        fireEvent.change(screen.getByTestId('ai-scanner-virtual-losses'), { target: { value: '3' } });
+        fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+        await waitFor(() => expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1));
+        act(() => settle?.({ profit: -0.5 }, true));
+        tick(3000, 2); tick(4000, 4); tick(5000, 6); tick(6000, 8);
+        expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('1/3 virtual losses');
+        fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+        fireEvent.click(screen.getByRole('button', { name: /Strategies/i }));
+        fireEvent.click(screen.getAllByRole('button', { name: /Load AI Bot/i })[7]);
+        expect(screen.getByTestId('ai-scanner-virtual-losses')).toHaveValue(3);
+        fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+        expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('1/3 virtual losses');
+        expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1);
+        fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+        fireEvent.change(screen.getByTestId('ai-scanner-virtual-losses'), { target: { value: '1' } });
+        fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+        expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('RECOVERY SCANNING');
+        expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('1/1 virtual losses');
+        expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1);
+        tick(7000, 2); // lowered target was already met; a new signal is still required
+        await waitFor(() => expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(2));
+        expect(mockExecuteLiveDerivTrade.mock.calls[1][0]).toMatchObject({ stake: 1, contractType: 'DIGITODD' });
+        act(() => settle?.({ profit: 0.9 }, true));
+    });
+
+    it('resumes virtual scanning if the target is raised before the next real signal', async () => {
+        mockTickBuffers.R_10 = [{ t: 1000, price: 100.08 }, { t: 2000, price: 100.09 }];
+        let settle: ((poc: any, terminal: boolean) => void) | undefined;
+        mockExecuteLiveDerivTrade.mockImplementation(async (params: any) => {
+            settle = params.onContractUpdate;
+            return { contractId: 9001, buyPrice: params.stake, payout: 1, longcode: 'test' };
+        });
+        const tick = (t: number, digit: number) => {
+            const item = { t, price: Number((100 + digit / 100).toFixed(2)) };
+            mockTickBuffers.R_10.push(item);
+            act(() => mockTickListener?.('R_10', item));
+        };
+        render(<AIBots />);
+        fireEvent.click(screen.getAllByRole('button', { name: /Load AI Bot/i })[7]);
+        fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+        await waitFor(() => expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1));
+        act(() => settle?.({ profit: -0.5 }, true));
+        tick(3000, 2); tick(4000, 4); tick(5000, 6); tick(6000, 8); // first target of 1 reached
+        expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('1/1 virtual losses');
+        fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+        fireEvent.change(screen.getByTestId('ai-scanner-virtual-losses'), { target: { value: '3' } });
+        fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+        expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('VIRTUAL SCANNING');
+        expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('1/3 virtual losses');
+        tick(7000, 2);
+        expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent('VIRTUAL TRADE');
+        expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1);
+    });
+
+    it('preserves the configured target for a real loss that settles after the bot was reopened', async () => {
+        mockTickBuffers.R_10 = [{ t: 1000, price: 100.08 }, { t: 2000, price: 100.09 }];
+        let settle: ((poc: any, terminal: boolean) => void) | undefined;
+        mockExecuteLiveDerivTrade.mockImplementation(async (params: any) => {
+            settle = params.onContractUpdate;
+            return { contractId: 9001, buyPrice: params.stake, payout: 1, longcode: 'test' };
+        });
+        render(<AIBots />);
+        fireEvent.click(screen.getAllByRole('button', { name: /Load AI Bot/i })[7]);
+        fireEvent.change(screen.getByTestId('ai-scanner-virtual-losses'), { target: { value: '3' } });
+        fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+        await waitFor(() => expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1));
+        fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+        fireEvent.click(screen.getByRole('button', { name: /Strategies/i }));
+        fireEvent.click(screen.getAllByRole('button', { name: /Load AI Bot/i })[7]);
+        act(() => settle?.({ profit: -0.5 }, true));
+        fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+        expect(screen.getByTestId('ai-scanner-virtual-losses')).toHaveValue(3);
+        expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('0/3 virtual losses');
+        expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects invalid loss targets and limits the setting to Bot 08', async () => {
+        mockTickBuffers.R_10 = [{ t: 1000, price: 100.08 }, { t: 2000, price: 100.09 }];
+        let settle: ((poc: any, terminal: boolean) => void) | undefined;
+        mockExecuteLiveDerivTrade.mockImplementation(async (params: any) => {
+            settle = params.onContractUpdate;
+            return { contractId: 9001, buyPrice: params.stake, payout: 1, longcode: 'test' };
+        });
+        render(<AIBots />);
+        fireEvent.click(screen.getAllByRole('button', { name: /Load AI Bot/i })[7]);
+        for (const value of ['', '0', '-2', '1.5']) {
+            fireEvent.change(screen.getByTestId('ai-scanner-virtual-losses'), { target: { value } });
+            fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+            expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('whole number of at least 1');
+            expect(mockExecuteLiveDerivTrade).not.toHaveBeenCalled();
+        }
+        fireEvent.change(screen.getByTestId('ai-scanner-virtual-losses'), { target: { value: '1' } });
+        fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+        await waitFor(() => expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1));
+        act(() => settle?.({ profit: 0.2 }, true));
+        fireEvent.click(screen.getByRole('button', { name: /Strategies/i }));
+        fireEvent.click(screen.getAllByRole('button', { name: /Load AI Bot/i })[5]);
+        expect(screen.queryByTestId('ai-scanner-virtual-losses')).not.toBeInTheDocument();
     });
 
     it('cancels pending virtual trades on stop and never places a real trade from their later ticks', async () => {
