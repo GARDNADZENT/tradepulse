@@ -955,7 +955,7 @@ window.Blockly.Blocks.purchase_hedge = {
             colour: window.Blockly.Colours.Special1.colour,
             colourSecondary: window.Blockly.Colours.Special1.colourSecondary,
             colourTertiary: window.Blockly.Colours.Special1.colourTertiary,
-            tooltip: localize('Purchases two contracts simultaneously on the exact same tick (e.g. Over 4 + Under 5)'),
+            tooltip: localize('Submits two contract purchases in parallel; their entry and settlement ticks may differ.'),
             category: window.Blockly.Categories.Before_Purchase,
         });
     },
@@ -975,3 +975,29 @@ getGenerator().forBlock.purchase_hedge = block => {
 
 
 
+
+// A synchronous snapshot of a live tick received after this purchase cycle began.
+window.Blockly.Blocks.fresh_cycle_digit = {
+    init() {
+        this.jsonInit({
+            message0: localize('Fresh cycle last digit is %1 or %2'),
+            args0: [
+                { type: 'field_number', name: 'DIGIT_1', value: 4, min: 0, max: 9, precision: 1 },
+                { type: 'field_number', name: 'DIGIT_2', value: 5, min: 0, max: 9, precision: 1 },
+            ],
+            output: 'Boolean',
+            outputShape: window.Blockly.OUTPUT_SHAPE_HEXAGONAL,
+            colour: window.Blockly.Colours.Base.colour,
+            colourSecondary: window.Blockly.Colours.Base.colourSecondary,
+            colourTertiary: window.Blockly.Colours.Base.colourTertiary,
+            tooltip: localize('Checks a live tick received after the current purchase cycle began.'),
+            category: window.Blockly.Categories.Tick_Analysis,
+        });
+    },
+    customContextMenu(menu) { modifyContextMenu(menu); },
+};
+
+getGenerator().forBlock.fresh_cycle_digit = block => [
+    `Bot.isFreshCycleDigit(${Number(block.getFieldValue('DIGIT_1'))}, ${Number(block.getFieldValue('DIGIT_2'))})`,
+    getGenerator().ORDER_ATOMIC,
+];
