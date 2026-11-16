@@ -14,6 +14,7 @@ const getBotInterface = tradeEngine => {
         init: (...args) => tradeEngine.init(...args),
         start: (...args) => tradeEngine.start(...args),
         stop: (...args) => tradeEngine.stop(...args),
+        isFreshCycleDigit: (digit1, digit2) => tradeEngine.isFreshCycleDigit(digit1, digit2),
         purchase: (contract_type, custom_prediction) => tradeEngine.purchase(contract_type, custom_prediction),
         purchaseHedge: (contract_type_1, pred_1, contract_type_2, pred_2) =>
             tradeEngine.purchaseHedge(contract_type_1, pred_1, contract_type_2, pred_2),

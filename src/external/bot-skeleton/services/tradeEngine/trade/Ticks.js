@@ -88,7 +88,7 @@ export default Engine =>
                 this.symbol = symbol;
                 this._tickListenerKey = null;
 
-                const callback = ticks => {
+                const callback = (ticks, metadata) => {
                     if (ticksService?._activeBotWatchListener && ticksService._activeBotWatchListener.engine !== this) {
                         return;
                     }
@@ -97,6 +97,10 @@ export default Engine =>
                     }
                     const lastTick = ticks.slice(-1)[0];
                     if (!lastTick) return;
+                    if (metadata?.isLive) {
+                        this._latestLiveTick = lastTick;
+                        this._observedTickSequence = (this._observedTickSequence || 0) + 1;
+                    }
                     this.latestTick = lastTick;
                     const { epoch } = lastTick;
                     this.store.dispatch({ type: constants.NEW_TICK, payload: epoch });
@@ -158,6 +162,17 @@ export default Engine =>
                 this._tickListenerKey = key;
                 ticksService._activeBotWatchListener = { symbol, key, engine: this };
             }
+        }
+
+        // Only ticks observed after start() can trigger a new purchase cycle.
+        isFreshCycleDigit(digit1, digit2) {
+            if (this.store.getState().scope !== constants.BEFORE_PURCHASE ||
+                (this._observedTickSequence || 0) <= (this._cycleStartTickSequence || 0) ||
+                !this._latestLiveTick || !Number.isFinite(Number(this._latestLiveTick.quote))) return false;
+            const pipSize = this.$scope.ticksService.pipSizes?.[this.symbol];
+            if (!Number.isInteger(pipSize) || pipSize < 0 || pipSize > 100) return false;
+            const digit = getLastDigit(Number(this._latestLiveTick.quote).toFixed(pipSize));
+            return digit === Number(digit1) || digit === Number(digit2);
         }
 
         checkTicksPromiseExists() {

@@ -24,12 +24,12 @@ interface SpecialBotEntry {
 
 const SPECIAL_BOTS_CATALOG: SpecialBotEntry[] = [
     {
-        id: 'under-5-over-4',
-        name: 'Under 5 Over 4',
-        file: 'special-bots/Under 5 Over 4.xml',
+        id: 'over-5-under-4',
+        name: 'Over 5 Under 4',
+        file: 'special-bots/Over 5 Under 4.xml',
         category: ['special'],
         strategy: 'Simultaneous Hedge',
-        description: 'Hedging bot that trades Digit Over 4 and Digit Under 5 at the exact same time.',
+        description: 'Waits for a fresh 4 or 5 before submitting Digit Over 5 and Digit Under 4 together.',
     },
     {
         id: 'best-of-3',

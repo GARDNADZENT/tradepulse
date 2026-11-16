@@ -169,7 +169,7 @@ export default class TicksService {
         this.subscriptions = new Map();
     }
 
-    updateTicksAndCallListeners(symbol, ticks) {
+    updateTicksAndCallListeners(symbol, ticks, isLive = false) {
         if (this.ticks.get(symbol) === ticks) {
             return;
         }
@@ -178,7 +178,7 @@ export default class TicksService {
         const listeners = this.tickListeners.get(symbol);
 
         if (listeners) {
-            listeners.forEach(callback => callback(this.ticks.get(symbol)));
+            listeners.forEach(callback => callback(this.ticks.get(symbol), { isLive }));
         }
     }
 
@@ -203,7 +203,7 @@ export default class TicksService {
                     const { symbol, id } = tick;
                     if (this.ticks.has(symbol)) {
                         this.subscriptions = this.subscriptions.setIn(['tick', symbol], id);
-                        this.updateTicksAndCallListeners(symbol, updateTicks(this.ticks.get(symbol), parseTick(tick)));
+                        this.updateTicksAndCallListeners(symbol, updateTicks(this.ticks.get(symbol), parseTick(tick)), true);
                     }
                 }
 
