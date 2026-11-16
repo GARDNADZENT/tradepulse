@@ -1001,3 +1001,26 @@ getGenerator().forBlock.fresh_cycle_digit = block => [
     `Bot.isFreshCycleDigit(${Number(block.getFieldValue('DIGIT_1'))}, ${Number(block.getFieldValue('DIGIT_2'))})`,
     getGenerator().ORDER_ATOMIC,
 ];
+
+// Separate opt-in mode: virtual loss OR win target; preserve real martingale state.
+window.Blockly.Blocks.ai_virtual_either_config = {
+    init() {
+        this.jsonInit({
+            message0: localize('Start virtual; return to real after %1 consecutive virtual losses or %2 consecutive virtual wins'),
+            args0: [
+                { type: 'field_number', name: 'LOSSES', value: 2, min: 1, max: 10, precision: 1 },
+                { type: 'field_number', name: 'WINS', value: 1, min: 1, max: 10, precision: 1 },
+            ],
+            previousStatement: null,
+            nextStatement: null,
+            colour: window.Blockly.Colours.Special1.colour,
+            colourSecondary: window.Blockly.Colours.Special1.colourSecondary,
+            colourTertiary: window.Blockly.Colours.Special1.colourTertiary,
+            tooltip: localize('After a real loss return to virtual. Virtual results do not change the real stake.'),
+            category: window.Blockly.Categories.Tick_Analysis,
+        });
+    },
+    customContextMenu(menu) { modifyContextMenu(menu); },
+};
+getGenerator().forBlock.ai_virtual_either_config = block =>
+    `Bot.setVirtualHook({enabled: true, startMode: 'virtual', aiEitherMode: true, virtualLosses: ${Math.max(1, Math.min(10, Number(block.getFieldValue('LOSSES')) || 1))}, virtualWins: ${Math.max(1, Math.min(10, Number(block.getFieldValue('WINS')) || 1))}});\n`;

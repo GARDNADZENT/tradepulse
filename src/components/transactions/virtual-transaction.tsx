@@ -11,7 +11,7 @@ const VirtualTransaction = ({ trade }: { trade: VirtualTransactionData }) => (
     <div className='transactions__item-wrapper transactions__virtual-wrapper' data-testid='virtual-transaction'>
         <div className='transactions__item'>
             <div className='transactions__cell transactions__trade-type transactions__virtual-type'>
-                <div className='transactions__virtual-icons' title={`${trade.display_name} · ${trade.contract_type === 'DIGITEVEN' ? 'Even' : 'Odd'}`}>
+                <div className='transactions__virtual-icons' title={`${trade.display_name} · ${trade.contract_type.replace('DIGIT', '')}`}>
                     <MarketIcon type={trade.underlying_symbol} />
                     <TradeTypeIcon type={trade.contract_type} size='sm' />
                 </div>

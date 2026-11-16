@@ -46,6 +46,14 @@ const getBotInterface = tradeEngine => {
                     tradeEngine.vh_state.initial_stake = 0;
                     tradeEngine.vh_state.current_stake = 0;
                 }
+                // Opt-in rule used by AI Developer; other virtual-hook modes retain their existing behavior.
+                tradeEngine.vh_state.ai_either_mode = settings.aiEitherMode === true;
+                if (tradeEngine.vh_state.ai_either_mode) {
+                    tradeEngine.vh_state.ai_virtual_loss_target = Math.max(1, Math.min(10, Number(settings.virtualLosses) || 1));
+                    tradeEngine.vh_state.ai_virtual_win_target = Math.max(1, Math.min(10, Number(settings.virtualWins) || 1));
+                    tradeEngine.vh_state.threshold = 0;
+                    tradeEngine.vh_state.needs_stake_reset = false;
+                }
                 if (typeof settings.enterAfterActualLosses !== 'undefined') {
                     tradeEngine.vh_state.enter_after_actual_losses = Math.max(
                         1,

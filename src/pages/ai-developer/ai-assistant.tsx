@@ -49,7 +49,7 @@ export default function AIAssistant({ dashboard, load_modal, run_panel }: { dash
         }
     };
 
-    const xml = spec ? compileAIBotToXml({ ...spec, virtualHookEnabled: false }) : '';
+    const xml = spec ? compileAIBotToXml({ ...spec, virtualHookEnabled: false, assistantVirtualHook: spec.virtualHook || undefined }) : '';
     const xmlValid = !!xml && !new DOMParser().parseFromString(xml, 'application/xml').querySelector('parsererror');
     const load = async () => {
         if (!spec || !xmlValid || !load_modal?.loadStrategyToBuilder || loadingBot) return;
@@ -94,14 +94,15 @@ export default function AIAssistant({ dashboard, load_modal, run_panel }: { dash
                         <div><dt>Entry</dt><dd>{spec.entryFilter === 'INSTANT' ? 'Every cycle (instant)' : `Latest digit equals ${spec.entryDigit} (not guaranteed fresh)`}</dd></div>
                         <div><dt>Stake / multiplier</dt><dd>{spec.baseStake} / ×{spec.martingaleMultiplier}</dd></div>
                         <div><dt>After a loss</dt><dd>{prediction ? `Prediction ${spec.recoveryBarrier}; ` : ''}multiply stake ×{spec.martingaleMultiplier}; reset on win</dd></div>
+                        <div><dt>Virtual hook</dt><dd>{spec.virtualHook ? `Start virtual; ${spec.virtualHook.virtualLosses} consecutive losses or ${spec.virtualHook.virtualWins} consecutive wins → real; real loss → virtual; real stake preserved` : 'Off'}</dd></div>
                         <div><dt>TP / SL</dt><dd>{spec.takeProfit} / {spec.stopLoss} (account currency)</dd></div>
                     </dl>
-                </> : <p className='ai-chat__empty'>Once the details are complete, your draft strategy will appear here. Supported: single contracts with instant or exact-digit entry.</p>}
+                </> : <p className='ai-chat__empty'>Once the details are complete, your draft strategy will appear here. Supported: single contracts with instant or exact-digit entry. The virtual-hook rule supports one-tick digit contracts. Paired virtual hedges are not supported.</p>}
                 <div className='ai-chat__actions'>
                     <button type='button' disabled={!xmlValid || busy} onClick={() => setShowXml(v => !v)}>{showXml ? 'Hide XML' : 'Preview XML'}</button>
                     <button type='button' className='ai-chat__primary' disabled={!xmlValid || busy || loadingBot} onClick={() => void load()}>{loadingBot ? 'Loading…' : 'Load into Bot Builder'}</button>
                 </div>
-                <p className='ai-chat__warning'>Review and test on a demo account. AI does not guarantee profit. Martingale can rapidly increase losses; TP/SL are checked after settlement and may be exceeded.</p>
+                <p className='ai-chat__warning'>Review and test on a demo account. AI does not guarantee profit. Virtual trades are simulations and may differ from real execution. Martingale can rapidly increase losses; TP/SL are checked after settlement and may be exceeded.</p>
             </aside>
             {showXml && xmlValid && <div className='ai-chat__xml'><strong>Generated Blockly XML</strong><pre>{xml}</pre></div>}
         </section>

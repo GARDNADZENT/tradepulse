@@ -15,7 +15,7 @@ export type VirtualTransaction = {
     is_virtual: true;
     display_name: string;
     underlying_symbol: string;
-    contract_type: 'DIGITEVEN' | 'DIGITODD';
+    contract_type: 'DIGITEVEN' | 'DIGITODD' | 'DIGITOVER' | 'DIGITUNDER' | 'DIGITMATCH' | 'DIGITDIFF';
     entry_spot: string;
     exit_spot: string;
     currency: string;
@@ -54,6 +54,7 @@ export default class TransactionsStore {
             is_transaction_details_modal_open: observable,
             transactions: computed,
             onBotContractEvent: action.bound,
+            onAIVirtualContractEvent: action.bound,
             pushTransaction: action.bound,
             pushVirtualTransaction: action.bound,
             clear: action.bound,
@@ -135,6 +136,11 @@ export default class TransactionsStore {
 
     onBotContractEvent(data: TContractInfo) {
         this.pushTransaction(data);
+    }
+
+    onAIVirtualContractEvent(data: Omit<VirtualTransaction, 'virtual_id' | 'is_virtual' | 'run_id' | 'buy_price' | 'profit'> & { accountKey: string }) {
+        const { accountKey, ...transaction } = data;
+        this.pushVirtualTransaction(transaction, accountKey);
     }
 
     pushTransaction(data: TContractInfo) {

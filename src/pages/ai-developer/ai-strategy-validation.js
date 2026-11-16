@@ -7,13 +7,19 @@ const number = (n, min, max) => typeof n === 'number' && Number.isFinite(n) && n
 const sensitive = text => /\b(?:sk-(?:or-v1-)?[a-zA-Z0-9_-]{16,}|pat_[a-zA-Z0-9_-]+|ory_ac_[a-zA-Z0-9_-]+)\b/i.test(text);
 
 function validateSpec(s) {
-    if (!s || typeof s !== 'object' || Array.isArray(s) || Object.keys(s).length !== keys.length || keys.some(k => !(k in s)) || Object.keys(s).some(k => !keys.includes(k))) return false;
+    if (!s || typeof s !== 'object' || Array.isArray(s) || keys.some(k => !(k in s)) || !Object.prototype.hasOwnProperty.call(s, 'virtualHook') || Object.keys(s).some(k => !keys.includes(k) && k !== 'virtualHook')) return false;
     if (typeof s.name !== 'string' || !/^[a-zA-Z0-9 _-]{1,60}$/.test(s.name) || !symbols.includes(s.symbol) || !contracts.includes(s.contractType)) return false;
     if (!integer(s.barrier, 0, 9) || !integer(s.recoveryBarrier, 0, 9) || !integer(s.durationTicks, 1, 10)) return false;
     if (s.contractType === 'DIGITOVER' && (s.barrier > 8 || s.recoveryBarrier > 8)) return false;
     if (s.contractType === 'DIGITUNDER' && (s.barrier < 1 || s.recoveryBarrier < 1)) return false;
     if (!number(s.baseStake, 0.35, 10000) || !number(s.martingaleMultiplier, 1, 20) || !number(s.takeProfit, 0.5, 100000) || !number(s.stopLoss, 1, 100000)) return false;
     if (!['INSTANT', 'EXACT_DIGIT'].includes(s.entryFilter) || !integer(s.entryDigit, 0, 9)) return false;
+    if (s.virtualHook !== null) {
+        const vh = s.virtualHook;
+        if (!vh || typeof vh !== 'object' || Array.isArray(vh) ||
+            Object.keys(vh).length !== 2 || !integer(vh.virtualLosses, 1, 10) || !integer(vh.virtualWins, 1, 10) ||
+            !['DIGITOVER', 'DIGITUNDER', 'DIGITMATCH', 'DIGITDIFF', 'DIGITEVEN', 'DIGITODD'].includes(s.contractType) || s.durationTicks !== 1) return false;
+    }
     // Only the contract types with prediction can change prediction after a loss.
     if (!['DIGITOVER', 'DIGITUNDER', 'DIGITMATCH', 'DIGITDIFF'].includes(s.contractType) && (s.barrier !== 0 || s.recoveryBarrier !== 0)) return false;
     return true;

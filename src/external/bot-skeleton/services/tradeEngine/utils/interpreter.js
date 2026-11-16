@@ -217,6 +217,7 @@ const Interpreter = () => {
         return new Promise((resolve, reject) => {
             try {
                 $scope.stopped = true;
+                if (bot.tradeEngine.vh_state?.ai_either_mode) bot.tradeEngine.resetVirtualTrade?.();
                 $scope.is_error_triggered = false;
                 globalObserver.emit('bot.stop');
                 const { ticksService } = $scope;

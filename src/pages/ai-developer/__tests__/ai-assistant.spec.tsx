@@ -8,7 +8,7 @@ jest.mock('@/utils/ai-bot-xml-builder', () => ({
     compileAIBotToXml: jest.fn(() => '<xml><block type="trade_definition" /></xml>'),
     loadXmlIntoBotBuilder: jest.fn().mockResolvedValue(undefined),
 }));
-const spec = { name: 'Test Bot', symbol: '1HZ100V', contractType: 'DIGITOVER', barrier: 5, recoveryBarrier: 5, durationTicks: 1, baseStake: 1, martingaleMultiplier: 1, takeProfit: 10, stopLoss: 20, entryFilter: 'EXACT_DIGIT', entryDigit: 4 };
+const spec = { name: 'Test Bot', symbol: '1HZ100V', contractType: 'DIGITOVER', barrier: 5, recoveryBarrier: 5, durationTicks: 1, baseStake: 1, martingaleMultiplier: 1, takeProfit: 10, stopLoss: 20, entryFilter: 'EXACT_DIGIT', entryDigit: 4, virtualHook: null };
 const send = (message: string) => { fireEvent.change(screen.getByLabelText('Your strategy message'), { target: { value: message } }); fireEvent.click(screen.getByRole('button', { name: 'Send' })); };
 
 describe('AI strategy assistant', () => {
@@ -36,6 +36,20 @@ describe('AI strategy assistant', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Load into Bot Builder' }));
         await waitFor(() => expect(loadXmlIntoBotBuilder).toHaveBeenCalledWith(expect.objectContaining({ runNow: false, name: 'Test Bot' })));
         expect(compileAIBotToXml).toHaveBeenCalledWith(expect.objectContaining({ ...spec, virtualHookEnabled: false }));
+    });
+    it('shows the exact virtual rule for review and passes it to the XML compiler', async () => {
+        const virtualSpec = { ...spec, virtualHook: { virtualLosses: 2, virtualWins: 1 } };
+        expect(validateSpec(virtualSpec)).toBe(true);
+        expect(validateSpec({ ...virtualSpec, virtualHook: { virtualLosses: 2, virtualWins: 0 } })).toBe(false);
+        expect(validateSpec({ ...virtualSpec, contractType: 'CALL', barrier: 0, recoveryBarrier: 0 })).toBe(false);
+        expect(validateSpec({ ...virtualSpec, durationTicks: 2 })).toBe(false);
+        const { virtualHook, ...missingHook } = virtualSpec;
+        expect(validateSpec(missingHook)).toBe(false);
+        (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ reply: 'Review your virtual hook.', spec: virtualSpec }) });
+        render(<AIAssistant dashboard={{}} load_modal={{}} run_panel={{}} />);
+        send('Create a virtual bot'); await screen.findByText('Review your virtual hook.');
+        expect(screen.getByText(/2 consecutive losses or 1 consecutive wins/)).toBeInTheDocument();
+        expect(compileAIBotToXml).toHaveBeenCalledWith(expect.objectContaining({ assistantVirtualHook: virtualSpec.virtualHook }));
     });
     it('does not replace a running bot or one with open contracts', async () => {
         (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ reply: 'Ready', spec }) });

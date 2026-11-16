@@ -497,6 +497,7 @@ export default class RunPanelStore {
         observer.register('bot.contract', this.onBotContractEvent);
         observer.register('bot.contract', summary_card.onBotContractEvent);
         observer.register('bot.contract', transactions.onBotContractEvent);
+        observer.register('bot.ai_virtual_contract', transactions.onAIVirtualContractEvent);
         observer.register('bot.stop_button_click', this.onStopBotClick);
         observer.register('Error', this.onError);
         observer.register('bot.setPurchaseInProgress', this.SetpurchaseInProgress);
@@ -820,6 +821,7 @@ export default class RunPanelStore {
         observer.unregisterAll('bot.trade_again');
         observer.unregisterAll('contract.status');
         observer.unregisterAll('bot.contract');
+        observer.unregisterAll('bot.ai_virtual_contract');
         observer.unregisterAll('Error');
         observer.unregisterAll('bot.setPurchaseInProgress');
     };
