@@ -220,6 +220,9 @@ export default Engine =>
         }
 
         async purchaseHedge(contract_type_1, pred_1, contract_type_2, pred_2) {
+            if (this.vh_state.enabled && this.vh_state.ai_either_mode) {
+                throw new Error('This virtual hook does not support paired contracts.');
+            }
             if (this.vh_state.enabled && this.vh_state.is_virtual) {
                 return this.virtualPurchase(contract_type_1, pred_1);
             }
@@ -230,6 +233,12 @@ export default Engine =>
             this.applyAlternateMarketsToCurrentTradeOptions();
 
             const { duration, duration_unit, symbol } = this.tradeOptions;
+            if (this.vh_state.ai_either_mode) {
+                const pip = this.$scope?.ticksService?.pipSizes?.[symbol];
+                if (!Number.isInteger(pip) || pip < 0 || pip > 100) throw new Error('Market precision unavailable for virtual trade.');
+                this.vh_state.ai_virtual_account = api_base.account_info?.loginid || (typeof window !== 'undefined' && window.localStorage?.getItem('active_loginid')) || '';
+                if (!this.vh_state.ai_virtual_account) throw new Error('Account unavailable for virtual trade.');
+            }
 
             let target_ticks = 0;
             if (duration_unit === 't') {
@@ -296,7 +305,15 @@ export default Engine =>
 
         processVirtualTick(tick_data) {
             if (!this.vh_state.virtual_trade_active) return;
-            if (this.$scope?.paused_) return;
+            if (this.$scope?.paused_ || (this.vh_state.ai_either_mode && this.$scope?.stopped)) return;
+            if (this.vh_state.ai_either_mode) {
+                const currentAccount = api_base.account_info?.loginid || (typeof window !== 'undefined' && window.localStorage?.getItem('active_loginid')) || '';
+                if (!currentAccount || currentAccount !== this.vh_state.ai_virtual_account) {
+                    this.resetVirtualTrade();
+                    globalObserver.emit('bot.stop_button_click');
+                    return;
+                }
+            }
 
             const symbol = this.tradeOptions?.symbol;
             if (!symbol || tick_data.symbol !== symbol) return;
@@ -329,7 +346,7 @@ export default Engine =>
         }
 
         settleVirtualTrade(tick_data) {
-            if (this.$scope?.paused_) return;
+            if (this.$scope?.paused_ || (this.vh_state.ai_either_mode && this.$scope?.stopped)) return;
             const raw_end_spot = tick_data.quote;
             const raw_entry_spot = this.vh_state.virtual_entry_spot;
 
@@ -412,9 +429,11 @@ export default Engine =>
                     /* noop */
                 }
 
-                setTimeout(() => {
-                    this.store.dispatch(start());
-                }, restartDelay);
+                if (!this.vh_state.ai_either_mode) {
+                    setTimeout(() => {
+                        this.store.dispatch(start());
+                    }, restartDelay);
+                }
             }, 0);
         }
 
@@ -435,10 +454,21 @@ export default Engine =>
 
         updateVirtualTotals(contract) {
             const win = contract.profit > 0;
-            const targetVirtualWins = Math.max(1, Number(this.vh_state.return_after_virtual_wins) || 1);
+            const targetVirtualWins = Math.max(1, Number(this.vh_state.ai_either_mode ? this.vh_state.ai_virtual_win_target : this.vh_state.return_after_virtual_wins) || 1);
             let switchedToReal = false;
 
-            if (this.vh_state.threshold > 0) {
+            if (this.vh_state.ai_either_mode) {
+                this.vh_state.loss_count = win ? 0 : (this.vh_state.loss_count || 0) + 1;
+                this.vh_state.virtual_win_count = win ? (this.vh_state.virtual_win_count || 0) + 1 : 0;
+                if (this.vh_state.loss_count >= this.vh_state.ai_virtual_loss_target ||
+                    this.vh_state.virtual_win_count >= this.vh_state.ai_virtual_win_target) {
+                    this.vh_state.is_virtual = false;
+                    this.vh_state.loss_count = 0;
+                    this.vh_state.virtual_win_count = 0;
+                    this.vh_state.needs_stake_reset = false;
+                    switchedToReal = true;
+                }
+            } else if (this.vh_state.threshold > 0) {
                 if (win) {
                     this.vh_state.loss_count = 0;
                     this.vh_state.current_stake = this.vh_state.initial_stake;
@@ -479,6 +509,7 @@ export default Engine =>
                     digit: contract.last_digit,
                     win_progress: `${ switchedToReal ? targetVirtualWins : this.vh_state.virtual_win_count || 0}/${targetVirtualWins}`,
                     switched_to_real: switchedToReal,
+                    ...(this.vh_state.ai_either_mode ? { loss_progress: `${this.vh_state.loss_count || 0}/${this.vh_state.ai_virtual_loss_target}` } : {}),
                 },
             });
 
@@ -514,7 +545,20 @@ export default Engine =>
                 contract_id: virtual_id,
             };
 
-            globalObserver.emit('bot.contract', { ...virtual_contract, is_sold: true });
+            if (this.vh_state.ai_either_mode) {
+                globalObserver.emit('bot.ai_virtual_contract', {
+                    accountKey: this.vh_state.ai_virtual_account,
+                    display_name: resolveMarketDisplayName(contract.symbol),
+                    underlying_symbol: contract.symbol,
+                    contract_type: contract.contract_type,
+                    entry_spot: contract.entry_spot,
+                    exit_spot: contract.exit_spot,
+                    currency: this.tradeOptions.currency || 'USD',
+                    outcome: win ? 'won' : 'lost',
+                });
+            } else {
+                globalObserver.emit('bot.contract', { ...virtual_contract, is_sold: true });
+            }
         }
 
         setInterpreterVariable(name, value) {
@@ -563,6 +607,15 @@ export default Engine =>
             if (!this.vh_state?.enabled || this.vh_state?.is_virtual) return;
 
             const win = contract?.profit > 0;
+
+            if (this.vh_state.ai_either_mode) {
+                if (Number(contract?.profit) < 0) {
+                    this.vh_state.is_virtual = true;
+                    this.vh_state.loss_count = 0;
+                    this.vh_state.virtual_win_count = 0;
+                }
+                return; // Only the XML after-purchase stack changes real stake/prediction.
+            }
 
             if (this.vh_state.needs_stake_reset) {
                 this.vh_state.needs_stake_reset = false;

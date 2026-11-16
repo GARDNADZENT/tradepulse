@@ -60,6 +60,18 @@ describe('virtual transactions', () => {
         restored.disposeReactionsFn();
     });
 
+    it('records AI Developer Over simulations as zero-value account-scoped virtual rows', () => {
+        const client = observable({ loginid: 'VIRTUAL_TEST_A' });
+        const store = new TransactionsStore({ run_panel: { run_id: 'run-ai' } } as any, { client } as any);
+        store.onAIVirtualContractEvent({ ...virtual, accountKey: 'VIRTUAL_TEST_A', contract_type: 'DIGITOVER' });
+        expect(store.transactions[0]).toMatchObject({ type: transaction_elements.VIRTUAL_CONTRACT, data: { contract_type: 'DIGITOVER', buy_price: 0, profit: 0, outcome: 'won' } });
+        expect(store.statistics).toMatchObject({ number_of_runs: 0, total_profit: 0, total_stake: 0 });
+        runInAction(() => { client.loginid = 'VIRTUAL_TEST_B'; });
+        store.onAIVirtualContractEvent({ ...virtual, accountKey: 'VIRTUAL_TEST_A', contract_type: 'DIGITOVER' });
+        expect(store.transactions).toHaveLength(0);
+        store.disposeReactionsFn();
+    });
+
     it.each(['won', 'lost'] as const)('shows %s as a clearly marked zero-cost virtual result', outcome => {
         render(<VirtualTransaction trade={{ ...virtual, outcome, virtual_id: 'v1', is_virtual: true,
             run_id: 'run-1', buy_price: 0, profit: 0 }} />);

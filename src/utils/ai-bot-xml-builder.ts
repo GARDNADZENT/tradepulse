@@ -42,6 +42,7 @@ export interface AIBotSpec {
     virtualHookStartMode?: 'virtual' | 'real';
     virtualHookLosses?: number;
     virtualHookWins?: number;
+    assistantVirtualHook?: { virtualLosses: number; virtualWins: number };
     entryFilter?: AIBotEntryFilter;
     entryWindow?: number;
     entryThreshold?: number;
@@ -171,7 +172,13 @@ export function compileAIBotToXml(spec: AIBotSpec): string {
           </block>`
         : purchaseBlock;
 
-    const vhConfigXml = vhEnabled
+    const aiVh = spec.assistantVirtualHook;
+    const vhConfigXml = aiVh
+        ? `<next><block type="ai_virtual_either_config" id="init_ai_vh">
+            <field name="LOSSES">${Math.max(1, Math.min(10, Math.round(Number(aiVh.virtualLosses) || 1)))}</field>
+            <field name="WINS">${Math.max(1, Math.min(10, Math.round(Number(aiVh.virtualWins) || 1)))}</field>
+          </block></next>`
+        : vhEnabled
         ? `<next>
             <block type="virtual_hook_config" id="init_vh">
               <field name="VH_ENABLED">ENABLED</field>

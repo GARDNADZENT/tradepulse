@@ -1,5 +1,5 @@
 const handler = require('../../../../api/ai-developer');
-const spec = { name: 'Draft', symbol: 'R_50', contractType: 'DIGITUNDER', barrier: 4, recoveryBarrier: 4, durationTicks: 1, baseStake: 1, martingaleMultiplier: 1, takeProfit: 10, stopLoss: 20, entryFilter: 'INSTANT', entryDigit: 0 };
+const spec = { name: 'Draft', symbol: 'R_50', contractType: 'DIGITUNDER', barrier: 4, recoveryBarrier: 4, durationTicks: 1, baseStake: 1, martingaleMultiplier: 1, takeProfit: 10, stopLoss: 20, entryFilter: 'INSTANT', entryDigit: 0, virtualHook: null };
 const req = () => ({ method: 'POST', headers: { host: 'example.com', origin: 'https://example.com', 'content-type': 'application/json', 'x-vercel-forwarded-for': '192.0.2.10' }, body: { messages: [{ role: 'user', content: 'Build my bot' }] } });
 const res = () => { const r: any = {}; r.status = jest.fn(() => r); r.setHeader = jest.fn(() => r); r.json = jest.fn(() => r); return r; };
 const original = process.env;
