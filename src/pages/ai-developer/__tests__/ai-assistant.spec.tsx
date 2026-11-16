@@ -98,6 +98,38 @@ describe('AI strategy assistant', () => {
         expect(screen.getByText(/2 consecutive losses or 1 consecutive wins/)).toBeInTheDocument();
         expect(compileAIBotToXml).toHaveBeenCalledWith(expect.objectContaining({ rules: streakSpec.rules }));
     });
+    it('sends on Enter, keeps Shift+Enter for a new line and does not send while busy', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ reply: 'Which market?', spec: null }) });
+        render(<AIAssistant dashboard={{}} load_modal={{}} run_panel={{}} />);
+        const box = screen.getByLabelText('Your strategy message') as HTMLTextAreaElement;
+        fireEvent.change(box, { target: { value: 'Build a bot' } });
+        fireEvent.keyDown(box, { key: 'Enter', shiftKey: true });
+        expect(fetch).not.toHaveBeenCalled();
+        expect(box.value).toBe('Build a bot');
+        fireEvent.keyDown(box, { key: 'Enter' });
+        await screen.findByText('Which market?');
+        expect(fetch).toHaveBeenCalledTimes(1);
+        expect(JSON.parse((fetch as jest.Mock).mock.calls[0][1].body).messages[0].content).toBe('Build a bot');
+        fireEvent.change(box, { target: { value: 'Another' } });
+        fireEvent.keyDown(box, { key: 'Enter', shiftKey: true });
+        expect(fetch).toHaveBeenCalledTimes(1);
+    });
+    it('downloads the reviewed draft XML', async () => {
+        const createObjectURL = jest.fn(() => 'blob:draft');
+        const revokeObjectURL = jest.fn();
+        Object.assign(URL, { createObjectURL, revokeObjectURL });
+        const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+        (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ reply: 'Ready', spec }) });
+        render(<AIAssistant dashboard={{}} load_modal={{}} run_panel={{}} />);
+        expect(screen.getByRole('button', { name: 'Download .XML' })).toBeDisabled();
+        send('Create a bot'); await screen.findByText('Ready');
+        fireEvent.click(screen.getByRole('button', { name: 'Download .XML' }));
+        expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+        expect(click).toHaveBeenCalledTimes(1);
+        expect(revokeObjectURL).toHaveBeenCalledWith('blob:draft');
+        expect(compileAIBotToXml).toHaveBeenCalled();
+        click.mockRestore();
+    });
     it('does not replace a running bot or one with open contracts', async () => {
         (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ reply: 'Ready', spec }) });
         render(<AIAssistant dashboard={{}} load_modal={{ loadStrategyToBuilder: jest.fn() }} run_panel={{ is_running: true }} />);

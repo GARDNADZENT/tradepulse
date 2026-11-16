@@ -17,8 +17,8 @@ export default function AIAssistant({ dashboard, load_modal, run_panel }: { dash
     const abortRef = useRef<AbortController | null>(null);
     useEffect(() => () => abortRef.current?.abort(), []);
 
-    const sendMessage = async (event: React.FormEvent) => {
-        event.preventDefault();
+    const sendMessage = async (event?: React.FormEvent) => {
+        event?.preventDefault();
         const text = input.trim();
         if (!text || busy) return;
         if (sensitive(text)) { setError('Please never send API keys or login tokens in chat. Revoke any exposed key.'); return; }
@@ -73,6 +73,22 @@ export default function AIAssistant({ dashboard, load_modal, run_panel }: { dash
             setError('Could not load the bot. Please try again.');
         } finally { setLoadingBot(false); }
     };
+    // Enter sends, Shift+Enter adds a line break, and IME composition is left alone.
+    const onComposerKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
+        event.preventDefault();
+        void sendMessage();
+    };
+    const downloadXml = () => {
+        if (!spec || !xmlValid) return;
+        const blob = new Blob([xml], { type: 'application/xml' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `${spec.name.replace(/[^a-z0-9_-]+/gi, '_')}.xml`;
+        anchor.click();
+        URL.revokeObjectURL(url);
+    };
     const prediction = spec && ['DIGITOVER', 'DIGITUNDER', 'DIGITMATCH', 'DIGITDIFF'].includes(spec.contractType);
     const rules = spec?.rules || [];
     const hasRules = rules.length > 0;
@@ -88,7 +104,7 @@ export default function AIAssistant({ dashboard, load_modal, run_panel }: { dash
                 {error && <div className='ai-chat__error' role='alert'>{error}</div>}
                 <form className='ai-chat__form' onSubmit={sendMessage}>
                     <label className='ai-chat__sr-only' htmlFor='ai-chat-input'>Your strategy message</label>
-                    <textarea id='ai-chat-input' value={input} maxLength={4000} onChange={event => setInput(event.target.value)} placeholder='Describe your bot or answer the assistant…' rows={2} />
+                    <textarea id='ai-chat-input' value={input} maxLength={4000} onChange={event => setInput(event.target.value)} onKeyDown={onComposerKeyDown} placeholder='Describe your bot or answer the assistant… (Enter to send, Shift+Enter for a new line)' rows={2} />
                     <button type='submit' disabled={busy || !input.trim()}>{busy ? 'Thinking…' : 'Send'}</button>
                 </form>
                 <p className='ai-chat__privacy'>Messages are sent to OpenRouter and its selected model provider. Don’t share passwords, API keys or account tokens.</p>
@@ -111,6 +127,7 @@ export default function AIAssistant({ dashboard, load_modal, run_panel }: { dash
                 </> : <p className='ai-chat__empty'>Once the details are complete, your draft strategy will appear here. Entries can be a single contract or ordered rules: digit streaks, over/under runs, parity or over/under shares, rising/falling tick runs, and AND/OR groups. The virtual-hook rule supports one-tick digit contracts. Paired virtual hedges are not supported.</p>}
                 <div className='ai-chat__actions'>
                     <button type='button' disabled={!xmlValid || busy} onClick={() => setShowXml(v => !v)}>{showXml ? 'Hide XML' : 'Preview XML'}</button>
+                    <button type='button' disabled={!xmlValid || busy} onClick={downloadXml}>Download .XML</button>
                     <button type='button' className='ai-chat__primary' disabled={!xmlValid || busy || loadingBot} onClick={() => void load()}>{loadingBot ? 'Loading…' : 'Load into Bot Builder'}</button>
                 </div>
                 <p className='ai-chat__warning'>Review and test on a demo account. AI does not guarantee profit. Virtual trades are simulations and may differ from real execution. Martingale can rapidly increase losses; TP/SL are checked after settlement and may be exceeded.</p>
