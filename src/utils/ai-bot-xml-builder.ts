@@ -27,11 +27,36 @@ export type AIBotEntryFilter =
     | 'OVER_UNDER_MAJORITY'
     | 'EXACT_DIGIT';
 
+/**
+ * Entry conditions the AI may combine into multi-rule strategies. Each leaf is
+ * evaluated against the tick history at the start of a purchase cycle; the
+ * first matching rule selects the contract for that cycle.
+ */
+export type AIEntryCondition =
+    | { type: 'ALWAYS' }
+    | { type: 'PARITY_STREAK'; parity: 'EVEN' | 'ODD'; count: number }
+    | { type: 'DIGIT_STREAK'; op: 'LT' | 'GT' | 'LTE' | 'GTE' | 'EQ'; barrier: number; count: number }
+    | { type: 'EXACT_DIGIT'; digit: number }
+    | { type: 'PARITY_SHARE'; parity: 'EVEN' | 'ODD'; window: number; minPercent: number }
+    | { type: 'OVER_UNDER_SHARE'; direction: 'OVER' | 'UNDER'; barrier: number; window: number; minPercent: number }
+    | { type: 'TICK_RUN'; direction: 'RISE' | 'FALL'; count: number }
+    | { type: 'ALL'; of: AIEntryCondition[] }
+    | { type: 'ANY'; of: AIEntryCondition[] };
+
+export interface AIEntryRule {
+    name: string;
+    when: AIEntryCondition;
+    contractType: AIBotContractKind;
+    barrier?: number;
+}
+
 export interface AIBotSpec {
     name: string;
     symbol: string;
     contractType: AIBotContractKind;
     barrier?: number;
+    /** Optional multi-rule strategy. When present, rules select the contract per cycle. */
+    rules?: AIEntryRule[];
     recoveryBarrier?: number;
     durationTicks?: number;
     baseStake: number;
@@ -55,6 +80,107 @@ const getSubmarketForSymbol = (symbol: string): string => {
     return 'random_index';
 };
 
+const PREDICTION_CONTRACTS: AIBotContractKind[] = ['DIGITOVER', 'DIGITUNDER', 'DIGITMATCH', 'DIGITDIFF'];
+const DIGIT_CONTRACTS: AIBotContractKind[] = [
+    'DIGITOVER',
+    'DIGITUNDER',
+    'DIGITEVEN',
+    'DIGITODD',
+    'DIGITMATCH',
+    'DIGITDIFF',
+];
+const clampInt = (value: unknown, min: number, max: number, fallback: number) =>
+    Math.max(min, Math.min(max, Math.round(Number(value ?? fallback) || fallback)));
+
+const joinConditions = (parts: string[], op: 'AND' | 'OR', id: string): string => {
+    if (parts.length === 1) return parts[0];
+    let acc = parts[0];
+    for (let index = 1; index < parts.length; index++) {
+        acc = `<block type="logic_operation" id="${id}_op${index}">
+            <field name="OP">${op}</field>
+            <value name="A">${acc}</value>
+            <value name="B">${parts[index]}</value>
+          </block>`;
+    }
+    return acc;
+};
+
+const conditionToXml = (condition: AIEntryCondition, id: string): string => {
+    switch (condition.type) {
+        case 'ALWAYS':
+            return `<block type="logic_boolean" id="${id}"><field name="BOOL">TRUE</field></block>`;
+        case 'PARITY_STREAK':
+            return `<block type="last_digits_condition" id="${id}">
+                <field name="CONDITION">${condition.parity === 'EVEN' ? 'ALL_EVEN' : 'ALL_ODD'}</field>
+                <value name="N"><block type="math_number" id="${id}_n"><field name="NUM">${clampInt(condition.count, 1, 20, 3)}</field></block></value>
+              </block>`;
+        case 'DIGIT_STREAK':
+            return `<block type="ai_digits_threshold" id="${id}">
+                <field name="OP">${condition.op}</field>
+                <field name="BARRIER">${clampInt(condition.barrier, 0, 9, 4)}</field>
+                <value name="N"><block type="math_number" id="${id}_n"><field name="NUM">${clampInt(condition.count, 1, 20, 2)}</field></block></value>
+              </block>`;
+        case 'EXACT_DIGIT':
+            return `<block type="logic_compare" id="${id}">
+                <field name="OP">EQ</field>
+                <value name="A"><block type="last_digit" id="${id}_d"></block></value>
+                <value name="B"><block type="math_number" id="${id}_n"><field name="NUM">${clampInt(condition.digit, 0, 9, 0)}</field></block></value>
+              </block>`;
+        case 'PARITY_SHARE':
+            return `<block type="al_parity_majority" id="${id}">
+                <field name="WINDOW">${clampInt(condition.window, 5, 1000, 50)}</field>
+                <field name="PARITY">${condition.parity}</field>
+                <field name="THRESHOLD">${clampInt(condition.minPercent, 1, 100, 55)}</field>
+              </block>`;
+        case 'OVER_UNDER_SHARE':
+            return `<block type="al_over_under_majority" id="${id}">
+                <field name="WINDOW">${clampInt(condition.window, 5, 1000, 50)}</field>
+                <field name="DIR">${condition.direction}</field>
+                <field name="BARRIER">${clampInt(condition.barrier, 0, 9, 4)}</field>
+                <field name="THRESHOLD">${clampInt(condition.minPercent, 1, 100, 55)}</field>
+              </block>`;
+        case 'TICK_RUN':
+            return `<block type="ai_tick_run_direction" id="${id}">
+                <field name="DIR">${condition.direction}</field>
+                <value name="N"><block type="math_number" id="${id}_n"><field name="NUM">${clampInt(condition.count, 1, 20, 3)}</field></block></value>
+              </block>`;
+        case 'ALL':
+        case 'ANY':
+            return joinConditions(
+                condition.of.map((child, index) => conditionToXml(child, `${id}_${index}`)),
+                condition.type === 'ALL' ? 'AND' : 'OR',
+                id
+            );
+        default:
+            return `<block type="logic_boolean" id="${id}"><field name="BOOL">FALSE</field></block>`;
+    }
+};
+
+const rulePurchaseToXml = (rule: AIEntryRule, id: string): string => {
+    if (PREDICTION_CONTRACTS.includes(rule.contractType)) {
+        const barrier = clampInt(rule.barrier, 0, 9, 4);
+        return `<block type="ai_purchase_barrier" id="${id}">
+            <field name="PURCHASE_LIST">${rule.contractType}</field>
+            <value name="PREDICTION">
+              <shadow type="math_number" id="${id}_sh"><field name="NUM">${barrier}</field></shadow>
+              <block type="math_number" id="${id}_p"><field name="NUM">${barrier}</field></block>
+            </value>
+          </block>`;
+    }
+    return `<block type="apollo_purchase2" id="${id}"><field name="PURCHASE_LIST">${rule.contractType}</field></block>`;
+};
+
+const rulesToXml = (rules: AIEntryRule[]): string => `
+      <block type="controls_if" id="bp_rules">
+        ${rules.length > 1 ? `<mutation elseif="${rules.length - 1}"></mutation>` : ''}
+        ${rules
+            .map(
+                (rule, index) => `<value name="IF${index}">${conditionToXml(rule.when, `cond_rule_${index}`)}</value>
+        <statement name="DO${index}">${rulePurchaseToXml(rule, `bp_rule_buy_${index}`)}</statement>`
+            )
+            .join('\n        ')}
+      </block>`;
+
 const getTradeCategoryAndType = (ct: AIBotContractKind) => {
     switch (ct) {
         case 'DIGITOVER':
@@ -76,7 +202,13 @@ const getTradeCategoryAndType = (ct: AIBotContractKind) => {
 export function compileAIBotToXml(spec: AIBotSpec): string {
     const symbol = spec.symbol || 'R_50';
     const submarket = getSubmarketForSymbol(symbol);
-    const { cat, type, hasPred } = getTradeCategoryAndType(spec.contractType);
+    const rules = Array.isArray(spec.rules) ? spec.rules.filter(rule => rule && rule.contractType) : [];
+    const ruleMode = rules.length > 0;
+    const headerContract = ruleMode ? rules[0].contractType : spec.contractType;
+    const { cat, type } = getTradeCategoryAndType(headerContract);
+    const hasPred = ruleMode
+        ? rules.some(rule => PREDICTION_CONTRACTS.includes(rule.contractType))
+        : PREDICTION_CONTRACTS.includes(spec.contractType);
     const baseStake = Math.max(0.35, Number(spec.baseStake) || 1);
     const martingale = Math.max(1, Number(spec.martingaleMultiplier) || 2);
     const takeProfit = Math.max(0.5, Number(spec.takeProfit) || 10);
@@ -90,9 +222,9 @@ export function compileAIBotToXml(spec: AIBotSpec): string {
             Math.round(
                 Number(
                     spec.recoveryBarrier ??
-                        (spec.contractType === 'DIGITOVER'
+                        (headerContract === 'DIGITOVER'
                             ? Math.min(8, barrier + 1)
-                            : spec.contractType === 'DIGITUNDER'
+                            : headerContract === 'DIGITUNDER'
                               ? Math.max(1, barrier - 1)
                               : barrier)
                 )
@@ -113,11 +245,11 @@ export function compileAIBotToXml(spec: AIBotSpec): string {
     let conditionBlockXml = '';
     if (entryFilter === 'STREAK') {
         const streakCond =
-            spec.contractType === 'DIGITOVER'
+            headerContract === 'DIGITOVER'
                 ? 'LTE'
-                : spec.contractType === 'DIGITUNDER'
+                : headerContract === 'DIGITUNDER'
                   ? 'GTE'
-                  : spec.contractType === 'DIGITEVEN'
+                  : headerContract === 'DIGITEVEN'
                     ? 'ODD'
                     : 'EVEN';
         conditionBlockXml = `
@@ -127,7 +259,7 @@ export function compileAIBotToXml(spec: AIBotSpec): string {
             <field name="BARRIER">${barrier}</field>
           </block>`;
     } else if (entryFilter === 'PARITY_MAJORITY') {
-        const parity = spec.contractType === 'DIGITODD' ? 'ODD' : 'EVEN';
+        const parity = headerContract === 'DIGITODD' ? 'ODD' : 'EVEN';
         conditionBlockXml = `
           <block type="al_parity_majority" id="cond_parity">
             <field name="WINDOW">${Math.max(10, entryWin)}</field>
@@ -135,7 +267,7 @@ export function compileAIBotToXml(spec: AIBotSpec): string {
             <field name="THRESHOLD">${entryThresh}</field>
           </block>`;
     } else if (entryFilter === 'OVER_UNDER_MAJORITY') {
-        const dir = spec.contractType === 'DIGITUNDER' ? 'UNDER' : 'OVER';
+        const dir = headerContract === 'DIGITUNDER' ? 'UNDER' : 'OVER';
         conditionBlockXml = `
           <block type="al_over_under_majority" id="cond_ou">
             <field name="WINDOW">${Math.max(10, entryWin)}</field>
@@ -162,7 +294,9 @@ export function compileAIBotToXml(spec: AIBotSpec): string {
         <field name="PURCHASE_LIST">${spec.contractType}</field>
       </block>`;
 
-    const beforePurchaseStack = conditionBlockXml
+    const beforePurchaseStack = ruleMode
+        ? rulesToXml(rules)
+        : conditionBlockXml
         ? `<block type="controls_if" id="bp_gate">
             <value name="IF0">${conditionBlockXml}
             </value>

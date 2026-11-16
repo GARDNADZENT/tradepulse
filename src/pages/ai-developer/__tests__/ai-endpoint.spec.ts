@@ -90,6 +90,18 @@ describe('AI server endpoint', () => {
         expect(JSON.stringify(r.json.mock.calls)).not.toContain('private provider detail');
         expect(fetch).toHaveBeenCalledTimes(2); // quota + provider only, no repair
     });
+    it('documents multi-rule entries and no longer refuses ordinary streak strategies', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => true })
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({ reply: 'Which virtual rule?', spec: null }) } }] }) });
+        const r = res(); await handler(req(), r);
+        expect(r.status).toHaveBeenCalledWith(200);
+        const systemPrompt = JSON.parse((fetch as jest.Mock).mock.calls[1][1].body).messages[0].content;
+        expect(systemPrompt).toContain('PARITY_STREAK');
+        expect(systemPrompt).toContain('FIRST matching rule');
+        expect(systemPrompt).toContain('never refuse ordinary digit strategies');
+        expect(systemPrompt).not.toContain('streak entry filters');
+        expect(systemPrompt).toContain('trade Odd after 3 Even');
+    });
     it('instructs the model with explicit market names so (1s) markets are not confused with R_ symbols', async () => {
         (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => true })
             .mockResolvedValueOnce({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({ reply: 'Which market?', spec: null }) } }] }) });

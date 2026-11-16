@@ -392,6 +392,9 @@
 .ai-chat__review dl div { display: flex; justify-content: space-between; gap: 15px; padding: 8px 0; border-bottom: 1px solid #1e293b; }
 .ai-chat__review dt { color: #94a3b8; }
 .ai-chat__review dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.ai-chat__review dl div.ai-chat__rules { flex-direction: column; gap: 6px; }
+.ai-chat__rules ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; text-align: left; }
+.ai-chat__rules li { line-height: 1.45; }
 .ai-chat__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .ai-chat__warning, .ai-chat__error { border: 1px solid #6d5025; background: #302419; color: #f9d79b; border-radius: 8px; padding: 10px; font-size: 11px; line-height: 1.5; }
 .ai-chat__error { margin-bottom: 10px; border-color: #7f1d1d; background: #361820; color: #fecaca; }

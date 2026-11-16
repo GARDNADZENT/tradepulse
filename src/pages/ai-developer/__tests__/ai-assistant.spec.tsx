@@ -19,6 +19,43 @@ describe('AI strategy assistant', () => {
         expect(validateAnswer({ reply: 'Please clarify.', spec: null })).toBe(true);
         expect(validateAnswer({ reply: 'Ready', spec: { ...spec, takeProfit: -1 } })).toBe(false);
     });
+    const streakSpec = {
+        ...spec,
+        name: 'Even Odd Streak',
+        contractType: 'DIGITODD',
+        barrier: 0,
+        recoveryBarrier: 0,
+        entryFilter: 'INSTANT',
+        entryDigit: 0,
+        baseStake: 0.35,
+        martingaleMultiplier: 1.2,
+        virtualHook: { virtualLosses: 2, virtualWins: 1 },
+        rules: [
+            { name: 'Odd after 3 even', when: { type: 'PARITY_STREAK', parity: 'EVEN', count: 3 }, contractType: 'DIGITODD' },
+            { name: 'Even after 3 odd', when: { type: 'PARITY_STREAK', parity: 'ODD', count: 3 }, contractType: 'DIGITEVEN' },
+        ],
+    };
+    it('accepts ordered multi-rule strategies and rejects unsafe rule shapes', () => {
+        expect(validateSpec(streakSpec)).toBe(true);
+        expect(specProblem(streakSpec)).toBeNull();
+        const reasons: Array<[any, string]> = [
+            [{ ...streakSpec, rules: [] }, 'between 1 and 12'],
+            [{ ...streakSpec, contractType: 'DIGITEVEN' }, 'must equal the first rule'],
+            [{ ...streakSpec, barrier: 4 }, 'barrier must equal the first rule'],
+            [{ ...streakSpec, entryFilter: 'EXACT_DIGIT' }, 'entryFilter must be INSTANT'],
+            [{ ...streakSpec, recoveryBarrier: 3 }, 'recoveryBarrier must equal barrier'],
+            [{ ...streakSpec, rules: [{ ...streakSpec.rules[0], when: { type: 'MOON_PHASE' } }] }, 'unsupported entry condition'],
+            [{ ...streakSpec, rules: [{ ...streakSpec.rules[0], when: { type: 'PARITY_STREAK', parity: 'EVEN', count: 0 } }] }, 'count must be an integer from 1 to 20'],
+            [{ ...streakSpec, rules: [{ ...streakSpec.rules[0], extra: true }] }, 'unexpected key'],
+            [{ ...streakSpec, rules: [{ ...streakSpec.rules[0], name: '<script>' }] }, 'name must be'],
+            [{ ...streakSpec, rules: [{ name: 'Rise', when: { type: 'ALWAYS' }, contractType: 'CALL' }], contractType: 'CALL', barrier: 0, recoveryBarrier: 0 }, 'every rule buys a digit contract'],
+            [{ ...streakSpec, rules: [{ ...streakSpec.rules[0], when: { type: 'ALL', of: [{ type: 'ALWAYS' }] } }] }, '2 to 5 conditions'],
+            [(() => { const { virtualHook, ...rest } = streakSpec; return rest; })(), 'missing required key "virtualHook"'],
+        ];
+        for (const [candidate, message] of reasons) expect(specProblem(candidate)).toContain(message);
+        expect(validateSpec({ ...streakSpec, rules: [{ ...streakSpec.rules[0], when: { type: 'ALL', of: [{ type: 'ALWAYS' }, { type: 'EXACT_DIGIT', digit: 4 }] } }] })).toBe(true);
+        expect(validateSpec({ ...streakSpec, rules: [{ ...streakSpec.rules[0], when: { type: 'TICK_RUN', direction: 'RISE', count: 3 } }] })).toBe(true);
+    });
     it('supports conversation, reviews locally compiled XML and never auto-runs', async () => {
         (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ reply: 'What stake?', spec: null }) })
             .mockResolvedValueOnce({ ok: true, json: async () => ({ reply: 'Review this draft.', spec }) });
@@ -50,6 +87,16 @@ describe('AI strategy assistant', () => {
         send('Create a virtual bot'); await screen.findByText('Review your virtual hook.');
         expect(screen.getByText(/2 consecutive losses or 1 consecutive wins/)).toBeInTheDocument();
         expect(compileAIBotToXml).toHaveBeenCalledWith(expect.objectContaining({ assistantVirtualHook: virtualSpec.virtualHook }));
+    });
+    it('lists each multi-rule entry in the review panel', async () => {
+        global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ reply: 'Review the rules.', spec: streakSpec }) });
+        render(<AIAssistant dashboard={{}} load_modal={{}} run_panel={{}} />);
+        send('Build an even odd streak bot'); await screen.findByText('Review the rules.');
+        expect(screen.getByText('Rules (first match wins)')).toBeInTheDocument();
+        expect(screen.getByText('Odd after 3 even: last 3 digits all even → buy Odd')).toBeInTheDocument();
+        expect(screen.getByText('Even after 3 odd: last 3 digits all odd → buy Even')).toBeInTheDocument();
+        expect(screen.getByText(/2 consecutive losses or 1 consecutive wins/)).toBeInTheDocument();
+        expect(compileAIBotToXml).toHaveBeenCalledWith(expect.objectContaining({ rules: streakSpec.rules }));
     });
     it('does not replace a running bot or one with open contracts', async () => {
         (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ reply: 'Ready', spec }) });

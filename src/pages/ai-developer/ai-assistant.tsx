@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { compileAIBotToXml, loadXmlIntoBotBuilder } from '@/utils/ai-bot-xml-builder';
+import { describeEntryRule } from './ai-rule-description';
 import { AIStrategy, sensitive, validateAnswer } from './ai-strategy-validation';
 
 type Message = { role: 'user' | 'assistant'; content: string; display?: string };
@@ -73,6 +74,8 @@ export default function AIAssistant({ dashboard, load_modal, run_panel }: { dash
         } finally { setLoadingBot(false); }
     };
     const prediction = spec && ['DIGITOVER', 'DIGITUNDER', 'DIGITMATCH', 'DIGITDIFF'].includes(spec.contractType);
+    const rules = spec?.rules || [];
+    const hasRules = rules.length > 0;
     return (
         <section className='ai-chat' aria-label='AI Strategy Assistant'>
             <div className='ai-chat__conversation'>
@@ -98,13 +101,14 @@ export default function AIAssistant({ dashboard, load_modal, run_panel }: { dash
                         <div><dt>Name</dt><dd>{spec.name}</dd></div>
                         <div><dt>Market</dt><dd>{spec.symbol}</dd></div>
                         <div><dt>Contract</dt><dd>{spec.contractType}{prediction ? ` · ${spec.barrier}` : ''} · {spec.durationTicks} tick(s)</dd></div>
-                        <div><dt>Entry</dt><dd>{spec.entryFilter === 'INSTANT' ? 'Every cycle (instant)' : `Latest digit equals ${spec.entryDigit} (not guaranteed fresh)`}</dd></div>
+                        <div><dt>Entry</dt><dd>{hasRules ? 'Rules are checked in order every tick; if none match, wait for the next tick' : spec.entryFilter === 'INSTANT' ? 'Every cycle (instant)' : `Latest digit equals ${spec.entryDigit} (not guaranteed fresh)`}</dd></div>
                         <div><dt>Stake / multiplier</dt><dd>{spec.baseStake} / ×{spec.martingaleMultiplier}</dd></div>
-                        <div><dt>After a loss</dt><dd>{prediction ? `Prediction ${spec.recoveryBarrier}; ` : ''}multiply stake ×{spec.martingaleMultiplier}; reset on win</dd></div>
+                        <div><dt>After a loss</dt><dd>{hasRules ? '' : prediction ? `Prediction ${spec.recoveryBarrier}; ` : ''}multiply stake ×{spec.martingaleMultiplier}; reset on win</dd></div>
                         <div><dt>Virtual hook</dt><dd>{spec.virtualHook ? `Start virtual; ${spec.virtualHook.virtualLosses} consecutive losses or ${spec.virtualHook.virtualWins} consecutive wins → real; real loss → virtual; real stake preserved` : 'Off'}</dd></div>
+                        {hasRules && <div className='ai-chat__rules'><dt>Rules (first match wins)</dt><dd><ol>{rules.map((rule, index) => <li key={index}>{describeEntryRule(rule)}</li>)}</ol></dd></div>}
                         <div><dt>TP / SL</dt><dd>{spec.takeProfit} / {spec.stopLoss} (account currency)</dd></div>
                     </dl>
-                </> : <p className='ai-chat__empty'>Once the details are complete, your draft strategy will appear here. Supported: single contracts with instant or exact-digit entry. The virtual-hook rule supports one-tick digit contracts. Paired virtual hedges are not supported.</p>}
+                </> : <p className='ai-chat__empty'>Once the details are complete, your draft strategy will appear here. Entries can be a single contract or ordered rules: digit streaks, over/under runs, parity or over/under shares, rising/falling tick runs, and AND/OR groups. The virtual-hook rule supports one-tick digit contracts. Paired virtual hedges are not supported.</p>}
                 <div className='ai-chat__actions'>
                     <button type='button' disabled={!xmlValid || busy} onClick={() => setShowXml(v => !v)}>{showXml ? 'Hide XML' : 'Preview XML'}</button>
                     <button type='button' className='ai-chat__primary' disabled={!xmlValid || busy || loadingBot} onClick={() => void load()}>{loadingBot ? 'Loading…' : 'Load into Bot Builder'}</button>
