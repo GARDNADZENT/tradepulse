@@ -8,6 +8,7 @@ import {
     compileAIBotToXml,
     loadXmlIntoBotBuilder,
 } from '@/utils/ai-bot-xml-builder';
+import AIAssistant from './ai-assistant';
 import './ai-developer.scss';
 
 const MARKETS = [
@@ -335,7 +336,7 @@ const AIDeveloper = observer(() => {
             setEntryWindow(2);
         }
 
-        setStatusNote('AI prompt parsed and compiled into Deriv Blockly XML blocks.');
+        setStatusNote('Keywords applied to the manual settings below. Review them before loading.');
     };
 
     const buildCurrentXml = React.useCallback(
@@ -424,7 +425,7 @@ const AIDeveloper = observer(() => {
             <div className='ai-dev__inner'>
                 <header className='ai-dev__header'>
                     <div>
-                        <span className='ai-dev__kicker'>RISKMANAGERS AI STRATEGY ARCHITECT</span>
+                        <span className='ai-dev__kicker'>TRADERSPULSE AI STRATEGY ARCHITECT</span>
                         <h1>AI Developer</h1>
                         <p>
                             Describe your Deriv bot in plain English or tune Virtual Hook &amp; Analysis Logics parameters
@@ -439,9 +440,11 @@ const AIDeveloper = observer(() => {
                     </div>
                 </header>
 
+                <AIAssistant dashboard={dashboard} load_modal={load_modal} run_panel={run_panel} />
+
                 <section className='ai-dev__prompt-card'>
                     <div className='ai-dev__prompt-top'>
-                        <strong>Natural-Language Bot Prompt</strong>
+                        <strong>Manual strategy settings and presets</strong>
                         {liveRecommendation && (
                             <button
                                 type='button'
@@ -465,7 +468,7 @@ const AIDeveloper = observer(() => {
                             placeholder='e.g. Build an Over 2 bot on Volatility 10 (1s) with Virtual Hook (2 losses), $2 stake, 2.1x martingale, $15 TP, $30 SL'
                         />
                         <button type='button' className='ai-dev__compile-btn' onClick={parseNaturalPrompt}>
-                            Generate Strategy
+                            Parse Keywords
                         </button>
                     </div>
                     <div className='ai-dev__presets'>
