@@ -38,8 +38,15 @@ export default function AIAssistant({ dashboard, load_modal, run_panel }: { dash
             });
             let data: any;
             try { data = await response.json(); } catch { throw new Error('AI Developer is unavailable. Please try again later.'); }
-            if (!response.ok) throw new Error(typeof data?.error === 'string' ? data.error : 'AI Developer is unavailable.');
-            if (!validateAnswer(data)) throw new Error('The AI returned an invalid strategy. Please clarify and try again.');
+            // If the AI produced a readable reply but no valid draft, keep it in the
+            // conversation so the user can clarify instead of hitting a dead end.
+            const showReply = () => {
+                if (typeof data?.reply === 'string' && data.reply.trim()) {
+                    setMessages(prev => [...prev, { role: 'assistant', content: data.reply, display: data.reply }]);
+                }
+            };
+            if (!response.ok) { showReply(); throw new Error(typeof data?.error === 'string' ? data.error : 'AI Developer is unavailable.'); }
+            if (!validateAnswer(data)) { showReply(); throw new Error('The AI returned an invalid strategy. Please clarify and try again.'); }
             setMessages(prev => [...prev, { role: 'assistant', content: JSON.stringify(data), display: data.reply }]);
             setSpec(data.spec);
         } catch (err) {

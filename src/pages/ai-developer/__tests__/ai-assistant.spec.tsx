@@ -2,7 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AIAssistant from '../ai-assistant';
 import { compileAIBotToXml, loadXmlIntoBotBuilder } from '@/utils/ai-bot-xml-builder';
-import { validateAnswer, validateSpec } from '../ai-strategy-validation';
+import { answerProblem, specProblem, validateAnswer, validateSpec } from '../ai-strategy-validation';
 
 jest.mock('@/utils/ai-bot-xml-builder', () => ({
     compileAIBotToXml: jest.fn(() => '<xml><block type="trade_definition" /></xml>'),

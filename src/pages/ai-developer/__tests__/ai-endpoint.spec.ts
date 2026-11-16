@@ -50,7 +50,54 @@ describe('AI server endpoint', () => {
         expect(JSON.stringify(r.json.mock.calls)).not.toContain('test-key');
     });
     it('rejects invalid model data and never returns provider error details', async () => {
-        (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => true }).mockResolvedValueOnce({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({ reply: 'Ready', spec: { ...spec, contractType: 'HEDGE' } }) } }] }) });
-        const r = res(); await handler(req(), r); expect(r.status).toHaveBeenCalledWith(502); expect(r.json.mock.calls[0][0]).not.toHaveProperty('spec');
+        const invalid = { reply: 'Ready', spec: { ...spec, contractType: 'HEDGE' } };
+        (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => true })
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify(invalid) } }] }) })
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify(invalid) } }] }) });
+        const r = res(); await handler(req(), r);
+        expect(r.status).toHaveBeenCalledWith(502);
+        expect(r.json.mock.calls[0][0]).not.toHaveProperty('spec');
+        expect(r.json.mock.calls[0][0].reply).toBe('Ready');
+        expect(fetch).toHaveBeenCalledTimes(3); // quota + first attempt + one repair attempt
+    });
+    it('repairs a minor formatting mistake once and returns the corrected draft', async () => {
+        const broken = { reply: 'Review it', spec: { ...spec, virtualHook: { enabled: true, virtualLosses: 2, virtualWins: 1 } } };
+        (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => true })
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify(broken) } }] }) })
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({ reply: 'Review it', spec: { ...spec, virtualHook: { virtualLosses: 2, virtualWins: 1 } } }) } }] }) });
+        const r = res(); await handler(req(), r);
+        expect(r.status).toHaveBeenCalledWith(200);
+        expect(r.json).toHaveBeenCalledWith({ reply: 'Review it', spec: { ...spec, virtualHook: { virtualLosses: 2, virtualWins: 1 } } });
+        const repairBody = JSON.parse((fetch as jest.Mock).mock.calls[2][1].body);
+        expect(repairBody.messages.at(-1).content).toContain('exactly virtualLosses and virtualWins');
+        expect(fetch).toHaveBeenCalledTimes(3);
+    });
+    it('repairs malformed JSON output once', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => true })
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ choices: [{ message: { content: 'not json at all' } }] }) })
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({ reply: 'Review it', spec }) } }] }) });
+        const r = res(); await handler(req(), r);
+        expect(r.status).toHaveBeenCalledWith(200);
+        expect(r.json).toHaveBeenCalledWith({ reply: 'Review it', spec });
+        expect(fetch).toHaveBeenCalledTimes(3);
+    });
+    it('does not retry when the provider itself is unavailable', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => true })
+            .mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({ error: 'private provider detail' }) });
+        const r = res(); await handler(req(), r);
+        expect(r.status).toHaveBeenCalledWith(502);
+        expect(r.json.mock.calls[0][0].error).toContain('provider is unavailable');
+        expect(JSON.stringify(r.json.mock.calls)).not.toContain('private provider detail');
+        expect(fetch).toHaveBeenCalledTimes(2); // quota + provider only, no repair
+    });
+    it('instructs the model with explicit market names so (1s) markets are not confused with R_ symbols', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => true })
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({ reply: 'Which market?', spec: null }) } }] }) });
+        const r = res(); await handler(req(), r);
+        expect(r.status).toHaveBeenCalledWith(200);
+        const systemPrompt = JSON.parse((fetch as jest.Mock).mock.calls[1][1].body).messages[0].content;
+        expect(systemPrompt).toContain('Volatility 10 (1s)=1HZ10V');
+        expect(systemPrompt).toContain('Volatility 10=R_10');
+        expect(systemPrompt).toContain('Never use an R_ symbol for a (1s) market');
     });
 });
