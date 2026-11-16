@@ -1,0 +1,17 @@
+# AI Developer setup (OpenRouter)
+
+The AI endpoint is a Vercel serverless function at `/api/ai-developer`. It is disabled (503) unless all configuration and its distributed quota database are available. Never put secrets into client-side code, Git, or chat.
+
+1. Revoke any OpenRouter key that was shared publicly or in chat. Create a replacement and set strict OpenRouter credit/spend limits. Use a model supported by OpenRouter's JSON response format.
+2. Run `supabase/migrations/20261012_ai_developer_quota.sql` in the site's Supabase project. It creates a server-only quota table and a service-role-only RPC; it does not alter existing tables. The RPC uses row locks for atomic limits across Vercel instances. It permits at most 5 requests per IP per minute and 100 total requests per rolling day. Failed provider calls also consume quota. This is abuse reduction, not user authentication or a spending guarantee. Set provider credit limits and consider Vercel Firewall controls; anyone can use the public endpoint within the quota. Hashed IP buckets persist; arrange periodic deletion of old `client:` rows if retention is not desired.
+3. In the Vercel project environment settings, add these **server-only** variables for each relevant environment:
+   - `OPENROUTER_API_KEY`: the replacement OpenRouter key.
+   - `OPENROUTER_MODEL`: optional; defaults to `openai/gpt-4o-mini`.
+   - `AI_LIMIT_SUPABASE_URL`: URL of the Supabase project containing the migration (e.g. `https://<project>.supabase.co`).
+   - `AI_LIMIT_SUPABASE_SERVICE_ROLE_KEY`: that project's service role key (not the publishable/anon key).
+   - `AI_RATE_LIMIT_SECRET`: a random secret at least 32 characters long, used to HMAC IP addresses for quota buckets. Rotating it resets per-IP buckets.
+4. Redeploy after setting variables. No secrets should be prefixed `NEXT_PUBLIC` or added to `rsbuild.config.ts`. Check the feature from the deployed site; the plain Rsbuild dev server does not run Vercel functions. For local end-to-end testing use a Vercel-compatible local function runner and local environment variables; never commit them.
+
+Messages are sent to OpenRouter and the selected model provider. They are held only in page state by this feature and are not intentionally logged or saved by the server. Refer to the providers' own retention policies. The service uses same-origin POST, limits input, fails closed if quotas are unavailable, and filters common token patterns, but this is not a substitute for never entering credentials in chat.
+
+The AI generates a validated, deliberately limited structured specification, not arbitrary executable code or XML. The site compiles it locally using existing Blockly blocks. Supported drafts are one contract, instant or latest-exact-digit entry, fixed/martingale stake, optional recovery prediction and post-settlement TP/SL. Unsupported instructions (including paired contracts, virtual trading, and fresh-tick requirements) must be clarified instead of silently approximated. Review every setting in Bot Builder and test on a demo account. Generated drafts do not start trades automatically; TP/SL is checked after settlement and may be exceeded. Market and contract availability, minimum stakes, execution and provider output still need real-world verification.
