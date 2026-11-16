@@ -17,6 +17,31 @@ describe('AI server endpoint', () => {
         expect(r.status).toHaveBeenCalledWith(429); expect(fetch).toHaveBeenCalledTimes(1);
         const payload = JSON.parse((fetch as jest.Mock).mock.calls[0][1].body); expect(payload.client_hash).toMatch(/^[a-f0-9]{64}$/); expect(JSON.stringify(payload)).not.toContain('192.0.2.10');
     });
+    it('reports safe reference codes for quota errors without disclosing credentials or response bodies', async () => {
+        for (const status of [400, 401, 403, 404, 429, 500]) {
+            (fetch as jest.Mock).mockReset().mockResolvedValueOnce({ ok: false, status, json: async () => ({ message: 'private provider detail' }) });
+            const r = res(); await handler(req(), r);
+            expect(r.status).toHaveBeenCalledWith(503);
+            const body = JSON.stringify(r.json.mock.calls);
+            expect(body).toContain(status === 500 ? 'Q-DATABASE' : `Q-${status}`);
+            expect(body).not.toContain('private provider detail');
+            expect(body).not.toContain('test-service-key');
+            expect(fetch).toHaveBeenCalledTimes(1);
+        }
+    });
+    it('fails closed with distinct references for missing IP, failed connection, and malformed quota result', async () => {
+        const noIp = req(); delete (noIp.headers as any)['x-vercel-forwarded-for'];
+        const r1 = res(); await handler(noIp, r1);
+        expect(r1.json.mock.calls[0][0].error).toContain('Q-IP');
+        expect(fetch).not.toHaveBeenCalled();
+        (fetch as jest.Mock).mockRejectedValueOnce(new Error('private error'));
+        const r2 = res(); await handler(req(), r2);
+        expect(r2.json.mock.calls[0][0].error).toContain('Q-NETWORK');
+        (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ unexpected: true }) });
+        const r3 = res(); await handler(req(), r3);
+        expect(r3.json.mock.calls[0][0].error).toContain('Q-RESPONSE');
+        expect(fetch).toHaveBeenCalledTimes(2);
+    });
     it('calls OpenRouter with server credentials and validates the returned structured draft', async () => {
         (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => true }).mockResolvedValueOnce({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({ reply: 'Review it', spec }) } }] }) });
         const r = res(); await handler(req(), r);

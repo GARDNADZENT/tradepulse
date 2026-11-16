@@ -25,15 +25,27 @@ module.exports = async function handler(req, res) {
         return send(res, 503, { error: 'AI Developer is not configured yet. Please contact the site owner.' });
     // Vercel supplies this header at the edge. Never send raw IP addresses to the database.
     const ip = (req.headers['x-vercel-forwarded-for'] || '').split(',')[0].trim();
-    if (!ip || ip.length > 64) return send(res, 503, { error: 'AI usage protection is unavailable.' });
+    if (!ip || ip.length > 64) return send(res, 503, { error: 'AI usage protection is unavailable. Reference: Q-IP.' });
     const clientHash = createHmac('sha256', AI_RATE_LIMIT_SECRET).update(ip).digest('hex');
+    let quota;
     try {
-        const quota = await fetch(`${AI_LIMIT_SUPABASE_URL.replace(/\/$/, '')}/rest/v1/rpc/consume_ai_developer_quota`, {
+        quota = await fetch(`${AI_LIMIT_SUPABASE_URL.replace(/\/$/, '')}/rest/v1/rpc/consume_ai_developer_quota`, {
             method: 'POST', headers: { 'Content-Type': 'application/json', apikey: AI_LIMIT_SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${AI_LIMIT_SUPABASE_SERVICE_ROLE_KEY}` },
             body: JSON.stringify({ client_hash: clientHash }), signal: AbortSignal.timeout(8000),
         });
-        if (!quota.ok) return send(res, 503, { error: 'AI usage protection is unavailable.' });
-        if ((await quota.json()) !== true) return send(res, 429, { error: 'AI usage limit reached. Please try again later.' });
+    } catch {
+        return send(res, 503, { error: 'AI usage protection is unavailable. Reference: Q-NETWORK.' });
+    }
+    if (!quota.ok) {
+        // Return only a small, safe diagnostic category, never provider error bodies or secrets.
+        const reference = [400, 401, 403, 404, 429].includes(quota.status) ? `Q-${quota.status}` : 'Q-DATABASE';
+        return send(res, 503, { error: `AI usage protection is unavailable. Reference: ${reference}.` });
+    }
+    let allowed;
+    try { allowed = await quota.json(); } catch { return send(res, 503, { error: 'AI usage protection is unavailable. Reference: Q-RESPONSE.' }); }
+    if (allowed === false) return send(res, 429, { error: 'AI usage limit reached. Please try again later.' });
+    if (allowed !== true) return send(res, 503, { error: 'AI usage protection is unavailable. Reference: Q-RESPONSE.' });
+    try {
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST', headers: { Authorization: `Bearer ${OPENROUTER_API_KEY}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ model: process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini', messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...req.body.messages], temperature: 0.2, max_tokens: 900, response_format: { type: 'json_object' } }),
