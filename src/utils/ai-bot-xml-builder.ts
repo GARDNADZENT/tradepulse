@@ -50,11 +50,19 @@ export interface AIEntryRule {
     barrier?: number;
 }
 
+export interface AIBotHedge {
+    /** Second leg bought at the same moment as the top-level contract. */
+    secondContractType: AIBotContractKind;
+    secondBarrier?: number;
+}
+
 export interface AIBotSpec {
     name: string;
     symbol: string;
     contractType: AIBotContractKind;
     barrier?: number;
+    /** Optional simultaneous two-leg hedge. One cycle is the combined result of both legs. */
+    hedge?: AIBotHedge;
     /** Optional multi-rule strategy. When present, rules select the contract per cycle. */
     rules?: AIEntryRule[];
     recoveryBarrier?: number;
@@ -204,11 +212,14 @@ export function compileAIBotToXml(spec: AIBotSpec): string {
     const submarket = getSubmarketForSymbol(symbol);
     const rules = Array.isArray(spec.rules) ? spec.rules.filter(rule => rule && rule.contractType) : [];
     const ruleMode = rules.length > 0;
+    const hedge = spec.hedge?.secondContractType ? spec.hedge : null;
+    const hedgeMode = Boolean(hedge);
     const headerContract = ruleMode ? rules[0].contractType : spec.contractType;
     const { cat, type } = getTradeCategoryAndType(headerContract);
     const hasPred = ruleMode
         ? rules.some(rule => PREDICTION_CONTRACTS.includes(rule.contractType))
-        : PREDICTION_CONTRACTS.includes(spec.contractType);
+        : PREDICTION_CONTRACTS.includes(spec.contractType) ||
+          Boolean(hedge && PREDICTION_CONTRACTS.includes(hedge.secondContractType));
     const baseStake = Math.max(0.35, Number(spec.baseStake) || 1);
     const martingale = Math.max(1, Number(spec.martingaleMultiplier) || 2);
     const takeProfit = Math.max(0.5, Number(spec.takeProfit) || 10);
@@ -290,7 +301,20 @@ export function compileAIBotToXml(spec: AIBotSpec): string {
           </block>`;
     }
 
-    const purchaseBlock = `<block type="purchase" id="bp_purchase">
+    const predictionXml = (input: string, id: string, value: number) => `
+        <value name="${input}">
+          <shadow type="math_number" id="${id}_sh"><field name="NUM">${value}</field></shadow>
+          <block type="math_number" id="${id}_n"><field name="NUM">${value}</field></block>
+        </value>`;
+
+    const hedgeBarrier = Math.max(0, Math.min(9, Math.round(Number(hedge?.secondBarrier ?? 0))));
+    const purchaseBlock = hedgeMode
+        ? `<block type="purchase_hedge" id="bp_purchase">
+        <field name="PURCHASE_LIST_1">${spec.contractType}</field>
+        <field name="PURCHASE_LIST_2">${hedge?.secondContractType}</field>
+        ${predictionXml('PREDICTION_1', 'bp_pred_1', barrier)}${predictionXml('PREDICTION_2', 'bp_pred_2', hedgeBarrier)}
+      </block>`
+        : `<block type="purchase" id="bp_purchase">
         <field name="PURCHASE_LIST">${spec.contractType}</field>
       </block>`;
 

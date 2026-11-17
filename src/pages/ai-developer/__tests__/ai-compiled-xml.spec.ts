@@ -88,4 +88,42 @@ describe('AI compiled Blockly XML', () => {
         expect(doc.querySelector('#bp_rule_buy_1 > field[name="PURCHASE_LIST"]')?.textContent).toBe('DIGITUNDER');
         expect(doc.querySelector('block[type="virtual_hook_config"]')).toBeNull();
     });
+
+    it('compiles a simultaneous Rise + Fall hedge with both leg predictions', () => {
+        const spec = {
+            name: 'Rise Fall Hedge', symbol: '1HZ100V', contractType: 'CALL', barrier: 0, recoveryBarrier: 0,
+            durationTicks: 3, baseStake: 0.35, martingaleMultiplier: 2, takeProfit: 2.8, stopLoss: 10,
+            entryFilter: 'INSTANT', entryDigit: 0, virtualHook: { virtualLosses: 2, virtualWins: 1 },
+            hedge: { secondContractType: 'PUT' },
+        };
+        if (!validateSpec(spec)) throw new Error('Test spec failed validation');
+        const doc = new DOMParser().parseFromString(compileAIBotToXml({ ...spec, assistantVirtualHook: spec.virtualHook }), 'application/xml');
+        expect(doc.querySelector('parsererror')).toBeNull();
+        expect(doc.querySelector('#bp_purchase')?.getAttribute('type')).toBe('purchase_hedge');
+        expect(doc.querySelector('#bp_purchase > field[name="PURCHASE_LIST_1"]')?.textContent).toBe('CALL');
+        expect(doc.querySelector('#bp_purchase > field[name="PURCHASE_LIST_2"]')?.textContent).toBe('PUT');
+        expect(doc.querySelector('#bp_purchase #bp_pred_1_n > field')?.textContent).toBe('0');
+        expect(doc.querySelector('#bp_purchase #bp_pred_2_n > field')?.textContent).toBe('0');
+        expect(doc.querySelector('#td_tradetype field[name="TRADETYPE_LIST"]')?.textContent).toBe('callput');
+        expect(doc.querySelector('#td_options > mutation')?.getAttribute('has_prediction')).toBe('false');
+        expect(doc.querySelector('#td_options #shad_dur > field')?.textContent).toBe('3');
+        expect(doc.querySelector('#init_ai_vh > field[name="LOSSES"]')?.textContent).toBe('2');
+        expect(doc.querySelector('block[type="purchase"]')).toBeNull();
+    });
+    it('compiles a digit hedge with an explicit second barrier', () => {
+        const spec = {
+            name: 'Digit Hedge', symbol: '1HZ10V', contractType: 'DIGITOVER', barrier: 2, recoveryBarrier: 2,
+            durationTicks: 1, baseStake: 1, martingaleMultiplier: 2, takeProfit: 5, stopLoss: 20,
+            entryFilter: 'INSTANT', entryDigit: 0, virtualHook: null,
+            hedge: { secondContractType: 'DIGITUNDER', secondBarrier: 7 },
+        };
+        if (!validateSpec(spec)) throw new Error('Test spec failed validation');
+        const doc = new DOMParser().parseFromString(compileAIBotToXml(spec), 'application/xml');
+        expect(doc.querySelector('parsererror')).toBeNull();
+        expect(doc.querySelector('#bp_purchase')?.getAttribute('type')).toBe('purchase_hedge');
+        expect(doc.querySelector('#bp_purchase #bp_pred_1_n > field')?.textContent).toBe('2');
+        expect(doc.querySelector('#bp_purchase #bp_pred_2_n > field')?.textContent).toBe('7');
+        expect(doc.querySelector('#td_options > mutation')?.getAttribute('has_prediction')).toBe('true');
+        expect(doc.querySelector('block[type="virtual_hook_config"]')).toBeNull();
+    });
 });

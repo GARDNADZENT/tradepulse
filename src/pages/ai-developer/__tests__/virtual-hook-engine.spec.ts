@@ -78,11 +78,56 @@ describe('AI Developer virtual hook', () => {
         // The stopped interpreter will no longer await the canceled virtual promise.
         void pending;
     });
-    it('rejects paired virtual hooks and fails closed if market precision is missing', async () => {
+    it('fails closed if market precision is missing', async () => {
         const engine = createEngine();
-        await expect(engine.purchaseHedge('DIGITOVER', 2, 'DIGITUNDER', 5)).rejects.toThrow(/paired/);
         engine.$scope.ticksService.pipSizes = {};
         await expect(engine.purchase('DIGITOVER', 2)).rejects.toThrow(/precision/);
         expect(mockSend).not.toHaveBeenCalled();
+    });
+
+    const runVirtualHedge = async (engine: any, legs: [string, number, string, number], quotes: Array<[number, number]>) => {
+        const promise = engine.purchaseHedge(legs[0], legs[1], legs[2], legs[3]);
+        quotes.forEach(([quote, epoch]) => engine.processVirtualTick({ symbol: '1HZ10V', quote, epoch }));
+        await jest.runOnlyPendingTimersAsync();
+        await promise;
+    };
+
+    it('simulates both hedge legs on the same ticks and counts one combined outcome', async () => {
+        const emit = jest.spyOn(observer, 'emit');
+        const engine = createEngine();
+        engine.tradeOptions.duration = 3; // 3-tick Rise + Fall, 0.35 per leg would be scaled by stake below
+        await runVirtualHedge(engine, ['CALL', 0, 'PUT', 0], [[100, 1], [100.05, 2], [100.02, 3], [100.1, 4]]);
+        const rows = emit.mock.calls.filter((call: any[]) => call[0] === 'bot.ai_virtual_contract');
+        // One row for the pair, never one per leg: the cycle is a single combined result.
+        expect(rows).toHaveLength(1);
+        expect(rows[0][1]).toMatchObject({ outcome: 'lost', contract_type: 'CALL+PUT', entry_spot: '100.00', exit_spot: '100.10' });
+        expect(engine.vh_state.loss_count).toBe(1);
+        expect(engine.vh_state.is_virtual).toBe(true);
+        expect(mockSend).not.toHaveBeenCalled();
+    });
+
+    it('loses both legs when the exit price is unchanged and switches to real after two combined losses', async () => {
+        const emit = jest.spyOn(observer, 'emit');
+        const engine = createEngine();
+        engine.tradeOptions.duration = 3;
+        await runVirtualHedge(engine, ['CALL', 0, 'PUT', 0], [[100, 1], [100, 2], [100, 3], [100, 4]]);
+        const first = emit.mock.calls.filter((call: any[]) => call[0] === 'bot.ai_virtual_contract');
+        expect(first).toHaveLength(1);
+        expect(first[0][1].outcome).toBe('lost');
+        expect(engine.vh_state.loss_count).toBe(1);
+        await runVirtualHedge(engine, ['CALL', 0, 'PUT', 0], [[100, 5], [99.9, 6], [99.8, 7], [99.7, 8]]);
+        expect(engine.vh_state.loss_count).toBe(0);
+        expect(engine.vh_state.is_virtual).toBe(false); // two combined losses hand control to real trading
+        expect(mockSend).not.toHaveBeenCalled();
+    });
+
+    it('simulates a one-tick digit pair as one cycle', async () => {
+        const emit = jest.spyOn(observer, 'emit');
+        const engine = createEngine();
+        await runVirtualHedge(engine, ['DIGITOVER', 2, 'DIGITUNDER', 7], [[100.09, 1]]);
+        const rows = emit.mock.calls.filter((call: any[]) => call[0] === 'bot.ai_virtual_contract');
+        expect(rows).toHaveLength(1);
+        expect(rows[0][1]).toMatchObject({ outcome: 'lost', contract_type: 'DIGITOVER+DIGITUNDER' });
+        expect(engine.vh_state.loss_count).toBe(1);
     });
 });

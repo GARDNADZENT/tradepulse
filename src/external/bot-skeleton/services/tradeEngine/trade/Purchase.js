@@ -149,6 +149,51 @@ const getPredictionVariableName = () => {
     }
 };
 
+// Virtual settlement rules shared by single and paired simulations. Each leg is
+// evaluated against the same entry/exit spots so a pair mirrors one real cycle.
+const evaluateVirtualLeg = (contract_type, prediction, entry_spot_str, exit_spot_str) => {
+    const entry_spot = Number(entry_spot_str);
+    const exit_spot = Number(exit_spot_str);
+    const last_digit = Number(exit_spot_str.slice(-1));
+    const prediction_barrier = parseInt(prediction, 10);
+    switch (contract_type) {
+        case 'CALL':
+            return exit_spot > entry_spot;
+        case 'PUT':
+            return exit_spot < entry_spot;
+        case 'DIGITMATCH':
+            return last_digit === prediction_barrier;
+        case 'DIGITDIFF':
+            return last_digit !== prediction_barrier;
+        case 'DIGITOVER':
+            return last_digit > prediction_barrier;
+        case 'DIGITUNDER':
+            return last_digit < prediction_barrier;
+        case 'DIGITODD':
+            return last_digit % 2 !== 0;
+        case 'DIGITEVEN':
+            return last_digit % 2 === 0;
+        default:
+            return false;
+    }
+};
+
+// A paired cycle is one outcome: the sum of both legs. A Rise + Fall pair wins one
+// leg and loses the other, which normally nets a loss after the payout spread.
+const combineVirtualLegs = (legs, per_leg_stake, entry_spot_str, exit_spot_str) => {
+    const results = legs.map(leg => ({
+        contract_type: leg.contract_type,
+        prediction_barrier: parseInt(leg.prediction, 10),
+        is_win: evaluateVirtualLeg(leg.contract_type, leg.prediction, entry_spot_str, exit_spot_str),
+    }));
+    const profit = results.reduce(
+        (sum, leg) => sum + (leg.is_win ? per_leg_stake * 0.95 : -per_leg_stake),
+        0
+    );
+    const payout = results.reduce((sum, leg) => sum + (leg.is_win ? per_leg_stake * 1.95 : 0), 0);
+    return { results, profit, payout, is_win: profit > 0 };
+};
+
 export default Engine =>
     class Purchase extends Engine {
         resolveLivePrediction(custom_prediction) {
@@ -220,16 +265,27 @@ export default Engine =>
         }
 
         async purchaseHedge(contract_type_1, pred_1, contract_type_2, pred_2) {
-            if (this.vh_state.enabled && this.vh_state.ai_either_mode) {
-                throw new Error('This virtual hook does not support paired contracts.');
-            }
             if (this.vh_state.enabled && this.vh_state.is_virtual) {
-                return this.virtualPurchase(contract_type_1, pred_1);
+                // Both legs are simulated on the same ticks and the pair counts as one cycle.
+                return this.virtualPurchaseHedge(contract_type_1, pred_1, contract_type_2, pred_2);
             }
             return this.realPurchaseHedge(contract_type_1, pred_1, contract_type_2, pred_2);
         }
 
         async virtualPurchase(contract_type, custom_prediction) {
+            return this.beginVirtualTrade([
+                { contract_type, prediction: this.resolveLivePrediction(custom_prediction) },
+            ]);
+        }
+
+        async virtualPurchaseHedge(contract_type_1, pred_1, contract_type_2, pred_2) {
+            return this.beginVirtualTrade([
+                { contract_type: contract_type_1, prediction: this.resolveLivePrediction(pred_1) },
+                { contract_type: contract_type_2, prediction: this.resolveLivePrediction(pred_2) },
+            ]);
+        }
+
+        async beginVirtualTrade(legs) {
             this.applyAlternateMarketsToCurrentTradeOptions();
 
             const { duration, duration_unit, symbol } = this.tradeOptions;
@@ -248,8 +304,6 @@ export default Engine =>
                 target_ticks = Math.ceil(duration_seconds);
             }
 
-            const resolved_prediction = this.resolveLivePrediction(custom_prediction);
-
             const configured_stake = Number(this.tradeOptions.amount) || 1;
             if (!this.vh_state.initial_stake || this.vh_state.initial_stake === 0) {
                 this.vh_state.initial_stake = configured_stake;
@@ -261,8 +315,9 @@ export default Engine =>
             this.vh_state.virtual_trade_active = true;
             this.vh_state.virtual_tick_count = 0;
             this.vh_state.virtual_target_duration = target_ticks;
-            this.vh_state.virtual_contract_type = contract_type;
-            this.vh_state.virtual_prediction = resolved_prediction;
+            this.vh_state.virtual_legs = legs;
+            this.vh_state.virtual_contract_type = legs[0].contract_type;
+            this.vh_state.virtual_prediction = legs[0].prediction;
             this.vh_state.virtual_entry_spot = 0;
             this.vh_state.entry_spot_captured = false;
             this.vh_state.last_tick_epoch = null;
@@ -322,8 +377,11 @@ export default Engine =>
             if (tick_epoch && tick_epoch === this.vh_state.last_tick_epoch) return;
             this.vh_state.last_tick_epoch = tick_epoch;
 
-            const { virtual_target_duration, virtual_contract_type } = this.vh_state;
-            const isDigitTrade = !['CALL', 'PUT'].includes(virtual_contract_type);
+            const { virtual_target_duration } = this.vh_state;
+            const legs = this.getVirtualLegs();
+            // A pair settles only when every leg is a digit contract; mixed pairs use the
+            // full tick duration because a CALL/PUT leg expires after N ticks.
+            const isDigitTrade = legs.every(leg => !['CALL', 'PUT'].includes(leg.contract_type));
 
             if (!this.vh_state.entry_spot_captured) {
                 this.vh_state.virtual_entry_spot = tick_data.quote;
@@ -345,6 +403,17 @@ export default Engine =>
             }
         }
 
+        getVirtualLegs() {
+            const legs = this.vh_state.virtual_legs;
+            if (Array.isArray(legs) && legs.length > 0) return legs;
+            return [
+                {
+                    contract_type: this.vh_state.virtual_contract_type,
+                    prediction: this.vh_state.virtual_prediction,
+                },
+            ];
+        }
+
         settleVirtualTrade(tick_data) {
             if (this.$scope?.paused_ || (this.vh_state.ai_either_mode && this.$scope?.stopped)) return;
             const raw_end_spot = tick_data.quote;
@@ -357,47 +426,20 @@ export default Engine =>
             const end_spot = Number(end_spot_str);
             const entry_spot = Number(entry_spot_str);
 
-            const trade_contract_type = this.vh_state.virtual_contract_type;
-            const prediction_barrier = parseInt(this.vh_state.virtual_prediction, 10);
+            const legs = this.getVirtualLegs();
+            const trade_contract_type = legs.map(leg => leg.contract_type).join('+');
+            const prediction_barrier = parseInt(legs[0].prediction, 10);
 
             const last_digit = Number(end_spot_str.slice(-1));
-            let is_win;
-
-            switch (trade_contract_type) {
-                case 'CALL':
-                    is_win = end_spot > entry_spot;
-                    break;
-                case 'PUT':
-                    is_win = end_spot < entry_spot;
-                    break;
-                case 'DIGITMATCH':
-                    is_win = last_digit === prediction_barrier;
-                    break;
-                case 'DIGITDIFF':
-                    is_win = last_digit !== prediction_barrier;
-                    break;
-                case 'DIGITOVER':
-                    is_win = last_digit > prediction_barrier;
-                    break;
-                case 'DIGITUNDER':
-                    is_win = last_digit < prediction_barrier;
-                    break;
-                case 'DIGITODD':
-                    is_win = last_digit % 2 !== 0;
-                    break;
-                case 'DIGITEVEN':
-                    is_win = last_digit % 2 === 0;
-                    break;
-                default:
-                    is_win = false;
-                    break;
-            }
-
             const stake = this.vh_state.current_stake || this.tradeOptions.amount || 1;
+            // Each leg carries the full configured stake, so a pair risks twice the stake
+            // per cycle and doubles under martingale.
+            const combined = combineVirtualLegs(legs, stake, entry_spot_str, end_spot_str);
+
             const simulated_contract = {
-                ask_price: stake,
-                payout: stake * 1.95,
-                profit: is_win ? stake * 0.95 : -stake,
+                ask_price: stake * legs.length,
+                payout: combined.payout,
+                profit: combined.profit,
                 status: 'sold',
                 is_sold: true,
                 entry_spot: entry_spot_str,
@@ -446,6 +488,7 @@ export default Engine =>
             }
             this.vh_state.virtual_trade_active = false;
             this.vh_state.virtual_tick_count = 0;
+            this.vh_state.virtual_legs = null;
             this.vh_state.virtual_resolve = null;
             this.vh_state.virtual_reject = null;
             this.vh_state.last_tick_epoch = null;
