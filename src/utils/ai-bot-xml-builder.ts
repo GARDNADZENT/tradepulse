@@ -63,6 +63,8 @@ export interface AIBotSpec {
     barrier?: number;
     /** Optional simultaneous two-leg hedge. One cycle is the combined result of both legs. */
     hedge?: AIBotHedge;
+    /** Optional market rotation: switch market every N cycles, in this exact order. */
+    marketRotation?: { everyTrades: number; markets: string[] };
     /** Optional multi-rule strategy. When present, rules select the contract per cycle. */
     rules?: AIEntryRule[];
     recoveryBarrier?: number;
@@ -331,14 +333,13 @@ export function compileAIBotToXml(spec: AIBotSpec): string {
         : purchaseBlock;
 
     const aiVh = spec.assistantVirtualHook;
-    const vhConfigXml = aiVh
-        ? `<next><block type="ai_virtual_either_config" id="init_ai_vh">
+    const vhBlockXml = aiVh
+        ? `<block type="ai_virtual_either_config" id="init_ai_vh">
             <field name="LOSSES">${Math.max(1, Math.min(10, Math.round(Number(aiVh.virtualLosses) || 1)))}</field>
             <field name="WINS">${Math.max(1, Math.min(10, Math.round(Number(aiVh.virtualWins) || 1)))}</field>
-          </block></next>`
+          </block>`
         : vhEnabled
-        ? `<next>
-            <block type="virtual_hook_config" id="init_vh">
+        ? `<block type="virtual_hook_config" id="init_vh">
               <field name="VH_ENABLED">ENABLED</field>
               <field name="START_MODE">${vhStartMode}</field>
               <value name="ENTER_AFTER_LOSSES">
@@ -347,9 +348,32 @@ export function compileAIBotToXml(spec: AIBotSpec): string {
               <value name="RETURN_AFTER_WINS">
                 <block type="math_number" id="vh_w"><field name="NUM">${vhWins}</field></block>
               </value>
-            </block>
-          </next>`
+            </block>`
         : '';
+
+    const rotation = spec.marketRotation;
+    const rotationMarkets = Array.isArray(rotation?.markets)
+        ? rotation!.markets.filter(market => typeof market === 'string' && /^[A-Z0-9_]{2,12}$/.test(market))
+        : [];
+    const rotationEvery = Math.max(1, Math.min(100, Math.round(Number(rotation?.everyTrades) || 1)));
+    const rotationBlockXml =
+        rotationMarkets.length > 1
+            ? `<block type="ai_market_rotation" id="init_mr">
+            <field name="EVERY">${rotationEvery}</field>
+            <field name="MARKETS">${rotationMarkets.join(',')}</field>
+          </block>`
+            : '';
+
+    // Chain the initialisation config blocks, each nested inside the previous one's next.
+    const chainBlocks = (blocks: string[]) => {
+        if (!blocks.length) return '';
+        let chained = blocks[blocks.length - 1];
+        for (let index = blocks.length - 2; index >= 0; index--) {
+            chained = `${blocks[index].replace(/<\/block>$/, `<next>${chained}</next></block>`)}`;
+        }
+        return `<next>${chained}</next>`;
+    };
+    const vhConfigXml = chainBlocks([vhBlockXml, rotationBlockXml].filter(Boolean));
 
     const predictionOptionXml = hasPred
         ? `<value name="PREDICTION">

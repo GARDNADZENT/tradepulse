@@ -104,6 +104,7 @@
 .ai-chat__form { display: flex; gap: 10px; align-items: stretch; }
 .ai-chat__form textarea { flex: 1; min-width: 0; resize: vertical; background: #050914; color: #fff; border: 1px solid #334155; border-radius: 9px; padding: 11px; font: inherit; font-size: 12px; }
 .ai-chat__form button, .ai-chat__actions .ai-chat__primary { background: #0667e8; border-color: #0667e8; color: white; }
+.ai-chat__actions .ai-chat__run { background: #0f766e; border-color: #0f766e; color: white; }
 .ai-chat__privacy { margin: 10px 0 0; line-height: 1.5; }
 .ai-chat__badge { border-radius: 999px; color: #eabf72; background: #392d1e; padding: 5px 9px; font-size: 10px; white-space: nowrap; }
 .ai-chat__badge--ready { color: #6ee7b7; background: #0d3a31; }

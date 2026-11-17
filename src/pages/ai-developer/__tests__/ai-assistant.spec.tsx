@@ -99,6 +99,50 @@ describe('AI strategy assistant', () => {
         expect(screen.getByText(/each cycle normally nets a small loss/)).toBeInTheDocument();
         expect(compileAIBotToXml).toHaveBeenCalledWith(expect.objectContaining({ hedge: hedgeSpec.hedge }));
     });
+    const rotatingSpec = {
+        ...spec,
+        name: 'Over 2 All Markets',
+        symbol: '1HZ10V',
+        contractType: 'DIGITOVER',
+        barrier: 2,
+        recoveryBarrier: 0,
+        baseStake: 2,
+        martingaleMultiplier: 1.5,
+        entryFilter: 'INSTANT',
+        entryDigit: 0,
+        virtualHook: { virtualLosses: 2, virtualWins: 1 },
+        marketRotation: { everyTrades: 1, markets: ['1HZ10V', 'R_10', '1HZ25V'] },
+    };
+    it('accepts all-market rotation and rejects shapes the engine cannot honour', () => {
+        expect(validateSpec(rotatingSpec)).toBe(true);
+        const reasons: Array<[any, string]> = [
+            [{ ...rotatingSpec, marketRotation: { everyTrades: 1, markets: ['R_10'] } }, 'between 2 and 12 markets'],
+            [{ ...rotatingSpec, marketRotation: { everyTrades: 1, markets: ['R_10', '1HZ10V'] } }, 'must start with the strategy symbol'],
+            [{ ...rotatingSpec, marketRotation: { everyTrades: 1, markets: ['1HZ10V', '1HZ10V'] } }, 'must not repeat'],
+            [{ ...rotatingSpec, marketRotation: { everyTrades: 1, markets: ['1HZ10V', 'NOPE'] } }, 'is not supported'],
+            [{ ...rotatingSpec, marketRotation: { everyTrades: 0, markets: ['1HZ10V', 'R_10'] } }, 'everyTrades must be'],
+            [{ ...rotatingSpec, marketRotation: { everyTrades: 1, markets: ['1HZ10V', 'R_10'], extra: 1 } }, 'unexpected key'],
+            [{ ...rotatingSpec, entryFilter: 'EXACT_DIGIT' }, 'requires entryFilter INSTANT'],
+            [{ ...rotatingSpec, rules: [{ name: 'R', when: { type: 'ALWAYS' }, contractType: 'DIGITOVER', barrier: 2 }], contractType: 'DIGITOVER' }, 'cannot be combined with rules'],
+        ];
+        for (const [candidate, message] of reasons) expect(specProblem(candidate)).toContain(message);
+    });
+    it('shows the rotation order and loads the draft and runs it on request', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ reply: 'Review the rotation.', spec: rotatingSpec }) });
+        render(<AIAssistant dashboard={{}} load_modal={{ loadStrategyToBuilder: jest.fn() }} run_panel={{ onRunButtonClick: jest.fn() }} />);
+        send('Build all markets'); await screen.findByText('Review the rotation.');
+        expect(screen.getByText(/Switches every 1 trade\(s\): 1HZ10V → R_10 → 1HZ25V/)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /Load & Run Now/ }));
+        await waitFor(() => expect(loadXmlIntoBotBuilder).toHaveBeenCalledWith(expect.objectContaining({ runNow: true, name: 'Over 2 All Markets' })));
+    });
+    it('blocks Load & Run Now while a bot is running', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ reply: 'Ready', spec }) });
+        render(<AIAssistant dashboard={{}} load_modal={{ loadStrategyToBuilder: jest.fn() }} run_panel={{ is_running: true }} />);
+        send('Create a bot'); await screen.findByText('Ready');
+        fireEvent.click(screen.getByRole('button', { name: /Load & Run Now/ }));
+        expect(screen.getByRole('alert')).toHaveTextContent('Stop the current bot');
+        expect(loadXmlIntoBotBuilder).not.toHaveBeenCalled();
+    });
     it('supports conversation, reviews locally compiled XML and never auto-runs', async () => {
         (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ reply: 'What stake?', spec: null }) })
             .mockResolvedValueOnce({ ok: true, json: async () => ({ reply: 'Review this draft.', spec }) });

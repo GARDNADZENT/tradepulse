@@ -92,6 +92,11 @@ const getBotInterface = tradeEngine => {
                 }
             }
         },
+        setMarketRotation: settings => {
+            if (tradeEngine && typeof tradeEngine.setMarketRotation === 'function') {
+                tradeEngine.setMarketRotation(settings);
+            }
+        },
         setJournalDigitWindow: count => {
             if (tradeEngine) {
                 tradeEngine.journal_digit_window = Math.max(1, Math.min(10, Number(count) || 1));

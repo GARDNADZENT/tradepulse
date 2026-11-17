@@ -84,7 +84,7 @@ function specProblem(s) {
     if (!s || typeof s !== 'object' || Array.isArray(s)) return 'spec must be an object or null';
     for (const k of keys) if (!(k in s)) return `spec is missing required key "${k}"`;
     if (!Object.prototype.hasOwnProperty.call(s, 'virtualHook')) return 'spec is missing required key "virtualHook"';
-    for (const k of Object.keys(s)) if (!keys.includes(k) && k !== 'virtualHook' && k !== 'rules' && k !== 'hedge') return `spec has unexpected key "${k}"`;
+    for (const k of Object.keys(s)) if (!keys.includes(k) && k !== 'virtualHook' && k !== 'rules' && k !== 'hedge' && k !== 'marketRotation') return `spec has unexpected key "${k}"`;
     if (!safeName(s.name)) return 'name must be 1-60 characters using only letters, digits, spaces, underscore or hyphen (no parentheses, punctuation or currency symbols)';
     if (!symbols.includes(s.symbol)) return `symbol must be one of: ${symbols.join(', ')}`;
     if (!contracts.includes(s.contractType)) return 'contractType is not supported';
@@ -96,6 +96,24 @@ function specProblem(s) {
     if (!number(s.stopLoss, 1, 100000)) return 'stopLoss must be a number from 1 to 100000';
     if (!['INSTANT', 'EXACT_DIGIT'].includes(s.entryFilter)) return 'entryFilter must be INSTANT or EXACT_DIGIT';
     if (!integer(s.entryDigit, 0, 9)) return 'entryDigit must be an integer from 0 to 9 (use the number 0 for INSTANT, never null)';
+
+    if (s.marketRotation !== undefined) {
+        const rotation = s.marketRotation;
+        if (!rotation || typeof rotation !== 'object' || Array.isArray(rotation)) return 'marketRotation must be an object or omitted';
+        for (const key of Object.keys(rotation)) {
+            if (!['everyTrades', 'markets'].includes(key)) return `marketRotation has unexpected key "${key}"`;
+        }
+        if (!Array.isArray(rotation.markets)) return 'marketRotation markets must be an array of symbols';
+        if (rotation.markets.length < 2 || rotation.markets.length > 12) return 'marketRotation markets must list between 2 and 12 markets';
+        if (new Set(rotation.markets).size !== rotation.markets.length) return 'marketRotation markets must not repeat';
+        for (const market of rotation.markets) {
+            if (!symbols.includes(market)) return `marketRotation market "${market}" is not supported`;
+        }
+        if (rotation.markets[0] !== s.symbol) return 'marketRotation markets must start with the strategy symbol';
+        if (!integer(rotation.everyTrades, 1, 100)) return 'marketRotation everyTrades must be an integer from 1 to 100';
+        if (s.rules !== undefined) return 'marketRotation cannot be combined with rules because rules read the tick history of one market';
+        if (s.entryFilter !== 'INSTANT' || s.entryDigit !== 0) return 'marketRotation requires entryFilter INSTANT and entryDigit 0';
+    }
 
     const legCategory = ct => (ct === 'CALL' || ct === 'PUT' ? 'callput' : 'digit');
     if (s.hedge !== undefined) {

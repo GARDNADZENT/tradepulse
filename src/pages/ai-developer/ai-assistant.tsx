@@ -59,7 +59,7 @@ export default function AIAssistant({ dashboard, load_modal, run_panel }: { dash
 
     const xml = spec ? compileAIBotToXml({ ...spec, virtualHookEnabled: false, assistantVirtualHook: spec.virtualHook || undefined }) : '';
     const xmlValid = !!xml && !new DOMParser().parseFromString(xml, 'application/xml').querySelector('parsererror');
-    const load = async () => {
+    const load = async (runNow = false) => {
         if (!spec || !xmlValid || !load_modal?.loadStrategyToBuilder || loadingBot) return;
         if (run_panel?.is_running || run_panel?.has_open_contract) {
             setError('Stop the current bot and wait for open contracts to settle before loading this draft.');
@@ -68,7 +68,7 @@ export default function AIAssistant({ dashboard, load_modal, run_panel }: { dash
         setLoadingBot(true);
         setError('');
         try {
-            await loadXmlIntoBotBuilder({ xml, name: spec.name, dashboard, load_modal, run_panel, runNow: false });
+            await loadXmlIntoBotBuilder({ xml, name: spec.name, dashboard, load_modal, run_panel, runNow });
         } catch {
             setError('Could not load the bot. Please try again.');
         } finally { setLoadingBot(false); }
@@ -123,6 +123,7 @@ export default function AIAssistant({ dashboard, load_modal, run_panel }: { dash
                     <dl>
                         <div><dt>Name</dt><dd>{spec.name}</dd></div>
                         <div><dt>Market</dt><dd>{spec.symbol}</dd></div>
+                        {spec.marketRotation && <div><dt>Market rotation</dt><dd>Switches every {spec.marketRotation.everyTrades} trade(s): {spec.marketRotation.markets.join(' → ')}</dd></div>}
                         <div><dt>Contract</dt><dd>{spec.contractType}{prediction ? ` · ${spec.barrier}` : ''} · {spec.durationTicks} tick(s)</dd></div>
                         <div><dt>Entry</dt><dd>{hasRules ? 'Rules are checked in order every tick; if none match, wait for the next tick' : spec.entryFilter === 'INSTANT' ? 'Every cycle (instant)' : `Latest digit equals ${spec.entryDigit} (not guaranteed fresh)`}</dd></div>
                         <div><dt>Stake / multiplier</dt><dd>{spec.baseStake} / ×{spec.martingaleMultiplier}</dd></div>
@@ -136,7 +137,8 @@ export default function AIAssistant({ dashboard, load_modal, run_panel }: { dash
                 <div className='ai-chat__actions'>
                     <button type='button' disabled={!xmlValid || busy} onClick={() => setShowXml(v => !v)}>{showXml ? 'Hide XML' : 'Preview XML'}</button>
                     <button type='button' disabled={!xmlValid || busy} onClick={downloadXml}>Download .XML</button>
-                    <button type='button' className='ai-chat__primary' disabled={!xmlValid || busy || loadingBot} onClick={() => void load()}>{loadingBot ? 'Loading…' : 'Load into Bot Builder'}</button>
+                    <button type='button' className='ai-chat__primary' disabled={!xmlValid || busy || loadingBot} onClick={() => void load(false)}>{loadingBot ? 'Loading…' : 'Load into Bot Builder'}</button>
+                    <button type='button' className='ai-chat__run' disabled={!xmlValid || busy || loadingBot} onClick={() => void load(true)}>▶ Load & Run Now</button>
                 </div>
                 {hedge && <p className='ai-chat__warning ai-chat__warning--danger'>Paired legs win and lose together on the same tick: one leg wins and the other loses, so after the payout spread each cycle normally nets a small loss, and an unchanged price can lose both legs. Martingale then doubles both stakes. This is not a risk-free hedge.</p>}
                 <p className='ai-chat__warning'>Review and test on a demo account. AI does not guarantee profit. Virtual trades are simulations and may differ from real execution. Martingale can rapidly increase losses; TP/SL are checked after settlement and may be exceeded.</p>
