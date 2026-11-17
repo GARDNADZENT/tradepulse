@@ -56,6 +56,49 @@ describe('AI strategy assistant', () => {
         expect(validateSpec({ ...streakSpec, rules: [{ ...streakSpec.rules[0], when: { type: 'ALL', of: [{ type: 'ALWAYS' }, { type: 'EXACT_DIGIT', digit: 4 }] } }] })).toBe(true);
         expect(validateSpec({ ...streakSpec, rules: [{ ...streakSpec.rules[0], when: { type: 'TICK_RUN', direction: 'RISE', count: 3 } }] })).toBe(true);
     });
+    const hedgeSpec = {
+        ...spec,
+        name: 'Rise Fall Hedge',
+        symbol: '1HZ100V',
+        contractType: 'CALL',
+        barrier: 0,
+        recoveryBarrier: 0,
+        durationTicks: 3,
+        baseStake: 0.35,
+        martingaleMultiplier: 2,
+        takeProfit: 2.8,
+        stopLoss: 10,
+        entryFilter: 'INSTANT',
+        entryDigit: 0,
+        virtualHook: { virtualLosses: 2, virtualWins: 1 },
+        hedge: { secondContractType: 'PUT' },
+    };
+    it('accepts a Rise + Fall hedge only with matching legs and explicit rules', () => {
+        expect(validateSpec(hedgeSpec)).toBe(true);
+        expect(specProblem(hedgeSpec)).toBeNull();
+        const reasons: Array<[any, string]> = [
+            [{ ...hedgeSpec, hedge: { secondContractType: 'DIGITEVEN' } }, 'share a contract category'],
+            [{ ...hedgeSpec, hedge: { secondContractType: 'PUT', extra: 1 } }, 'unexpected key'],
+            [{ ...hedgeSpec, hedge: {} }, 'missing secondContractType'],
+            [{ ...hedgeSpec, hedge: { secondContractType: 'HEDGE' } }, 'not supported'],
+            [{ ...hedgeSpec, recoveryBarrier: 2 }, 'recoveryBarrier must equal barrier'],
+            [{ ...hedgeSpec, rules: [{ name: 'R', when: { type: 'ALWAYS' }, contractType: 'CALL' }] }, 'cannot be combined'],
+            [{ ...hedgeSpec, hedge: { secondContractType: 'DIGITUNDER' }, contractType: 'DIGITOVER', barrier: 2, recoveryBarrier: 2 }, 'secondBarrier must be an integer'],
+            [{ ...hedgeSpec, hedge: { secondContractType: 'DIGITOVER', secondBarrier: 2 }, contractType: 'CALL' }, 'share a contract category'],
+            [{ ...hedgeSpec, contractType: 'DIGITOVER', barrier: 2, recoveryBarrier: 2, hedge: { secondContractType: 'DIGITUNDER', secondBarrier: 7 } }, 'digit pairs with one tick'],
+        ];
+        for (const [candidate, message] of reasons) expect(specProblem(candidate)).toContain(message);
+        expect(validateSpec({ ...hedgeSpec, hedge: { secondContractType: 'DIGITUNDER', secondBarrier: 7 }, contractType: 'DIGITOVER', barrier: 2, recoveryBarrier: 2, durationTicks: 1 })).toBe(true);
+        expect(validateSpec({ ...hedgeSpec, virtualHook: null, durationTicks: 5 })).toBe(true);
+    });
+    it('reviews the hedge with both legs and warns that it normally nets a loss', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ reply: 'Review the hedge.', spec: hedgeSpec }) });
+        render(<AIAssistant dashboard={{}} load_modal={{}} run_panel={{}} />);
+        send('Build the hedge'); await screen.findByText('Review the hedge.');
+        expect(screen.getByText(/Both legs bought together: Rise \+ Fall/)).toBeInTheDocument();
+        expect(screen.getByText(/each cycle normally nets a small loss/)).toBeInTheDocument();
+        expect(compileAIBotToXml).toHaveBeenCalledWith(expect.objectContaining({ hedge: hedgeSpec.hedge }));
+    });
     it('supports conversation, reviews locally compiled XML and never auto-runs', async () => {
         (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ reply: 'What stake?', spec: null }) })
             .mockResolvedValueOnce({ ok: true, json: async () => ({ reply: 'Review this draft.', spec }) });

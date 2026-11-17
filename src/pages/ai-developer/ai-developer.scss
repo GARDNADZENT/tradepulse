@@ -118,6 +118,7 @@
 .ai-chat__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .ai-chat__warning, .ai-chat__error { border: 1px solid #6d5025; background: #302419; color: #f9d79b; border-radius: 8px; padding: 10px; font-size: 11px; line-height: 1.5; }
 .ai-chat__error { margin-bottom: 10px; border-color: #7f1d1d; background: #361820; color: #fecaca; }
+.ai-chat__warning--danger { border-color: #7f1d1d; background: #2c1418; color: #fecaca; margin: 0 0 10px; }
 .ai-chat__xml { grid-column: 1 / -1; font-size: 12px; }
 .ai-chat__xml pre { max-height: 350px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: #a9c8ee; }
 .ai-chat__sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }

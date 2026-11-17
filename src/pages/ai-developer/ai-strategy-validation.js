@@ -84,7 +84,7 @@ function specProblem(s) {
     if (!s || typeof s !== 'object' || Array.isArray(s)) return 'spec must be an object or null';
     for (const k of keys) if (!(k in s)) return `spec is missing required key "${k}"`;
     if (!Object.prototype.hasOwnProperty.call(s, 'virtualHook')) return 'spec is missing required key "virtualHook"';
-    for (const k of Object.keys(s)) if (!keys.includes(k) && k !== 'virtualHook' && k !== 'rules') return `spec has unexpected key "${k}"`;
+    for (const k of Object.keys(s)) if (!keys.includes(k) && k !== 'virtualHook' && k !== 'rules' && k !== 'hedge') return `spec has unexpected key "${k}"`;
     if (!safeName(s.name)) return 'name must be 1-60 characters using only letters, digits, spaces, underscore or hyphen (no parentheses, punctuation or currency symbols)';
     if (!symbols.includes(s.symbol)) return `symbol must be one of: ${symbols.join(', ')}`;
     if (!contracts.includes(s.contractType)) return 'contractType is not supported';
@@ -96,6 +96,28 @@ function specProblem(s) {
     if (!number(s.stopLoss, 1, 100000)) return 'stopLoss must be a number from 1 to 100000';
     if (!['INSTANT', 'EXACT_DIGIT'].includes(s.entryFilter)) return 'entryFilter must be INSTANT or EXACT_DIGIT';
     if (!integer(s.entryDigit, 0, 9)) return 'entryDigit must be an integer from 0 to 9 (use the number 0 for INSTANT, never null)';
+
+    const legCategory = ct => (ct === 'CALL' || ct === 'PUT' ? 'callput' : 'digit');
+    if (s.hedge !== undefined) {
+        const hedge = s.hedge;
+        if (!hedge || typeof hedge !== 'object' || Array.isArray(hedge)) return 'hedge must be an object or omitted';
+        for (const key of Object.keys(hedge)) {
+            if (!['secondContractType', 'secondBarrier'].includes(key)) return `hedge has unexpected key "${key}"`;
+        }
+        if (!('secondContractType' in hedge)) return 'hedge is missing secondContractType';
+        if (!contracts.includes(hedge.secondContractType)) return 'hedge secondContractType is not supported';
+        if (legCategory(hedge.secondContractType) !== legCategory(s.contractType))
+            return 'hedge legs must share a contract category: both digit contracts or both Rise/Fall';
+        if (predictionContracts.includes(hedge.secondContractType)) {
+            if (!integer(hedge.secondBarrier, 0, 9)) return 'hedge secondBarrier must be an integer from 0 to 9 for a prediction contract';
+            if (hedge.secondContractType === 'DIGITOVER' && hedge.secondBarrier > 8) return 'hedge DIGITOVER secondBarrier must be from 0 to 8';
+            if (hedge.secondContractType === 'DIGITUNDER' && hedge.secondBarrier < 1) return 'hedge DIGITUNDER secondBarrier must be from 1 to 9';
+        } else if (hedge.secondBarrier !== undefined && hedge.secondBarrier !== 0) {
+            return 'hedge secondBarrier must be omitted or 0 when the second leg has no prediction';
+        }
+        if (s.rules !== undefined) return 'hedge and rules cannot be combined; use one entry model';
+        if (s.recoveryBarrier !== s.barrier) return 'with hedge, recoveryBarrier must equal barrier because both leg predictions are explicit';
+    }
 
     if (s.rules !== undefined) {
         const issue = rulesProblem(s.rules);
@@ -121,6 +143,14 @@ function specProblem(s) {
         if (!vh || typeof vh !== 'object' || Array.isArray(vh)) return 'virtualHook must be null or an object with virtualLosses and virtualWins';
         if (Object.keys(vh).length !== 2 || !('virtualLosses' in vh) || !('virtualWins' in vh)) return 'virtualHook must contain exactly virtualLosses and virtualWins, with no other keys';
         if (!integer(vh.virtualLosses, 1, 10) || !integer(vh.virtualWins, 1, 10)) return 'virtualHook virtualLosses and virtualWins must be integers from 1 to 10';
+        if (s.hedge !== undefined) {
+            const legs = [s.contractType, s.hedge.secondContractType];
+            const callPutPair = legs.every(ct => ct === 'CALL' || ct === 'PUT');
+            const digitPair = legs.every(ct => digitContracts.includes(ct));
+            if (callPutPair) return null; // tick duration 1-10 already validated above
+            if (!digitPair || s.durationTicks !== 1) return 'virtualHook supports Rise/Fall pairs at any tick duration, or digit pairs with one tick';
+            return null;
+        }
         if (s.durationTicks !== 1) return 'virtualHook requires a one-tick contract';
         if (s.rules !== undefined) {
             if (!s.rules.every(rule => digitContracts.includes(rule.contractType))) return 'virtualHook requires that every rule buys a digit contract';

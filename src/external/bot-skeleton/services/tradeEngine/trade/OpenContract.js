@@ -29,7 +29,6 @@ export default Engine =>
                             this.hedgeSettledContracts.push(contract);
 
                             this.updateTotals(contract);
-                            this.onRealContractSettled?.(contract);
 
                             if (this.expectedHedgeIds.size === 0) {
                                 this.isSold = true;
@@ -47,6 +46,15 @@ export default Engine =>
                                     sell_price: totalSell,
                                     profit: combinedProfit,
                                 };
+                                // A paired cycle is one outcome: report the combined profit once so
+                                // virtual-hook accounting and stake recovery cannot fire per leg.
+                                this.onRealContractSettled?.({
+                                    ...this.data.contract,
+                                    contract_type: settledLegs
+                                        .map(settled => settled.contract_type)
+                                        .filter(Boolean)
+                                        .join('+'),
+                                });
                                 this.hedgeSettledContracts = [];
 
                                 contractStatus({

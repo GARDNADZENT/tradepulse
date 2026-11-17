@@ -90,6 +90,18 @@ describe('AI server endpoint', () => {
         expect(JSON.stringify(r.json.mock.calls)).not.toContain('private provider detail');
         expect(fetch).toHaveBeenCalledTimes(2); // quota + provider only, no repair
     });
+    it('documents the paired hedge, its spread warning and the confirmation gate', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => true })
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({ reply: 'This pair normally loses the spread — confirm?', spec: null }) } }] }) });
+        const r = res(); await handler(req(), r);
+        expect(r.status).toHaveBeenCalledWith(200);
+        const systemPrompt = JSON.parse((fetch as jest.Mock).mock.calls[1][1].body).messages[0].content;
+        expect(systemPrompt).toContain('PAIRED HEDGE');
+        expect(systemPrompt).toContain('get the user\'s explicit confirmation');
+        expect(systemPrompt).toContain('normally nets a loss');
+        expect(systemPrompt).toContain('Never describe a hedge as profitable');
+        expect(systemPrompt).not.toContain('paired or hedged contracts, more than one contract');
+    });
     it('documents multi-rule entries and no longer refuses ordinary streak strategies', async () => {
         (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => true })
             .mockResolvedValueOnce({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({ reply: 'Which virtual rule?', spec: null }) } }] }) });

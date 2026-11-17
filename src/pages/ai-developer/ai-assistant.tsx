@@ -92,6 +92,13 @@ export default function AIAssistant({ dashboard, load_modal, run_panel }: { dash
     const prediction = spec && ['DIGITOVER', 'DIGITUNDER', 'DIGITMATCH', 'DIGITDIFF'].includes(spec.contractType);
     const rules = spec?.rules || [];
     const hasRules = rules.length > 0;
+    const hedge = spec?.hedge;
+    const hedgeLegLabel = (contractType?: string, barrier?: number) =>
+        contractType
+            ? `${contractType === 'CALL' ? 'Rise' : contractType === 'PUT' ? 'Fall' : contractType.replace('DIGIT', '')}${
+                  ['DIGITOVER', 'DIGITUNDER', 'DIGITMATCH', 'DIGITDIFF'].includes(contractType) ? ` ${barrier ?? 0}` : ''
+              }`
+            : '';
     return (
         <section className='ai-chat' aria-label='AI Strategy Assistant'>
             <div className='ai-chat__conversation'>
@@ -120,6 +127,7 @@ export default function AIAssistant({ dashboard, load_modal, run_panel }: { dash
                         <div><dt>Entry</dt><dd>{hasRules ? 'Rules are checked in order every tick; if none match, wait for the next tick' : spec.entryFilter === 'INSTANT' ? 'Every cycle (instant)' : `Latest digit equals ${spec.entryDigit} (not guaranteed fresh)`}</dd></div>
                         <div><dt>Stake / multiplier</dt><dd>{spec.baseStake} / ×{spec.martingaleMultiplier}</dd></div>
                         <div><dt>After a loss</dt><dd>{hasRules ? '' : prediction ? `Prediction ${spec.recoveryBarrier}; ` : ''}multiply stake ×{spec.martingaleMultiplier}; reset on win</dd></div>
+                        {hedge && <div><dt>Hedge</dt><dd>{`Both legs bought together: ${hedgeLegLabel(spec.contractType, spec.barrier)} + ${hedgeLegLabel(hedge.secondContractType, hedge.secondBarrier)} — ${spec.baseStake} on each leg; the cycle counts the combined result`}</dd></div>}
                         <div><dt>Virtual hook</dt><dd>{spec.virtualHook ? `Start virtual; ${spec.virtualHook.virtualLosses} consecutive losses or ${spec.virtualHook.virtualWins} consecutive wins → real; real loss → virtual; real stake preserved` : 'Off'}</dd></div>
                         {hasRules && <div className='ai-chat__rules'><dt>Rules (first match wins)</dt><dd><ol>{rules.map((rule, index) => <li key={index}>{describeEntryRule(rule)}</li>)}</ol></dd></div>}
                         <div><dt>TP / SL</dt><dd>{spec.takeProfit} / {spec.stopLoss} (account currency)</dd></div>
@@ -130,6 +138,7 @@ export default function AIAssistant({ dashboard, load_modal, run_panel }: { dash
                     <button type='button' disabled={!xmlValid || busy} onClick={downloadXml}>Download .XML</button>
                     <button type='button' className='ai-chat__primary' disabled={!xmlValid || busy || loadingBot} onClick={() => void load()}>{loadingBot ? 'Loading…' : 'Load into Bot Builder'}</button>
                 </div>
+                {hedge && <p className='ai-chat__warning ai-chat__warning--danger'>Paired legs win and lose together on the same tick: one leg wins and the other loses, so after the payout spread each cycle normally nets a small loss, and an unchanged price can lose both legs. Martingale then doubles both stakes. This is not a risk-free hedge.</p>}
                 <p className='ai-chat__warning'>Review and test on a demo account. AI does not guarantee profit. Virtual trades are simulations and may differ from real execution. Martingale can rapidly increase losses; TP/SL are checked after settlement and may be exceeded.</p>
             </aside>
             {showXml && xmlValid && <div className='ai-chat__xml'><strong>Generated Blockly XML</strong><pre>{xml}</pre></div>}
