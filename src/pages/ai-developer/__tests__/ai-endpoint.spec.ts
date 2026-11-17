@@ -90,6 +90,17 @@ describe('AI server endpoint', () => {
         expect(JSON.stringify(r.json.mock.calls)).not.toContain('private provider detail');
         expect(fetch).toHaveBeenCalledTimes(2); // quota + provider only, no repair
     });
+    it('tells the model to expand ALL MARKETS into a rotation instead of asking for one market', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => true })
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({ reply: 'Which TP?', spec: null }) } }] }) });
+        const r = res(); await handler(req(), r);
+        expect(r.status).toHaveBeenCalledWith(200);
+        const systemPrompt = JSON.parse((fetch as jest.Mock).mock.calls[1][1].body).messages[0].content;
+        expect(systemPrompt).toContain('MARKET ROTATION');
+        expect(systemPrompt).toContain('do NOT ask them to pick one market');
+        expect(systemPrompt).toContain('marketRotation');
+        expect(systemPrompt).toContain('Rotation requires INSTANT entry');
+    });
     it('documents the paired hedge, its spread warning and the confirmation gate', async () => {
         (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => true })
             .mockResolvedValueOnce({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({ reply: 'This pair normally loses the spread — confirm?', spec: null }) } }] }) });

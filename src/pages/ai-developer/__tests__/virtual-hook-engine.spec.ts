@@ -78,6 +78,45 @@ describe('AI Developer virtual hook', () => {
         // The stopped interpreter will no longer await the canceled virtual promise.
         void pending;
     });
+    it('rotates markets after each purchase cycle and honours the every-N setting', async () => {
+        const emit = jest.spyOn(observer, 'emit');
+        const engine = createEngine();
+        engine.tradeOptions.symbol = '1HZ10V';
+        engine.setMarketRotation({ enabled: true, everyTrades: 1, markets: ['1HZ10V', 'R_10', '1HZ25V'] });
+        expect(engine.market_rotation).toEqual({ everyTrades: 1, markets: ['1HZ10V', 'R_10', '1HZ25V'] });
+        expect(emit).toHaveBeenCalledWith('ui.log.success', expect.objectContaining({ log_type: 'market_rotation' }));
+
+        const seen: string[] = [];
+        for (let cycle = 0; cycle < 4; cycle++) {
+            engine.applyMarketRotation();
+            seen.push(engine.tradeOptions.symbol);
+        }
+        expect(seen).toEqual(['1HZ10V', 'R_10', '1HZ25V', '1HZ10V']);
+
+        engine._rotationTradeIndex = 0;
+        engine.setMarketRotation({ enabled: true, everyTrades: 2, markets: ['1HZ10V', 'R_10'] });
+        const everyTwo: string[] = [];
+        for (let cycle = 0; cycle < 4; cycle++) {
+            engine.applyMarketRotation();
+            everyTwo.push(engine.tradeOptions.symbol);
+        }
+        expect(everyTwo).toEqual(['1HZ10V', '1HZ10V', 'R_10', 'R_10']);
+
+        engine.setMarketRotation({ enabled: false });
+        expect(engine.market_rotation).toBeNull();
+        const frozen = engine.tradeOptions.symbol;
+        engine.applyMarketRotation();
+        expect(engine.tradeOptions.symbol).toBe(frozen);
+    });
+
+    it('rejects rotation lists that cannot cycle and ignores malformed symbols', () => {
+        const engine = createEngine();
+        engine.setMarketRotation({ enabled: true, everyTrades: 1, markets: ['R_10'] });
+        expect(engine.market_rotation).toBeNull();
+        engine.setMarketRotation({ enabled: true, everyTrades: 1, markets: ['R_10', 'bad symbol', 'R_25'] });
+        expect(engine.market_rotation?.markets).toEqual(['R_10', 'R_25']);
+    });
+
     it('fails closed if market precision is missing', async () => {
         const engine = createEngine();
         engine.$scope.ticksService.pipSizes = {};

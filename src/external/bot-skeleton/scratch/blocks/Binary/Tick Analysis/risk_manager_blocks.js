@@ -1002,6 +1002,36 @@ getGenerator().forBlock.fresh_cycle_digit = block => [
     getGenerator().ORDER_ATOMIC,
 ];
 
+// Market rotation: switch to the next listed market every N purchase cycles.
+window.Blockly.Blocks.ai_market_rotation = {
+    init() {
+        this.jsonInit({
+            message0: localize('Rotate market every %1 trade(s) through: %2'),
+            args0: [
+                { type: 'field_number', name: 'EVERY', value: 1, min: 1, max: 100, precision: 1 },
+                { type: 'field_input', name: 'MARKETS', text: 'R_10,R_25,R_50' },
+            ],
+            previousStatement: null,
+            nextStatement: null,
+            colour: window.Blockly.Colours.Special1.colour,
+            colourSecondary: window.Blockly.Colours.Special1.colourSecondary,
+            colourTertiary: window.Blockly.Colours.Special1.colourTertiary,
+            tooltip: localize('Trades the listed markets in order, switching after the configured number of trades.'),
+            category: window.Blockly.Categories.Tick_Analysis,
+        });
+    },
+    customContextMenu(menu) { modifyContextMenu(menu); },
+};
+getGenerator().forBlock.ai_market_rotation = block => {
+    const every = Math.max(1, Math.min(100, Number(block.getFieldValue('EVERY')) || 1));
+    const markets = String(block.getFieldValue('MARKETS') || '')
+        .split(',')
+        .map(symbol => symbol.trim().toUpperCase())
+        .filter(symbol => /^[A-Z0-9_]{2,12}$/.test(symbol));
+    if (markets.length < 2) return '';
+    return `Bot.setMarketRotation({enabled: true, everyTrades: ${every}, markets: ${JSON.stringify(markets)}});\n`;
+};
+
 // Separate opt-in mode: virtual loss OR win target; preserve real martingale state.
 window.Blockly.Blocks.ai_virtual_either_config = {
     init() {

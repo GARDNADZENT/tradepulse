@@ -126,4 +126,30 @@ describe('AI compiled Blockly XML', () => {
         expect(doc.querySelector('#td_options > mutation')?.getAttribute('has_prediction')).toBe('true');
         expect(doc.querySelector('block[type="virtual_hook_config"]')).toBeNull();
     });
+
+    it('compiles market rotation after the virtual hook configuration', () => {
+        const spec = {
+            name: 'Over 2 All Markets', symbol: '1HZ10V', contractType: 'DIGITOVER', barrier: 2, recoveryBarrier: 0,
+            durationTicks: 1, baseStake: 2, martingaleMultiplier: 1.5, takeProfit: 10, stopLoss: 10,
+            entryFilter: 'INSTANT', entryDigit: 0, virtualHook: { virtualLosses: 2, virtualWins: 1 },
+            marketRotation: { everyTrades: 1, markets: ['1HZ10V', 'R_10', '1HZ25V'] },
+        };
+        if (!validateSpec(spec)) throw new Error('Test spec failed validation');
+        const doc = new DOMParser().parseFromString(compileAIBotToXml({ ...spec, assistantVirtualHook: spec.virtualHook }), 'application/xml');
+        expect(doc.querySelector('parsererror')).toBeNull();
+        const rotation = doc.querySelector('#init_mr');
+        expect(rotation?.getAttribute('type')).toBe('ai_market_rotation');
+        expect(rotation?.querySelector('field[name="EVERY"]')?.textContent).toBe('1');
+        expect(rotation?.querySelector('field[name="MARKETS"]')?.textContent).toBe('1HZ10V,R_10,1HZ25V');
+        // The rotation block chains after the virtual hook config, not replacing it.
+        expect(rotation?.parentElement?.tagName).toBe('next');
+        expect(doc.querySelector('#init_ai_vh')?.parentElement?.querySelector('next > #init_mr')).toBe(rotation);
+        expect(doc.querySelector('#bp_purchase > field[name="PURCHASE_LIST"]')?.textContent).toBe('DIGITOVER');
+    });
+    it('omits the rotation block for a single-market strategy', () => {
+        const spec = { name: 'Single', symbol: 'R_50', contractType: 'DIGITEVEN', barrier: 0, recoveryBarrier: 0, durationTicks: 1, baseStake: 1, martingaleMultiplier: 1, takeProfit: 5, stopLoss: 10, entryFilter: 'INSTANT', entryDigit: 0, virtualHook: null };
+        if (!validateSpec(spec)) throw new Error('Test spec failed validation');
+        const xml = compileAIBotToXml(spec);
+        expect(xml).not.toContain('ai_market_rotation');
+    });
 });

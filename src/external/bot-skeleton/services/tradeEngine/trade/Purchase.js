@@ -257,7 +257,41 @@ export default Engine =>
             return undefined;
         }
 
+        setMarketRotation(settings) {
+            const markets = Array.isArray(settings?.markets)
+                ? settings.markets.filter(symbol => typeof symbol === 'string' && /^[A-Z0-9_]{2,12}$/.test(symbol))
+                : [];
+            if (!settings?.enabled || markets.length < 2) {
+                this.market_rotation = null;
+                return;
+            }
+            this.market_rotation = {
+                everyTrades: Math.max(1, Math.min(100, Math.round(Number(settings.everyTrades) || 1))),
+                markets,
+            };
+            this._rotationTradeIndex = 0;
+            globalObserver.emit('ui.log.success', {
+                log_type: 'market_rotation',
+                extra: { markets: markets.join(', '), every_trades: this.market_rotation.everyTrades },
+            });
+        }
+
+        // Called once per purchase cycle, before the trade options are read, so the
+        // first cycle uses the declared market and later cycles follow the list.
+        applyMarketRotation() {
+            const rotation = this.market_rotation;
+            if (!rotation || rotation.markets.length < 2) return;
+            const index = this._rotationTradeIndex || 0;
+            const group = Math.floor(index / rotation.everyTrades);
+            const next_symbol = rotation.markets[group % rotation.markets.length];
+            this._rotationTradeIndex = index + 1;
+            if (next_symbol && this.tradeOptions?.symbol !== next_symbol) {
+                this.tradeOptions = { ...this.tradeOptions, symbol: next_symbol };
+            }
+        }
+
         async purchase(contract_type, custom_prediction) {
+            this.applyMarketRotation();
             if (this.vh_state.enabled && this.vh_state.is_virtual) {
                 return this.virtualPurchase(contract_type, custom_prediction);
             }
@@ -265,6 +299,7 @@ export default Engine =>
         }
 
         async purchaseHedge(contract_type_1, pred_1, contract_type_2, pred_2) {
+            this.applyMarketRotation();
             if (this.vh_state.enabled && this.vh_state.is_virtual) {
                 // Both legs are simulated on the same ticks and the pair counts as one cycle.
                 return this.virtualPurchaseHedge(contract_type_1, pred_1, contract_type_2, pred_2);
