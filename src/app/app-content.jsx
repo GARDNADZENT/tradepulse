@@ -13,6 +13,14 @@ import useDevMode from '@/hooks/useDevMode';
 import { useStore } from '@/hooks/useStore';
 import useThemeSwitcher from '@/hooks/useThemeSwitcher';
 import { isPreviewMode } from '@/utils/is-preview-mode';
+import {
+    SOCKET_OPEN_TIMEOUT_MS,
+    SYMBOLS_LOAD_TIMEOUT_MS,
+    getSocketTimeoutFailure,
+    getSymbolsErrorFailure,
+    getSymbolsTimeoutFailure,
+    withTimeout,
+} from '@/utils/api-init-timeout';
 import { statusService } from '@/services/supabase/status.service';
 import { ThemeProvider } from '@deriv-com/quill-ui';
 import { setSmartChartsPublicPath } from '@deriv-com/smartcharts-champion';
@@ -36,6 +44,12 @@ const PreviewBranding =
 const AppContent = observer(() => {
     const [is_api_initialized, setIsApiInitialized] = React.useState(false);
     const [is_loading, setIsLoading] = React.useState(true);
+    // Set when startup gives up (socket never opened, or the market list failed).
+    // Rendering an explicit error instead of spinning forever is the whole point:
+    // a silent spinner left users unable to tell a blocked WebSocket from a slow API.
+    const [init_failure, setInitFailure] = React.useState(null);
+    // Bumped by Retry so the bootstrap effects run again.
+    const [init_attempt, setInitAttempt] = React.useState(0);
 
     const store = useStore();
     const { app, transactions, common, client } = store;
@@ -44,6 +58,13 @@ const AppContent = observer(() => {
     const { recovered_transactions, recoverPendingContracts } = transactions;
     const is_subscribed_to_msg_listener = React.useRef(false);
     const msg_listener = React.useRef(null);
+    const retry_timer = React.useRef(null);
+    // Refs mirror the two flags for callbacks armed in earlier renders
+    // (the socket deadline is deliberately not re-armed on every state change).
+    const api_initialized_ref = React.useRef(false);
+    api_initialized_ref.current = is_api_initialized;
+    const loading_ref = React.useRef(true);
+    loading_ref.current = is_loading;
     const { connectionStatus } = useApiBase();
 
     // Initialize dev mode keyboard shortcuts
@@ -88,6 +109,50 @@ const AppContent = observer(() => {
             statusService.saveStatus('disconnected', { connectionStatus });
         }
     }, [common, connectionStatus]);
+
+    // Never wait for the socket forever. Without this the loading screen had no
+    // exit when the WebSocket was blocked (ad blocker, VPN, firewall, offline) and
+    // never reached OPENED, so nothing ever set `is_api_initialized` or `is_loading`.
+    useEffect(() => {
+        const timeoutId = setTimeout(() => {
+            // The socket opened (`is_api_initialized`) or startup already resolved
+            // (success or a symbols error) — the connection is not the problem.
+            if (api_initialized_ref.current || !loading_ref.current) return;
+            console.error('[TradersPulse] Deriv socket did not open within', SOCKET_OPEN_TIMEOUT_MS, 'ms');
+            setInitFailure(getSocketTimeoutFailure(connectionStatus));
+            setIsLoading(false);
+        }, SOCKET_OPEN_TIMEOUT_MS);
+
+        return () => clearTimeout(timeoutId);
+        // Re-armed on every retry.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [init_attempt]);
+
+    useEffect(
+        () => () => {
+            if (retry_timer.current) clearTimeout(retry_timer.current);
+        },
+        []
+    );
+
+    const retryInitialization = React.useCallback(() => {
+        setInitFailure(null);
+        setIsLoading(true);
+        if (retry_timer.current) {
+            clearTimeout(retry_timer.current);
+            retry_timer.current = null;
+        }
+        // A dead socket must be rebuilt: `generateDerivApiInstance` reuses any
+        // CONNECTING/OPEN singleton, so the error path has to force a new socket
+        // rather than waiting on the same one again.
+        if (connectionStatus !== CONNECTION_STATUS.OPENED) {
+            ApiHelpers.disposeInstance();
+            api_base.init(true).catch(error => {
+                console.error('[TradersPulse] Reconnect failed:', error);
+            });
+        }
+        setInitAttempt(attempt => attempt + 1);
+    }, [connectionStatus]);
 
     const { current_language } = common;
     const html = document.documentElement;
@@ -143,25 +208,74 @@ const AppContent = observer(() => {
     const changeActiveSymbolLoadingState = () => {
         init();
 
-        const retrieveActiveSymbols = () => {
-            const { active_symbols } = ApiHelpers.instance;
+        const retrieveActiveSymbols = (is_retry = false) => {
+            const active_symbols = ApiHelpers?.instance?.active_symbols;
 
-            active_symbols.retrieveActiveSymbols(true).then(() => {
+            if (!active_symbols) {
+                setInitFailure(getSymbolsErrorFailure(new Error('Market data helper is unavailable')));
                 setIsLoading(false);
-            });
+                return;
+            }
+
+            // `retrieveActiveSymbols` can reject (socket error) *or* never settle at
+            // all (a request that gets no reply while the socket looks open). Both
+            // used to leave the app on the loading screen forever, because the only
+            // way out was the `.then()` below.
+            withTimeout(
+                Promise.resolve(active_symbols.retrieveActiveSymbols(true)),
+                SYMBOLS_LOAD_TIMEOUT_MS,
+                'Active symbols request timed out'
+            )
+                .then(() => {
+                    setInitFailure(null);
+                    setIsLoading(false);
+                })
+                .catch(error => {
+                    console.error('[TradersPulse] Failed to load active symbols:', error);
+
+                    if (!is_retry) {
+                        // Either the request rejected, or it hung long enough to hit
+                        // the deadline above. Both usually mean the socket is in a
+                        // half-open state (`readyState === OPEN`, but nothing is
+                        // delivered — e.g. after a laptop sleep or a proxy reset) and
+                        // `generateDerivApiInstance` would happily reuse it. Force a
+                        // fresh connection and retry once before giving up.
+                        retry_timer.current = setTimeout(() => {
+                            retry_timer.current = null;
+                            api_base.init(true).catch(reconnect_error => {
+                                console.error('[TradersPulse] Reconnect during retry failed:', reconnect_error);
+                            });
+                            retrieveActiveSymbols(true);
+                        }, 1500);
+                        return;
+                    }
+
+                    const timed_out = error instanceof Error && error.message === 'Active symbols request timed out';
+                    setInitFailure(timed_out ? getSymbolsTimeoutFailure() : getSymbolsErrorFailure(error));
+                    setIsLoading(false);
+                });
         };
 
         if (ApiHelpers?.instance?.active_symbols) {
             retrieveActiveSymbols();
         } else {
             // This is a workaround to fix the issue where the active symbols are not loaded immediately
-            // when the API is initialized. Should be replaced with RxJS pubsub
+            // when the API is initialized. Should be replaced with RxJS pubsub.
+            // Bounded: if the helper never appears, fall through to the error screen
+            // instead of polling a dead interval forever.
+            const started_at = Date.now();
             const intervalId = setInterval(() => {
                 if (ApiHelpers?.instance?.active_symbols) {
                     clearInterval(intervalId);
                     retrieveActiveSymbols();
+                } else if (Date.now() - started_at >= SYMBOLS_LOAD_TIMEOUT_MS) {
+                    clearInterval(intervalId);
+                    setInitFailure(getSymbolsTimeoutFailure());
+                    setIsLoading(false);
                 }
             }, 1000);
+
+            return () => clearInterval(intervalId);
         }
     };
 
@@ -170,18 +284,19 @@ const AppContent = observer(() => {
             init();
             setIsLoading(true);
             if (!client.is_logged_in) {
-                changeActiveSymbolLoadingState();
+                // Polling never finds the helper → the cleanup stops the interval.
+                return changeActiveSymbolLoadingState();
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [is_api_initialized]);
+    }, [is_api_initialized, init_attempt]);
 
     React.useEffect(() => {
         if (client.is_logged_in && is_api_initialized) {
-            changeActiveSymbolLoadingState();
+            return changeActiveSymbolLoadingState();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [is_api_initialized, client.loginid]);
+    }, [is_api_initialized, client.loginid, init_attempt]);
 
     if (common?.error) return null;
 
@@ -192,8 +307,36 @@ const AppContent = observer(() => {
                     <PreviewBranding />
                 </Suspense>
             )}
-            {is_loading ? (
-                <div className='app-root__loading'>Initializing Deriv Bot account</div>
+            {init_failure ? (
+                <div className='app-root__loading app-root__loading--error' role='alert' data-testid='dt_init_error'>
+                    <div className='app-root__loading-card'>
+                        <h2 className='app-root__loading-title'>{init_failure.title}</h2>
+                        <p className='app-root__loading-detail'>{init_failure.detail}</p>
+                        <div className='app-root__loading-actions'>
+                            <button
+                                type='button'
+                                className='app-root__loading-retry'
+                                onClick={retryInitialization}
+                                data-testid='dt_init_retry'
+                            >
+                                {localize('Retry')}
+                            </button>
+                            <button
+                                type='button'
+                                className='app-root__loading-reload'
+                                onClick={() => window.location.reload()}
+                            >
+                                {localize('Reload page')}
+                            </button>
+                        </div>
+                        <p className='app-root__loading-code'>{init_failure.code}</p>
+                    </div>
+                </div>
+            ) : is_loading ? (
+                <div className='app-root__loading' data-testid='dt_init_loading'>
+                    <span className='app-root__loading-spinner' aria-hidden='true' />
+                    <span>{localize('Initializing Deriv Bot account')}</span>
+                </div>
             ) : (
                 <AuthLoadingWrapper>
                     <ThemeProvider theme={is_dark_mode_on ? 'dark' : 'light'}>

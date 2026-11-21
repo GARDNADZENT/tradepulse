@@ -1,12 +1,90 @@
-.app-root {
-    height: 100vh;
-    width: 100vw;
+// Startup gate (loading + unrecoverable-failure screen).
+//
+// Before this existed, the app rendered a bare "Initializing Deriv Bot account"
+// line and could sit on it forever when the Deriv WebSocket never opened.
+.app-root__loading {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 1.6rem;
+    min-height: 40vh;
+    padding: 2.4rem;
     font-size: 1.6rem;
+    color: #ffffff;
+    text-align: center;
 
-    .load-message {
-        margin-top: 6rem;
+    &-spinner {
+        width: 2.8rem;
+        height: 2.8rem;
+        border: 0.3rem solid rgba(255, 255, 255, 0.25);
+        border-top-color: #ffffff;
+        border-radius: 50%;
+        animation: app-root-loading-spin 0.9s linear infinite;
+    }
+
+    &-card {
+        max-width: 46rem;
+        padding: 2.4rem;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 1.2rem;
+        background: rgba(0, 0, 0, 0.28);
+        box-shadow: 0 1.2rem 3.2rem rgba(0, 0, 0, 0.35);
+    }
+
+    &-title {
+        margin: 0 0 0.8rem;
+        font-size: 2rem;
+        font-weight: 700;
+    }
+
+    &-detail {
+        margin: 0 0 1.6rem;
+        font-size: 1.4rem;
+        line-height: 1.6;
+        opacity: 0.85;
+    }
+
+    &-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        justify-content: center;
+    }
+
+    &-retry,
+    &-reload {
+        min-width: 11rem;
+        padding: 0.9rem 1.6rem;
+        border-radius: 0.8rem;
+        border: 1px solid transparent;
+        font-size: 1.4rem;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
+    &-retry {
+        background: var(--brand-primary, #ff444f);
+        color: #ffffff;
+    }
+
+    &-reload {
+        background: transparent;
+        border-color: rgba(255, 255, 255, 0.35);
+        color: #ffffff;
+    }
+
+    &-code {
+        margin: 1.6rem 0 0;
+        font-size: 1.1rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        opacity: 0.55;
+    }
+}
+
+@keyframes app-root-loading-spin {
+    to {
+        transform: rotate(360deg);
     }
 }
