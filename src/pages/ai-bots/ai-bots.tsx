@@ -14,6 +14,14 @@ import {
     RiskManagerAIBotId,
 } from './ai-bot-presets';
 import { advanceVirtualRecovery, VirtualRecoveryContract, VirtualRecoveryTrade } from './virtual-recovery';
+import {
+    applyVirtualOutcome,
+    canPlaceRealOrder,
+    getGateBlockedMessage,
+    normalizeVirtualTarget,
+    restoreVirtualGate,
+} from './virtual-gate';
+import { clearVirtualGate, readVirtualGate, writeVirtualGate } from './virtual-gate-storage';
 import './ai-bots.scss';
 
 const RobotIcon: React.FC = () => (
@@ -50,6 +58,21 @@ type SuspendedVirtualRecovery = {
 };
 // Preserve a recovery gate across scanner stops and tab changes in this page session.
 const virtualRecoveryByAccount = new Map<string, SuspendedVirtualRecovery>();
+
+// Mirrors a gate into sessionStorage so a reload cannot forget the virtual losses
+// the trader still owes, nor reset the configured target to the default.
+const persistGate = (accountKey: string, gate: SuspendedVirtualRecovery) => {
+    writeVirtualGate(accountKey, {
+        virtualLossesRequired: gate.virtualLossesRequired,
+        inRecovery: true,
+        virtualLosses: gate.virtualLosses,
+    });
+};
+
+const forgetGate = (accountKey: string) => {
+    virtualRecoveryByAccount.delete(accountKey);
+    clearVirtualGate(accountKey);
+};
 
 const COUNT_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const RISE_FALL_COUNT_OPTIONS = [2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -227,6 +250,7 @@ const AIBots = observer(() => {
     const [isRunning, setIsRunning] = useState(false);
     const [inRecovery, setInRecovery] = useState(false);
     const [virtualMode, setVirtualMode] = useState(false);
+    const [owedVirtualLosses, setOwedVirtualLosses] = useState(0);
     const [isExecutingTrade, setIsExecutingTrade] = useState(false);
     const [totalPL, setTotalPL] = useState(0);
     const [footerMessage, setFooterMessage] = useState('Scanner idle — configure setup and start scanning.');
@@ -246,6 +270,25 @@ const AIBots = observer(() => {
     const currentStakeRef = useRef(0.5);
     const totalPLRef = useRef(0);
     const lastFiredEpochBySymbolRef = useRef<Record<string, number>>({});
+
+    // Restore a gate the previous page load left behind (same account) so a reload
+    // cannot reset the target to 1 or forget a partially-completed virtual gate.
+    const hydrateVirtualGate = useCallback(() => {
+        const accountKey = configRef.current.accountKey;
+        if (!accountKey || virtualRecoveryByAccount.has(accountKey)) return;
+        const stored = readVirtualGate(accountKey);
+        // A stored *target* is not a recovery gate: only `inRecovery` records carry
+        // virtual losses still owed. Treating a bare target as a gate made the bot
+        // believe a recovery was already running and skip its first entry.
+        if (!stored || !stored.inRecovery) return;
+        virtualRecoveryByAccount.set(accountKey, {
+            virtualMode: stored.virtualLosses < stored.virtualLossesRequired,
+            virtualLosses: stored.virtualLosses,
+            virtualLossesRequired: stored.virtualLossesRequired,
+            stake: 0,
+            totalPL: 0,
+        });
+    }, []);
 
     const configRef = useRef({
         selectedBotId: null as RiskManagerAIBotId | null,
@@ -302,8 +345,18 @@ const AIBots = observer(() => {
         setEntryCount(bot.defaultEntryCount);
         setRecoveryCount(bot.defaultRecoveryCount);
         if (bot.id === 'under7-rec-evenodd-virtual') {
+            // Restore the target the trader last used instead of resetting to the
+            // default of 1 — a silent reset shortened the virtual gate and let a real
+            // order fire after fewer (or zero) virtual losses than configured.
+            hydrateVirtualGate();
+            const stored = readVirtualGate(configRef.current.accountKey);
             const saved = virtualRecoveryByAccount.get(configRef.current.accountKey);
-            setVirtualLossesInput(String(saved?.virtualLossesRequired ?? 1));
+            const target = saved?.virtualLossesRequired ?? stored?.virtualLossesRequired;
+            configRef.current.virtualLossesRequired = target ?? 1;
+            setVirtualLossesInput(String(target ?? 1));
+            // Surface an unfinished gate as soon as the strategy is opened, so the
+            // trader can see (and clear) it before starting.
+            setOwedVirtualLosses(saved && saved.virtualLosses < target! ? saved.virtualLosses : 0);
             virtualLossesEditedRef.current = false;
         }
         setInRecovery(false);
@@ -311,6 +364,26 @@ const AIBots = observer(() => {
         setTotalPL(0);
         totalPLRef.current = 0;
         setFooterMessage('Scanner idle — configure setup and start scanning.');
+    };
+
+    /**
+     * Clears the recovery gate for this account. Needed when a reload interrupted a
+     * real trade and the trader has confirmed there is no open contract: otherwise
+     * the restored gate would keep simulating forever with no way out.
+     */
+    const handleClearVirtualGate = () => {
+        const accountKey = configRef.current.accountKey;
+        if (!accountKey) return;
+        forgetGate(accountKey);
+        virtualLossesRef.current = 0;
+        virtualModeRef.current = false;
+        inRecoveryRef.current = false;
+        virtualLossesEditedRef.current = false;
+        setOwedVirtualLosses(0);
+        setVirtualMode(false);
+        setInRecovery(false);
+        setVirtualLossesInput(String(configRef.current.virtualLossesRequired));
+        setFooterMessage('Virtual gate cleared for this account. The next signal trades for real.');
     };
 
     const handleBackToStrategies = () => {
@@ -351,6 +424,32 @@ const AIBots = observer(() => {
             const marketLabel = marketMeta?.label || sym;
             const stakeToUse = Math.max(0.35, Number(currentStakeRef.current.toFixed(2)));
             const isVirtualBot = cfg.selectedBotId === 'under7-rec-evenodd-virtual';
+
+            // Single source of truth: a real order is allowed only once the required
+            // virtual losses are on record. `virtualModeRef` is recomputed here so a
+            // stale boolean, a restored flag or a target change can never bypass the
+            // gate — that is what let Bot 08 buy real before its virtual losses.
+            if (isVirtualBot) {
+                const gate = {
+                    inRecovery: inRecoveryRef.current,
+                    virtualLosses: virtualLossesRef.current,
+                    required: cfg.virtualLossesRequired,
+                };
+                const required = normalizeVirtualTarget(gate.required);
+                if (!canPlaceRealOrder(true, gate)) {
+                    // Hold the real order and fall through to the virtual simulation
+                    // below, which books this signal as a virtual trade.
+                    virtualModeRef.current = true;
+                    const blockedMessage = getGateBlockedMessage(gate);
+                    setFooterMessage(blockedMessage);
+                    if (gate.virtualLosses < required) {
+                        journal?.pushMessage?.(blockedMessage, MessageTypes.NOTIFY, '');
+                    }
+                } else if (gate.virtualLosses >= required) {
+                    // Gate satisfied: this signal is the next real trade.
+                    virtualModeRef.current = false;
+                }
+            }
 
             if (isVirtualBot && virtualModeRef.current) {
                 // Use the same scanner and tick duration, but never call the buy API.
@@ -412,14 +511,18 @@ const AIBots = observer(() => {
                         if (runningRef.current && runGenerationRef.current === orderGeneration) {
                             stopScannerInternal('Account changed. Scanner stopped; check your account before restarting.');
                         }
-                        if (profit > 0) virtualRecoveryByAccount.delete(cfg.accountKey);
-                        else virtualRecoveryByAccount.set(cfg.accountKey, {
-                            virtualMode: true,
-                            virtualLosses: 0,
-                            virtualLossesRequired: cfg.virtualLossesRequired,
-                            stake: Number((stakeToUse * cfg.martingale).toFixed(2)),
-                            totalPL: Number((orderPriorPL + profit).toFixed(2)),
-                        });
+                        if (profit > 0) forgetGate(cfg.accountKey);
+                        else {
+                            const lateGate = {
+                                virtualMode: true,
+                                virtualLosses: 0,
+                                virtualLossesRequired: normalizeVirtualTarget(cfg.virtualLossesRequired),
+                                stake: Number((stakeToUse * cfg.martingale).toFixed(2)),
+                                totalPL: Number((orderPriorPL + profit).toFixed(2)),
+                            };
+                            virtualRecoveryByAccount.set(cfg.accountKey, lateGate);
+                            persistGate(cfg.accountKey, lateGate);
+                        }
                         return;
                     }
                 }
@@ -432,7 +535,7 @@ const AIBots = observer(() => {
                 if (!runningRef.current) return;
 
                 if (nextPL >= cfg.takeProfit) {
-                    if (isVirtualBot) virtualRecoveryByAccount.delete(cfg.accountKey);
+                    if (isVirtualBot) forgetGate(cfg.accountKey);
                     inRecoveryRef.current = false;
                     setInRecovery(false);
                     stopScannerInternal(`Take profit reached: +${nextPL.toFixed(2)}`);
@@ -446,7 +549,7 @@ const AIBots = observer(() => {
                 }
 
                 if (nextPL <= -Math.abs(cfg.stopLoss)) {
-                    if (isVirtualBot) virtualRecoveryByAccount.delete(cfg.accountKey);
+                    if (isVirtualBot) forgetGate(cfg.accountKey);
                     inRecoveryRef.current = false;
                     setInRecovery(false);
                     stopScannerInternal(`Stop loss reached: ${nextPL.toFixed(2)}`);
@@ -460,7 +563,7 @@ const AIBots = observer(() => {
                 }
 
                 if (profit > 0) {
-                    if (isVirtualBot) virtualRecoveryByAccount.delete(cfg.accountKey);
+                    if (isVirtualBot) forgetGate(cfg.accountKey);
                     currentStakeRef.current = cfg.baseStake;
                     inRecoveryRef.current = false;
                     setInRecovery(false);
@@ -473,12 +576,17 @@ const AIBots = observer(() => {
                         inRecoveryRef.current = true;
                         setInRecovery(true);
                         if (isVirtualBot) {
+                            // A real loss opens a fresh gate: zero virtual losses, all
+                            // required losses still owed before the next real order.
+                            const required = normalizeVirtualTarget(cfg.virtualLossesRequired);
                             virtualModeRef.current = true;
                             virtualLossesRef.current = 0;
-                            virtualRecoveryByAccount.set(cfg.accountKey, {
-                                virtualMode: true, virtualLosses: 0, virtualLossesRequired: cfg.virtualLossesRequired,
+                            const openedGate = {
+                                virtualMode: true, virtualLosses: 0, virtualLossesRequired: required,
                                 stake: currentStakeRef.current, totalPL: nextPL,
-                            });
+                            };
+                            virtualRecoveryByAccount.set(cfg.accountKey, openedGate);
+                            persistGate(cfg.accountKey, openedGate);
                             setVirtualMode(true);
                             const message = `Real loss ${profit.toFixed(2)} ${cfg.currency} on ${marketLabel} · Virtual recovery scanning (0/${cfg.virtualLossesRequired} virtual losses; next real stake ${currentStakeRef.current.toFixed(2)})`;
                             setFooterMessage(message);
@@ -584,15 +692,31 @@ const AIBots = observer(() => {
                     inFlightRef.current = false;
                     setIsExecutingTrade(false);
                     const didWin = result.outcome === 'won';
-                    const virtualLosses = virtualLossesRef.current + (didWin ? 0 : 1);
-                    const required = configRef.current.virtualLossesRequired;
-                    const keepVirtual = didWin || virtualLosses < required;
+                    const required = normalizeVirtualTarget(configRef.current.virtualLossesRequired);
+                    const advanced = applyVirtualOutcome(
+                        {
+                            inRecovery: true,
+                            virtualLosses: virtualLossesRef.current,
+                            required,
+                        },
+                        result.outcome
+                    );
+                    const virtualLosses = advanced.virtualLosses;
+                    // A win never advances the gate; only the required losses do.
+                    const keepVirtual = advanced.virtualMode;
                     virtualLossesRef.current = virtualLosses;
                     virtualModeRef.current = keepVirtual;
+                    setOwedVirtualLosses(keepVirtual ? virtualLosses : 0);
                     const saved = virtualRecoveryByAccount.get(runningAccountRef.current);
-                    if (saved) virtualRecoveryByAccount.set(runningAccountRef.current, {
-                        ...saved, virtualMode: keepVirtual, virtualLosses, virtualLossesRequired: required,
-                    });
+                    const nextGateRecord = saved ?? {
+                        stake: currentStakeRef.current,
+                        totalPL: totalPLRef.current,
+                    };
+                    const settledGate = {
+                        ...nextGateRecord, virtualMode: keepVirtual, virtualLosses, virtualLossesRequired: required,
+                    };
+                    virtualRecoveryByAccount.set(runningAccountRef.current, settledGate);
+                    persistGate(runningAccountRef.current, settledGate);
                     setVirtualMode(keepVirtual);
                     transactions?.pushVirtualTransaction?.({
                         display_name: pending.marketLabel,
@@ -660,6 +784,10 @@ const AIBots = observer(() => {
             setFooterMessage('Wait for your account ID to load before starting this strategy.');
             return;
         }
+        // A reload leaves the module-level Map empty; rebuild it from sessionStorage
+        // before deciding real vs virtual, otherwise the outstanding virtual losses
+        // are forgotten and the bot buys real immediately.
+        if (isVirtualBot) hydrateVirtualGate();
         const saved = isVirtualBot ? virtualRecoveryByAccount.get(accountKey) : undefined;
         // A late settlement may create a saved gate after the card was opened.
         // Preserve its target unless the user explicitly edited it while stopped.
@@ -671,7 +799,7 @@ const AIBots = observer(() => {
             return;
         }
         if (saved && (saved.totalPL >= configRef.current.takeProfit || saved.totalPL <= -Math.abs(configRef.current.stopLoss))) {
-            virtualRecoveryByAccount.delete(accountKey);
+            forgetGate(accountKey);
             setFooterMessage('The previous run reached its take profit or stop loss while stopped. Review it before starting a new run.');
             return;
         }
@@ -682,8 +810,12 @@ const AIBots = observer(() => {
         }
         if (saved) {
             saved.virtualLossesRequired = required;
+            saved.virtualLosses = Math.max(0, Math.floor(Number(saved.virtualLosses) || 0));
+            // The gate is open only when the required virtual losses are already on
+            // record; otherwise the next signals stay virtual.
             saved.virtualMode = saved.virtualLosses < required;
             virtualRecoveryByAccount.set(accountKey, saved);
+            persistGate(accountKey, saved);
         }
         const baseStake = Math.max(0.35, Number(stakeInput) || 0.5);
         currentStakeRef.current = saved?.stake ?? baseStake;
@@ -692,8 +824,13 @@ const AIBots = observer(() => {
         totalPLRef.current = saved?.totalPL ?? 0;
         setTotalPL(totalPLRef.current);
         inFlightRef.current = false;
-        virtualModeRef.current = saved?.virtualMode ?? false;
-        virtualLossesRef.current = saved?.virtualLosses ?? 0;
+        // Derive the gate from the persisted loss count, never from `saved.virtualMode`
+        // alone: a stale/incorrect flag would otherwise permit a real order before
+        // the virtual losses were completed.
+        const restoredGate = restoreVirtualGate(saved, configRef.current.virtualLossesRequired, isVirtualBot);
+        virtualModeRef.current = isVirtualBot ? restoredGate.inRecovery && !canPlaceRealOrder(true, restoredGate) : false;
+        virtualLossesRef.current = restoredGate.virtualLosses;
+        setOwedVirtualLosses(virtualModeRef.current ? restoredGate.virtualLosses : 0);
         virtualTradeRef.current = null;
         setVirtualMode(virtualModeRef.current);
         runningAccountRef.current = accountKey;
@@ -702,7 +839,7 @@ const AIBots = observer(() => {
         setIsRunning(true);
         autoDockRunPanel(run_panel, 1);
         setFooterMessage(saved
-            ? `Resuming ${saved.virtualMode ? 'virtual' : 'real'} recovery scanning · ${saved.virtualLosses}/${saved.virtualLossesRequired} virtual losses · next real stake ${saved.stake.toFixed(2)}. Waiting for a new signal.`
+            ? `Resuming ${virtualModeRef.current ? 'virtual' : 'real'} recovery scanning · ${restoredGate.virtualLosses}/${restoredGate.required} virtual losses · next real stake ${saved.stake.toFixed(2)}. Waiting for a new signal.`
             : `Scanning ${marketScope === 'ALL' ? 'All Markets' : marketScope} for confirmed ${selectedBot?.title || 'AI'} signal…`
         );
         // A restarted recovery must wait for a new live tick, not reuse a stale signal.
@@ -980,6 +1117,26 @@ const AIBots = observer(() => {
                                         onChange={e => {
                                             virtualLossesEditedRef.current = true;
                                             setVirtualLossesInput(e.target.value);
+                                            // Forget any gate opened under a different target; the
+                                            // new target must be honoured from the next run.
+                                            const nextTarget = normalizeVirtualTarget(e.target.value);
+                                            const gateAccount = configRef.current.accountKey;
+                                            const pending = virtualRecoveryByAccount.get(gateAccount);
+                                            if (pending) {
+                                                const updated = {
+                                                    ...pending,
+                                                    virtualLossesRequired: nextTarget,
+                                                    virtualMode: pending.virtualLosses < nextTarget,
+                                                };
+                                                virtualRecoveryByAccount.set(gateAccount, updated);
+                                                persistGate(gateAccount, updated);
+                                            } else if (gateAccount) {
+                                                writeVirtualGate(gateAccount, {
+                                                    virtualLossesRequired: nextTarget,
+                                                    inRecovery: false,
+                                                    virtualLosses: 0,
+                                                });
+                                            }
                                         }}
                                         aria-describedby='ai-scanner-virtual-losses-help'
                                         data-testid='ai-scanner-virtual-losses'
@@ -987,6 +1144,21 @@ const AIBots = observer(() => {
                                     <p id='ai-scanner-virtual-losses-help' className='rm-ai-scanner__rule-note'>
                                         After this many virtual losses, wait for the next real signal. Wins do not count.
                                     </p>
+                                    {owedVirtualLosses > 0 && owedVirtualLosses < Number(virtualLossesInput || 1) && !isRunning && (
+                                        <p className='rm-ai-scanner__rule-note'>
+                                            This account still owes {owedVirtualLosses} of{' '}
+                                            {virtualLossesInput || '1'} virtual losses from an unfinished run.{' '}
+                                            <button
+                                                type='button'
+                                                className='rm-ai-scanner__link-button'
+                                                onClick={handleClearVirtualGate}
+                                                data-testid='ai-scanner-clear-virtual-gate'
+                                            >
+                                                Clear gate
+                                            </button>{' '}
+                                            only if you have confirmed there is no open real contract.
+                                        </p>
+                                    )}
                                 </div>
                             )}
                         </div>
