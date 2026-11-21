@@ -20,53 +20,70 @@ export default class TradingTimes {
         this.last_update_moment = this.server_time.local();
 
         if (!Object.keys(this.trading_times).length) {
-            await this.updateTradingTimes();
-            this.init_promise.resolve();
-
-            const periodicUpdate = async () => {
-                const changes = this.updateMarketOpenClosed();
-
-                if (Object.keys(changes).length > 0 && this.onMarketOpenCloseChanged) {
-                    this.onMarketOpenCloseChanged(changes);
-                }
-
-                let next_update_date = this.nextUpdateDate();
-
-                if (!next_update_date) {
-                    const now_moment = this.server_time.local();
-                    const next_update_moment = this.last_update_moment.clone().add(1, 'days');
-
-                    if (now_moment.isAfter(next_update_moment)) {
-                        this.last_update_moment = now_moment.clone();
-                    } else {
-                        this.last_update_moment = next_update_moment.clone();
-                    }
-
-                    // Retain the current market open close status, because the trade times
-                    // will now be the following day:
-                    const is_open_map = {};
-
-                    Object.keys(this.trading_times).forEach(symbol_name => {
-                        is_open_map[symbol_name] = this.trading_times[symbol_name].is_opened;
-                    });
-
-                    await this.updateTradingTimes();
-
-                    Object.keys(this.trading_times).forEach(symbol_name => {
-                        this.trading_times[symbol_name].is_opened = is_open_map[symbol_name];
-                    });
-
-                    // next update date will be 00:00 hours (UTC) of the following day:
-                    next_update_moment.set({ hour: 0, minute: 0, second: 0 });
-                    next_update_date = next_update_moment.toDate();
-                }
-
-                const wait_period = next_update_date - this.server_time.local().toDate();
-                this.update_timer = setTimeout(periodicUpdate, wait_period);
-            };
-
-            await periodicUpdate();
+            try {
+                await this.load();
+            } catch (error) {
+                // Without this, `is_initialised` stays true and `init_promise` stays
+                // pending forever, so every later `initialise()` call (including a
+                // user-triggered retry) awaits a promise that will never settle.
+                // That turned one transient failure into a permanent
+                // "Initializing Deriv Bot account" screen.
+                this.is_initialised = false;
+                this.init_promise = new PendingPromise();
+                throw error;
+            }
         }
+
+        return this.init_promise;
+    }
+
+    async load() {
+        await this.updateTradingTimes();
+        this.init_promise.resolve();
+
+        const periodicUpdate = async () => {
+            const changes = this.updateMarketOpenClosed();
+
+            if (Object.keys(changes).length > 0 && this.onMarketOpenCloseChanged) {
+                this.onMarketOpenCloseChanged(changes);
+            }
+
+            let next_update_date = this.nextUpdateDate();
+
+            if (!next_update_date) {
+                const now_moment = this.server_time.local();
+                const next_update_moment = this.last_update_moment.clone().add(1, 'days');
+
+                if (now_moment.isAfter(next_update_moment)) {
+                    this.last_update_moment = now_moment.clone();
+                } else {
+                    this.last_update_moment = next_update_moment.clone();
+                }
+
+                // Retain the current market open close status, because the trade times
+                // will now be the following day:
+                const is_open_map = {};
+
+                Object.keys(this.trading_times).forEach(symbol_name => {
+                    is_open_map[symbol_name] = this.trading_times[symbol_name].is_opened;
+                });
+
+                await this.updateTradingTimes();
+
+                Object.keys(this.trading_times).forEach(symbol_name => {
+                    this.trading_times[symbol_name].is_opened = is_open_map[symbol_name];
+                });
+
+                // next update date will be 00:00 hours (UTC) of the following day:
+                next_update_moment.set({ hour: 0, minute: 0, second: 0 });
+                next_update_date = next_update_moment.toDate();
+            }
+
+            const wait_period = next_update_date - this.server_time.local().toDate();
+            this.update_timer = setTimeout(periodicUpdate, wait_period);
+        };
+
+        await periodicUpdate();
 
         return this.init_promise;
     }
