@@ -165,3 +165,32 @@ begin
     -- Create updated_at index if it doesn't exist
     create index if not exists idx_journeys_updated_at on public.journeys(updated_at desc);
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Row level security
+--
+-- Both tables had RLS enabled with NO policies, so every request from the app
+-- failed with:
+--   42501 new row violates row-level security policy for table "journeys"
+--
+-- The app uses the publishable/anon key with no Supabase Auth session
+-- (see src/services/supabase/client.ts: persistSession false, no signIn) and
+-- identifies a trader by their Deriv login ID, so there is no auth.uid() to
+-- scope a policy by. These policies mirror the rest of this schema and allow
+-- the client key to read/write journey data.
+--
+-- NOTE: several Supabase projects are used by deployments of this app; make
+-- sure this block (and the tables above) exist in each one.
+-- ---------------------------------------------------------------------------
+alter table public.journeys enable row level security;
+alter table public.journey_days enable row level security;
+
+drop policy if exists journeys_client_access on public.journeys;
+create policy journeys_client_access on public.journeys
+    for all to anon, authenticated
+    using (true) with check (true);
+
+drop policy if exists journey_days_client_access on public.journey_days;
+create policy journey_days_client_access on public.journey_days
+    for all to anon, authenticated
+    using (true) with check (true);

@@ -732,4 +732,100 @@ describe('AI Bots (8-card suite & in-page AI Scanner workspace)', () => {
         expect(fallBuy.parameters.barrier).toBeUndefined();
         expect(fallBuy.parameters.selected_tick).toBeUndefined();
     });
+
+    it('never places a real recovery order while the configured virtual losses are still owed', async () => {
+        mockTickBuffers.R_10 = [{ t: 1000, price: 100.08 }, { t: 2000, price: 100.09 }];
+        let settle: ((poc: any, terminal: boolean) => void) | undefined;
+        mockExecuteLiveDerivTrade.mockImplementation(async (params: any) => {
+            settle = params.onContractUpdate;
+            return { contractId: 9001, buyPrice: params.stake, payout: 1, longcode: 'test' };
+        });
+        const tick = (t: number, digit: number) => {
+            const item = { t, price: Number((100 + digit / 100).toFixed(2)) };
+            mockTickBuffers.R_10.push(item);
+            act(() => mockTickListener?.('R_10', item));
+        };
+
+        render(<AIBots />);
+        fireEvent.click(screen.getAllByRole('button', { name: /Load AI Bot/i })[7]);
+        fireEvent.change(screen.getByTestId('ai-scanner-virtual-losses'), { target: { value: '2' } });
+        fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+
+        // Initial Under 7 entry is a normal real trade.
+        await waitFor(() => expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1));
+        expect(mockExecuteLiveDerivTrade.mock.calls[0][0]).toMatchObject({ contractType: 'DIGITUNDER', barrier: 7 });
+        act(() => settle?.({ profit: -0.5 }, true)); // real loss opens the virtual gate
+
+        // Signal 1 → virtual loss 1 of 2. No real order.
+        tick(3000, 2); tick(4000, 4); tick(5000, 6); tick(6000, 8);
+        expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('1/2 virtual losses');
+        expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1);
+        expect(screen.getByTestId('ai-scanner-status-pill')).toHaveTextContent(/VIRTUAL/);
+
+        // Signal 2 → virtual loss 2 of 2. The gate is satisfied at this point, but the
+        // signal that produced the final virtual loss must NOT also buy real.
+        tick(7000, 2); tick(8000, 4);
+        expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1);
+        expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('2/2 virtual losses');
+        expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('Wait for the next real recovery signal');
+        expect(mockPushVirtualTransaction).toHaveBeenCalledTimes(2);
+
+        // The next fresh signal is the real recovery trade (Even–Odd on Odd).
+        tick(9000, 6);
+        await waitFor(() => expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(2));
+        expect(mockExecuteLiveDerivTrade.mock.calls[1][0]).toMatchObject({ contractType: 'DIGITODD' });
+        expect(mockPushVirtualTransaction).toHaveBeenCalledTimes(2);
+
+        // Settle so the module-level unsettled-contract guard does not leak into the
+        // next test (it blocks a restart while a real contract is still open).
+        act(() => settle?.({ profit: 0.5 }, true));
+    });
+
+    it('does not silently fall back to the default target after the bot card is reopened', async () => {
+        mockTickBuffers.R_10 = [{ t: 1000, price: 100.08 }, { t: 2000, price: 100.09 }];
+        mockExecuteLiveDerivTrade.mockImplementation(async (params: any) => ({
+            contractId: 9001, buyPrice: params.stake, payout: 1, longcode: 'test',
+        }));
+        render(<AIBots />);
+        fireEvent.click(screen.getAllByRole('button', { name: /Load AI Bot/i })[7]);
+        fireEvent.change(screen.getByTestId('ai-scanner-virtual-losses'), { target: { value: '2' } });
+        // Back out without ever starting a run, then open Bot 08 again.
+        fireEvent.click(screen.getByRole('button', { name: /Strategies/i }));
+        fireEvent.click(screen.getAllByRole('button', { name: /Load AI Bot/i })[7]);
+        // The trader's configured 2 must not silently become the default 1.
+        expect(screen.getByTestId('ai-scanner-virtual-losses')).toHaveValue(2);
+    });
+
+    it('offers a way out of a restored gate and lets the next signal trade real after clearing', async () => {
+        mockTickBuffers.R_10 = [{ t: 1000, price: 100.08 }, { t: 2000, price: 100.09 }];
+        mockExecuteLiveDerivTrade.mockImplementation(async (params: any) => ({
+            contractId: 9001, buyPrice: params.stake, payout: 1, longcode: 'test',
+        }));
+        // Simulate a reload that left a half-finished virtual gate on this account.
+        window.sessionStorage.setItem(
+            `tp_ai_bot08_virtual_gate:${mockLoginId}`,
+            JSON.stringify({ virtualLossesRequired: 2, inRecovery: true, virtualLosses: 1 })
+        );
+
+        render(<AIBots />);
+        fireEvent.click(screen.getAllByRole('button', { name: /Load AI Bot/i })[7]);
+        // The gate is visible instead of being an invisible trap.
+        expect(screen.getByTestId('ai-scanner-clear-virtual-gate')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByTestId('ai-scanner-clear-virtual-gate'));
+        expect(window.sessionStorage.getItem(`tp_ai_bot08_virtual_gate:${mockLoginId}`)).toBeNull();
+        expect(screen.getByTestId('ai-scanner-footer')).toHaveTextContent('The next signal trades for real');
+
+        fireEvent.click(screen.getByTestId('ai-scanner-toggle-btn'));
+        // Deliver fresh ticks so the entry signal is evaluated deterministically.
+        const tick = (t: number, digit: number) => {
+            const item = { t, price: Number((100 + digit / 100).toFixed(2)) };
+            mockTickBuffers.R_10.push(item);
+            act(() => mockTickListener?.('R_10', item));
+        };
+        tick(3000, 2); tick(4000, 4);
+        await waitFor(() => expect(mockExecuteLiveDerivTrade).toHaveBeenCalledTimes(1));
+        // Gate cleared → the initial Under 7 entry is a normal real trade.
+        expect(mockExecuteLiveDerivTrade.mock.calls[0][0]).toMatchObject({ contractType: 'DIGITUNDER', barrier: 7 });
+    });
 });
